@@ -25,6 +25,10 @@ Export HIP Path
 7) Launch RuinedFooocus
 `python launch.py`
 
+# After initial installation: 
+Simply use RuinedFooocus_amd_launch.bat to launch RuinedFooocus, you can also make a shortcut for it by holding alt and moving it to your Desktop etc.
+* Inside file is set --gpu-only flag by default, feel free to replace it with wanted ones
+
 ## Original RuinedFooocus Readme:
 # RuinedFooocus
 
