@@ -29,6 +29,9 @@ warnings.filterwarnings(
     "ignore", category=UserWarning, message="TypedStorage is deprecated"
 )
 
+os.environ["TORCH_PLATFORM"] = "rocm6.2"
+print("Forcing ROCm 6.2 backend on RX 7900 XTX")
+
 from modules.launch_util import (
     is_installed,
     run,
