@@ -1,32 +1,37 @@
-# RuinedFooocus AMD Modification Instructions:
+# RuinedFooocus AMD gfx1100 (RX 7900 XTX) ROCm Launch Modification Instructions:
+* Potentially can work with other gfx110x series
+* For gfx1151 and gfx1201 download cp312 files from [rocm-TheRock repository](https://github.com/scottt/rocm-TheRock/releases/tag/v6.5.0rc-pytorch)
 
 How to use on AMD:
 
-Install [Python 3.11.9](https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe) as usual and [Git for Windows](https://github.com/git-for-windows/git/releases/download/v2.50.1.windows.1/Git-2.50.1-64-bit.exe)
-Install [HIP SDK for Windows](https://www.amd.com/en/developer/resources/rocm-hub/hip-sdk.html)
-Optional [HIP SDK Extensions for Windows](https://drive.usercontent.google.com/download?id=124N7C22-tiC8XR-QmPDqvmfSrF6LRglh&export=download&authuser=0) -- Replace files in C:\Program Files\AMD\ROCm\6.2 from zip
-Export HIP Path
+* Install [Python 3.11.9](https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe) as usual and [Git for Windows](https://github.com/git-for-windows/git/releases/download/v2.50.1.windows.1/Git-2.50.1-64-bit.exe)
+* Install [HIP SDK for Windows](https://www.amd.com/en/developer/resources/rocm-hub/hip-sdk.html)
+* Optional [HIP SDK Extensions for Windows](https://drive.usercontent.google.com/download?id=124N7C22-tiC8XR-QmPDqvmfSrF6LRglh&export=download&authuser=0) -- Replace files in C:\Program Files\AMD\ROCm\6.2 from zip
+* Export HIP Path
 `setx HIP_PATH "C:\Program Files\AMD\ROCm\6.2"`
 
+Installation:
 1) Clone Repo
-`git clone https://github.com/johnmart19/RuinedFooocus RuinedFooocus && cd RuinedFooocus`
+* `git clone https://github.com/johnmart19/RuinedFooocus RuinedFooocus && cd RuinedFooocus`
 2) Make Venv
-`python -m venv venv`
+* `python -m venv venv`
 3) Activate it
-`.\venv\Scripts\activate`
+* `.\venv\Scripts\activate`
 4) Update pip (Optional)
-`python.exe -m pip install --upgrade pip`
-5) Download and put to RuinedFooocus foler:
-[torch-2.7.0a0+rocm_git3f903c3-cp311-cp311-win_amd64.whl](https://github.com/scottt/rocm-TheRock/releases/download/v6.5.0rc-pytorch/torch-2.7.0a0+rocm_git3f903c3-cp311-cp311-win_amd64.whl)
-[torchaudio-2.7.0a0+52638ef-cp311-cp311-win_amd64.whl](https://github.com/scottt/rocm-TheRock/releases/download/v6.5.0rc-pytorch/torchaudio-2.7.0a0+52638ef-cp311-cp311-win_amd64.whl)
-[torchvision-0.22.0+9eb57cd-cp311-cp311-win_amd64.whl](https://github.com/scottt/rocm-TheRock/releases/download/v6.5.0rc-pytorch/torchvision-0.22.0+9eb57cd-cp311-cp311-win_amd64.whl)
+* `python.exe -m pip install --upgrade pip`
+5) Download and put to RuinedFooocus foler (files are provided from [TheRock repository](https://github.com/scottt/rocm-TheRock/releases/tag/v6.5.0rc-pytorch)):
+For RX 7900 XTX and other gfx110x:
+* [torch-2.7.0a0+rocm_git3f903c3-cp311-cp311-win_amd64.whl](https://github.com/scottt/rocm-TheRock/releases/download/v6.5.0rc-pytorch/torch-2.7.0a0+rocm_git3f903c3-cp311-cp311-win_amd64.whl)
+* [torchaudio-2.7.0a0+52638ef-cp311-cp311-win_amd64.whl](https://github.com/scottt/rocm-TheRock/releases/download/v6.5.0rc-pytorch/torchaudio-2.7.0a0+52638ef-cp311-cp311-win_amd64.whl)
+* [torchvision-0.22.0+9eb57cd-cp311-cp311-win_amd64.whl](https://github.com/scottt/rocm-TheRock/releases/download/v6.5.0rc-pytorch/torchvision-0.22.0+9eb57cd-cp311-cp311-win_amd64.whl)
 6) Install Requirements
-`pip install torch-2.7.0a0+rocm_git3f903c3-cp311-cp311-win_amd64.whl torchaudio-2.7.0a0+rocm_git3f903c3-cp311-cp311-win_amd64.whl torchvision-0.22.0+9eb57cd-cp311-cp311-win_amd64.whl`
+For RX 7900 XTX and other gfx110x:
+* `pip install torch-2.7.0a0+rocm_git3f903c3-cp311-cp311-win_amd64.whl torchaudio-2.7.0a0+rocm_git3f903c3-cp311-cp311-win_amd64.whl torchvision-0.22.0+9eb57cd-cp311-cp311-win_amd64.whl`
 7) Launch RuinedFooocus
-`python launch.py`
+* `python launch.py`
 
 # After initial installation: 
-Simply use RuinedFooocus_amd_launch.bat to launch RuinedFooocus, you can also make a shortcut for it by holding alt and moving it to your Desktop etc.
+Simply use `RuinedFooocus_amd_launch.bat` to launch RuinedFooocus, you can also make a shortcut for it by holding alt and moving it to your Desktop etc.
 * Inside file is set --gpu-only flag by default, feel free to replace it with wanted ones
 
 ## Original RuinedFooocus Readme:
