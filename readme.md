@@ -19,6 +19,9 @@ Installation:
 * `.\venv\Scripts\activate`
 4) Update pip (Optional)
 * `python.exe -m pip install --upgrade pip`
+## Automatic download Method
+5) ` pip install -r extra-requirements.txt`
+## Manual Method
 5) Download and put to RuinedFooocus foler (files are provided from [TheRock repository](https://github.com/scottt/rocm-TheRock/releases/tag/v6.5.0rc-pytorch)):
 For RX 7900 XTX and other gfx110x:
 * [torch-2.7.0a0+rocm_git3f903c3-cp311-cp311-win_amd64.whl](https://github.com/scottt/rocm-TheRock/releases/download/v6.5.0rc-pytorch/torch-2.7.0a0+rocm_git3f903c3-cp311-cp311-win_amd64.whl)
@@ -27,6 +30,7 @@ For RX 7900 XTX and other gfx110x:
 6) Install Requirements
 For RX 7900 XTX and other gfx110x:
 * `pip install torch-2.7.0a0+rocm_git3f903c3-cp311-cp311-win_amd64.whl torchaudio-2.7.0a0+52638ef-cp311-cp311-win_amd64.whl torchvision-0.22.0+9eb57cd-cp311-cp311-win_amd64.whl`
+
 7) Launch RuinedFooocus
 * `python launch.py`
 
