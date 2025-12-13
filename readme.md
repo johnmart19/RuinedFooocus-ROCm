@@ -16,8 +16,14 @@ Installation:
 * `.\venv\Scripts\activate`
 4) Update pip (Optional)
 * `python.exe -m pip install --upgrade pip`
-5) Install appropriate AMD Torch versions (Mandatory)
-` pip install -r extra-requirements.txt`
+5) Install appropriate AMD Torch versions (Mandatory):
+
+Option 1 (Latest by AMD):
+* `python -m pip install  --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/  "rocm[libraries,devel]"`
+* `python -m pip install  --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/  --pre torch torchaudio torchvision`
+
+Option 2 (rocm-TheRock version, Not updated):
+* ` pip install -r extra-requirements.txt`
 6) Launch RuinedFooocus as usual
 * `python launch.py`
 
