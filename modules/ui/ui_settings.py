@@ -17,7 +17,8 @@ def save_clicked(*args):
         if key in [
             "archive_folders",
             "path_checkpoints",
-            "path_loras"
+            "path_loras",
+            "path_wildcards",
         ]:
             settings.default_settings[key] = settings.default_settings[key].splitlines()
 
@@ -194,6 +195,14 @@ def create_settings():
                 add_setting("path_inbox", path_inbox)
                 path_outputs = gr.Textbox(label=t("Output Folder"), interactive=True, placeholder="", value=path_manager.paths.get("path_outputs", "../outputs/"))
                 add_setting("path_outputs", path_outputs)
+                path_wildcards = gr.Code(
+                    label=t("Wildcard Folders"),
+                    interactive=True,
+                    value="\n".join(path_manager.paths.get("path_wildcards", ["wildcards"])),
+                    lines=5,
+                    max_lines=5
+                )
+                add_setting("path_wildcards", path_wildcards)
 
                 gr.Markdown(t("# Chatbot settings"))
                 curr_localfile = settings.default_settings.get("llama_localfile", None)
