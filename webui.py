@@ -267,16 +267,21 @@ def generate_clicked(*args):
             preset_data = json.loads(params)
 
             if preset_data["software"] == "RuinedFooocus":
-                gen_data["steps"] = preset_data["steps"]
-                gen_data["width"] = preset_data["width"]
-                gen_data["height"] = preset_data["height"]
-                gen_data["cfg"] = preset_data["cfg"]
-                gen_data["sampler_name"] = preset_data["sampler_name"]
-                gen_data["scheduler"] = preset_data["scheduler"]
-                gen_data["clip_skip"] = preset_data["clip_skip"]
-                gen_data["base_model_name"] = preset_data["base_model_name"]
-                gen_data["base_model_hash"] = preset_data.get("base_model_hash", None)
-                gen_data["loras"] = preset_data["loras"]
+                if 0b100 & settings.get("preset_mode", 7):
+                    gen_data["base_model_name"] = preset_data["base_model_name"]
+                    gen_data["base_model_hash"] = preset_data.get("base_model_hash", None)
+                    gen_data["loras"] = preset_data["loras"]
+
+                if 0b010 & settings.get("preset_mode", 7):
+                    gen_data["steps"] = preset_data["steps"]
+                    gen_data["cfg"] = preset_data["cfg"]
+                    gen_data["sampler_name"] = preset_data["sampler_name"]
+                    gen_data["scheduler"] = preset_data["scheduler"]
+                    gen_data["clip_skip"] = preset_data["clip_skip"]
+
+                if 0b001 & settings.get("preset_mode", 7):
+                    gen_data["width"] = preset_data["width"]
+                    gen_data["height"] = preset_data["height"]
         except Exception as e:
             print(f"WARNING: Failed using preset: {e}")
             traceback.print_exc()
@@ -1308,25 +1313,28 @@ with shared.gradio_root as block:
         def preset_select(preset_gallery, evt: gr.SelectData):
             path = evt.value['image']['path']
             preset = Path(path).with_suffix('').name
+            show_models = gr.update(visible='hidden') if (0b100 & settings.get("preset_mode", 7)) else gr.update()
+            show_perf = gr.update(visible='hidden') if (0b010 & settings.get("preset_mode", 7)) else gr.update()
+            show_size = gr.update(visible='hidden') if (0b001 & settings.get("preset_mode", 7)) else gr.update()
             return {
                 preset_image: gr.update(value=path),
                 preset_selection: gr.update(value=path),
                 preset_accordion: gr.update(label=t("Preset:") + " " + preset),
 
-                performance_selection: gr.update(visible='hidden'),
-                perf_name: gr.update(visible='hidden'),
-                perf_save: gr.update(visible='hidden'),
-                cfg: gr.update(visible='hidden'),
-                sampler_name: gr.update(visible='hidden'),
-                scheduler: gr.update(visible='hidden'),
-                clip_skip: gr.update(visible='hidden'),
-                custom_steps: gr.update(visible='hidden'),
-                aspect_ratios_selection: gr.update(visible='hidden'),
-                ratio_name: gr.update(visible='hidden'),
-                custom_width: gr.update(visible='hidden'),
-                custom_height: gr.update(visible='hidden'),
-                ratio_save: gr.update(visible='hidden'),
-                model_tab: gr.update(visible=False),
+                performance_selection: show_perf,
+                perf_name: show_perf,
+                perf_save: show_perf,
+                cfg: show_perf,
+                sampler_name: show_perf,
+                scheduler: show_perf,
+                clip_skip: show_perf,
+                custom_steps: show_perf,
+                aspect_ratios_selection: show_size,
+                ratio_name: show_size,
+                custom_width: show_size,
+                custom_height: show_size,
+                ratio_save: show_size,
+                model_tab: show_models,
             }
 
         def preset_unselect(performance_selection_val, aspect_ratios_selection_val):

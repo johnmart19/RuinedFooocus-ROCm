@@ -96,6 +96,23 @@ def create_settings():
                     lora_max = gr.Number(label=t("LoRA weight max"), interactive=True, value=settings.default_settings.get("lora_max", 2))
                     add_setting("lora_max", lora_max)
 
+                gr.Markdown(t("# Preset"))
+                preset_mode = gr.Dropdown(
+                    label=t("Preset Mode"),
+                    interactive=True,
+                    choices=[
+                        ("Full", 7),
+                        ("Models and Performance", 6),
+                        ("Models and Size", 5),
+                        ("Performance and Size", 3),
+                        ("Models only", 4),
+                        ("Performance only", 2),
+                        ("Size only", 1),
+                    ],
+                    value=settings.default_settings.get("preset_mode", 7)
+                )
+                add_setting("preset_mode", preset_mode)
+
                 gr.Markdown(t("# Models to load at startup"))
                 base_model = gr.Dropdown(
                     label=t("Base Model"),
