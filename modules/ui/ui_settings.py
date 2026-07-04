@@ -245,6 +245,16 @@ def create_settings():
                 add_setting("interrogator", interrogator)
                 save_metadata = gr.Checkbox(label=t("Save Metadata"), value=settings.default_settings.get("save_metadata", True))
                 add_setting("save_metadata", save_metadata)
+
+                meta_comment = gr.Textbox(
+                    label=t("Metadata Comment (Text added to the metadata)"),
+                    interactive=True,
+                    value=settings.default_settings.get("meta_comment", ""),
+                    lines=5,
+                    max_lines=5
+                )
+                add_setting("meta_comment", meta_comment)
+
                 update_interval = gr.Number(label=t("WebUI update interval"), interactive=True, value=settings.default_settings.get("update_interval", 0.1), minimum=0.01, step=0.01)
                 add_setting("update_interval", update_interval)
                 theme = gr.Textbox(label=t("Theme"), interactive=True, value=settings.default_settings.get("theme", None))
