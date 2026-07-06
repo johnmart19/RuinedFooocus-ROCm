@@ -1,6 +1,7 @@
 import gc
 import numpy as np
 import os
+import sys
 import torch
 import traceback
 import math
@@ -520,7 +521,7 @@ class pipeline:
             if sd is not None:
                 # Try to load as All-In-One checkpoint
                 try:
-                    aio = load_state_dict_guess_config(sd)
+                    aio = load_state_dict_guess_config(sd.copy())
                 except:
                     aio = None
                 if isinstance(aio, tuple):
