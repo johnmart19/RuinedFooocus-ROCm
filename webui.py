@@ -1291,6 +1291,24 @@ with shared.gradio_root as block:
 
         stop_button.click(fn=stop_clicked, api_visibility='undocumented', queue=False)
 
+        modetoggle_btn = gr.Button(value="edit mode", elem_id="edit_mode", visible='hidden')
+        edit_mode = True
+        def toggle_edit_mode(inpaint_toggle):
+            global edit_mode
+            edit_mode = edit_mode == False # Toggle edit_mode
+            return {
+                main_view: gr.update(visible=True if edit_mode and not inpaint_toggle else 'hidden'),
+                inpaint_view: gr.update(visible=True if edit_mode and inpaint_toggle else 'hidden'),
+                progress_html: gr.update(visible='hidden'), # Keep these hidden. They will show up during/after generation any way
+                gallery: gr.update(visible='hidden'), # ...not a perfect solution, but an easy one
+            }
+        modetoggle_btn.click(
+            api_visibility='undocumented',
+            fn=toggle_edit_mode,
+            inputs=[inpaint_toggle],
+            outputs=[main_view, inpaint_view, progress_html, gallery],
+        )
+
         def update_cfg():
             # Update ui components
             # Only refresh things like minimum, maximum and choices. Assume the user already
