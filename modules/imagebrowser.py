@@ -289,7 +289,7 @@ class ImageBrowser:
                     gr.update(value=self.load_images(1)[0]),
                     gr.update(
                         value=1,
-                        maximum=int(image_cnt/self.images_per_page) + 1,
+                        maximum=max(int(image_cnt/self.images_per_page) + 1, 2),
                     ),
                     gr.update(
                         value=f"Found {image_cnt} images from {folders} and subdirectories",
@@ -297,7 +297,7 @@ class ImageBrowser:
                 )
             return (
                 gr.update(value=[]),
-                gr.update(value=1, maximum=1),
+                gr.update(value=1, maximum=2),
                 gr.update(value=f"No images found in {folders} or subdirectories")
             )
 
