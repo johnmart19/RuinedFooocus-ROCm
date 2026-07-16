@@ -135,13 +135,13 @@ def prepare_environment(offline=False):
             run_pip(f'install -r "{modules_file}"', "required modules")
 
         try:
-            xlc_version = "xllamacpp==0.2.7"
+            xlc_version = "xllamacpp==2026.7.9873"
             if REINSTALL_ALL or not is_installed(xlc_version):
                 platform_index = {
                     'cu124': 'https://xorbitsai.github.io/xllamacpp/whl/cu124',
                     'cu128': 'https://xorbitsai.github.io/xllamacpp/whl/cu128',
-                    'rocm6.3': 'https://xorbitsai.github.io/xllamacpp/whl/rocm-6.3.4',
                     'rocm6.4': 'https://xorbitsai.github.io/xllamacpp/whl/rocm-6.4.1',
+                    'rocm7.2': 'https://xorbitsai.github.io/xllamacpp/whl/rocm-7.2.4',
                     'cpu': 'https://pypi.org/simple'
                 }
                 if torch_platform not in platform_index:
