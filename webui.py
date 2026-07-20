@@ -73,7 +73,7 @@ import modules.html
 import modules.hints
 import modules.ui.ui_onebutton as ui_onebutton
 import modules.ui.ui_controlnet as ui_controlnet
-from modules.api import add_api
+from modules.api import add_api, add_fastapi
 from modules.interrogate import look
 
 # Block the "Token indices sequence length is longer than the specified maximum sequence length for this model" warning
@@ -1495,6 +1495,7 @@ if isinstance(args.auth, str) and not "/" in args.auth:
         )
         args.share = False
 launch_app(args)
+add_fastapi()
 
 # Wait...
 while True:
