@@ -130,6 +130,7 @@ class pipeline:
             "clip_mistral3": "mistral_3_small_flux2_fp8.safetensors",
             "clip_qwen25": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
             "clip_qwen3_4b": "Qwen3-4B-Q4_K_M.gguf",
+            "clip_qwen3vl_4b": "qwen3vl_4b_bf16.safetensors",
             "clip_qwen3vl_4b_scaled": "qwen3vl_4b_fp8_scaled.safetensors",
             "clip_qwen3_8b": "Qwen3-8B-Q8_0.gguf",
             "clip_qwen3_06b": "qwen_3_06b_base.safetensors",
@@ -147,6 +148,7 @@ class pipeline:
             "vae_flux": "ae.safetensors",
             "vae_flux2": "flux2-vae.safetensors",
             "vae_lumina2": "lumina2_vae_fp32.safetensors",
+            "vae_mage_flow": "mage_flow_vae.safetensors",
             "vae_pixart": "pixart_vae_fp16.safetensors",
             "vae_qwen_image": "qwen_image_vae.safetensors",
             "vae_sd": "sd15_vae.safetensors",
@@ -258,6 +260,12 @@ class pipeline:
             "clip_names": [get_clip_name("clip_gemma")],
             "vae_name": get_vae_name("vae_lumina2"),
             "model_sampling": ('AuraFlow', settings.default_settings.get("lumina2_shift", 3.0))
+        },
+        "MageFlow": {
+            "latent": "SD3",
+            "clip_type": comfy.sd.CLIPType.MAGE,
+            "clip_names": [get_clip_name("clip_qwen3vl_4b")],
+            "vae_name": get_vae_name("vae_mage_flow"),
         },
         "NewBieImage": {
             "latent": "SD3",

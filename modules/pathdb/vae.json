@@ -49,6 +49,11 @@
         "path": "path_vae",
         "filename": "lumina2_vae_fp32.safetensors"
     },
+    "vae/mage_flow_vae.safetensors": {
+        "url": "https://huggingface.co/microsoft/Mage-Flow-Turbo/resolve/main/vae/diffusion_pytorch_model.safetensors",
+        "path": "path_vae",
+        "filename": "mage_flow_vae.safetensors"
+    },
     "vae/hunyuan_video_vae_bf16.safetensors": {
         "url": "https://huggingface.co/calcuis/hunyuan-gguf/resolve/main/hunyuan_video_vae_bf16.safetensors",
         "path": "path_vae",
