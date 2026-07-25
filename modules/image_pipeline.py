@@ -148,7 +148,7 @@ class pipeline:
             "vae_flux": "ae.safetensors",
             "vae_flux2": "flux2-vae.safetensors",
             "vae_lumina2": "lumina2_vae_fp32.safetensors",
-            "vae_mage_flow": "mage_flow_vae.safetensors",
+            "vae_mage_flow": "mage_flow_vae_bf16.safetensors",
             "vae_pixart": "pixart_vae_fp16.safetensors",
             "vae_qwen_image": "qwen_image_vae.safetensors",
             "vae_sd": "sd15_vae.safetensors",
@@ -262,7 +262,7 @@ class pipeline:
             "model_sampling": ('AuraFlow', settings.default_settings.get("lumina2_shift", 3.0))
         },
         "MageFlow": {
-            "latent": "SD3",
+            "latent": "MAGE",
             "clip_type": comfy.sd.CLIPType.MAGE,
             "clip_names": [get_clip_name("clip_qwen3vl_4b")],
             "vae_name": get_vae_name("vae_mage_flow"),
@@ -898,6 +898,9 @@ class pipeline:
                     latent = EmptySD3LatentImage().generate(
                         width=gen_data["width"], height=gen_data["height"], batch_size=1
                     )[0]
+                case 'MAGE':
+                    zero_latent = torch.zeros([1, 128, gen_data['height'] // 16, gen_data['width'] // 16], device=comfy.model_management.intermediate_device())
+                    latent = {"samples": zero_latent, "downscale_ratio_spacial": 16}
                 case _:
                     latent = EmptyLatentImage().generate(
                         width=gen_data["width"], height=gen_data["height"], batch_size=1
