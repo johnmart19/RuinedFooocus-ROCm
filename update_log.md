@@ -1,5 +1,5 @@
 ### development
-* [Mage Flow](https://huggingface.co/microsoft/Mage-Flow) support
+* [Mage Flow/Mage Flow Edit](https://huggingface.co/microsoft/Mage-Flow) support
 * Esc to toggle "edit mode"
 * Button in Image browser to copy metadata to Prompt.
 * GGUF support for Krea 2 [models](https://huggingface.co/molbal/krea2-gguf)
