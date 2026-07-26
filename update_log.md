@@ -1,4 +1,4 @@
-### development
+### 26.07.26
 * [Mage Flow/Mage Flow Edit](https://huggingface.co/microsoft/Mage-Flow) support
 * Esc to toggle "edit mode"
 * Button in Image browser to copy metadata to Prompt.
