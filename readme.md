@@ -1,10 +1,15 @@
-# RuinedFooocus Windows AMD AI Bundle Launch Modification Instructions:
+# RuinedFooocus WSL2 - Ubuntu 24.04 - Windows 11 AMD Launch Modification Instructions:
 * Tested with Sapphire Radeon RX 7900 XTX Nitro+ Vapor-X
 
 How to use on AMD:
+Windows:
 * Install latest AMD Driver with HIP SDK (optional):
 Example for RX 7900 XTX: https://www.amd.com/en/developer/resources/rocm-hub/eula/licenses.html?filename=AMD-Software-PRO-Edition-26.Q3-Win11-For-HIP.exe.exe
 Tested with driver version: Adrenalin 26.10.21.06 (PRO Edition) | Torch version: 2.10.0+rocm7.2.4.lw.git3d3aa833
+
+WSL2: 
+* Install latest AMD Driver for Compute:
+https://rocm.docs.amd.com/en/latest/install/rocm.html?fam=radeon&w=compute&gpu=rx-7900-xtx&gfx=gfx1100&os=ubuntu&ubuntu-ver=24.04&i=pkgman
 
 Installation:
 1) Clone Repo
