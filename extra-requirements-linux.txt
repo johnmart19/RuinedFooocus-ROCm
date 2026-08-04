@@ -1,0 +1,9 @@
+https://repo.radeon.com/rocm/manylinux/rocm-rel-7.2.4/apex-1.10.0%2Brocm7.2.4.git751f5dd5-cp312-cp312-linux_x86_64.whl
+https://repo.radeon.com/rocm/manylinux/rocm-rel-7.2.4/onnxruntime_migraphx-1.23.2-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
+https://repo.radeon.com/rocm/manylinux/rocm-rel-7.2.4/tensorflow_rocm-2.20.0.dev0%2Bselfbuilt-cp312-cp312-manylinux_2_28_x86_64.whl
+https://repo.radeon.com/rocm/manylinux/rocm-rel-7.2.4/torch-2.10.0%2Brocm7.2.4.lw.git3d3aa833-cp312-cp312-linux_x86_64.whl
+https://repo.radeon.com/rocm/manylinux/rocm-rel-7.2.4/torchaudio-2.10.0%2Brocm7.2.4.git5047768f-cp312-cp312-linux_x86_64.whl
+https://repo.radeon.com/rocm/manylinux/rocm-rel-7.2.4/torchvision-0.25.0%2Brocm7.2.4.git82df5f59-cp312-cp312-linux_x86_64.whl
+https://repo.radeon.com/rocm/manylinux/rocm-rel-7.2.4/transformer_engine-2.6.0-py3-none-any.whl
+https://repo.radeon.com/rocm/manylinux/rocm-rel-7.2.4/transformer_engine_rocm-2.6.0-py3-none-manylinux_2_28_x86_64.whl
+https://repo.radeon.com/rocm/manylinux/rocm-rel-7.2.4/triton-3.6.0%2Brocm7.2.4.git4ed88892-cp312-cp312-linux_x86_64.whl
