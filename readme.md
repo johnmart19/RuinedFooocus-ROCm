@@ -9,7 +9,7 @@ Tested with driver version: Adrenalin 26.10.21.06 (PRO Edition) | Torch version:
 
 WSL2: 
 * Install latest AMD Driver for Compute:
-https://rocm.docs.amd.com/en/latest/install/rocm.html?fam=radeon&w=compute&gpu=rx-7900-xtx&gfx=gfx1100&os=ubuntu&ubuntu-ver=24.04&i=pkgman
+https://rocm.docs.amd.com/en/latest/install/rocm.html?fam=radeon&w=compute&os=wsl&ubuntu-ver=24.04&gpu=rx-7900-xtx&gfx=gfx1100&i=pkgman
 
 Installation:
 1) Clone Repo
