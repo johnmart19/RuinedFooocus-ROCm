@@ -19,13 +19,29 @@ from PIL import Image
 from PIL.PngImagePlugin import PngInfo
 from modules.util import generate_temp_filename, TimeIt, get_checkpoint_hashes, get_lora_hashes
 import modules.pipelines
+import comfy.model_management as model_management
 from shared import settings
 
 buffer = []
 outputs = []
 current_task = 0
+task_lock = threading.Lock()
+api_jobs = {}
 
 interrupt_ruined_processing = False
+
+def interrupt_processing():
+    global interrupt_ruined_processing
+    interrupt_ruined_processing = True
+    model_management.interrupt_current_processing(True)
+
+
+def check_interrupt(gen_data):
+    job = gen_data.get("_api_job")
+    if interrupt_ruined_processing or (job is not None and job.cancelled.is_set()):
+        raise model_management.InterruptProcessingException()
+    model_management.throw_exception_if_processing_interrupted()
+
 
 def is_sha256_hash(input_string):
     # Check if the string is exactly 64 characters long
@@ -39,7 +55,20 @@ def is_sha256_hash(input_string):
 def _process(gen_data):
     res = []
     metadatastrings = []
-    gen_data = process_metadata(gen_data)
+    # Named sampling defaults apply first; imported image/JSON metadata wins.
+    gen_data = shared.performance_settings.apply(gen_data)
+    if "_api_job" not in gen_data:
+        gen_data = process_metadata(gen_data)
+
+    from modules.video_settings import VIDEO_FPS, constrain_video_settings
+    family = shared.models.get_model_base(shared.models.get_models_by_path(
+        "checkpoints", gen_data.get("base_model_name", "")))
+    if family in VIDEO_FPS and gen_data.get("performance_selection") not in shared.performance_settings.choices_for_model(
+            family, gen_data.get("base_model_name", "")):
+        gen_data["performance_selection"] = shared.performance_settings.selection_for_model(
+            family, gen_data.get("base_model_name", ""), None)
+        gen_data = shared.performance_settings.apply(gen_data)
+    gen_data = constrain_video_settings(gen_data, family)
 
     pipeline = modules.pipelines.update(gen_data)
     if pipeline == None:
@@ -86,18 +115,6 @@ def _process(gen_data):
     if "silent" not in gen_data:
         outputs.append([gen_data["task_id"], "preview", (-1, f"Loading LoRA models ...", None)])
 
-    # FIXME move this into get_perf_options?
-    if (
-        gen_data["performance_selection"] == shared.performance_settings.CUSTOM_PERFORMANCE or
-        gen_data["performance_selection"] == None
-    ):
-        steps = gen_data["custom_steps"]
-    else:
-        perf_options = shared.performance_settings.get_perf_options(
-            gen_data["performance_selection"]
-        ).copy()
-        perf_options.update(gen_data)
-        gen_data = perf_options
     steps = gen_data["custom_steps"]
     gen_data["steps"] = steps
 
@@ -144,16 +161,9 @@ def _process(gen_data):
     status = random.choice(lines)
     status = f"{status}"
 
-    class InterruptProcessingException(Exception):
-        pass
-
     def callback(step, x0, x, total_steps, y):
-        global status, interrupt_ruined_processing
-
-        if interrupt_ruined_processing:
-            shared.state["interrupted"] = True
-            interrupt_ruined_processing = False
-            raise InterruptProcessingException()
+        global status
+        check_interrupt(gen_data)
 
         # If we only generate 1 image, skip the last preview
         if (
@@ -179,7 +189,7 @@ def _process(gen_data):
         pheight = int(height * grid_ysize / grid_max)
         if shared.state["preview_grid"] is None:
             shared.state["preview_grid"] = Image.new("RGB", (pwidth, pheight))
-        if y is not None and step != 0: # FIXME: Weird bug where the 0th step has the preview from the last image, so just skip it
+        if y is not None:
             if isinstance(y, Image.Image):
                 image = y
             elif isinstance(y, str):
@@ -230,9 +240,12 @@ def _process(gen_data):
         gen_data["main_view"] = None
 
     stop_batch = False
+    prompt_styles = gen_data["style_selection"]
+    if modules.controlnet.get_settings(gen_data).get("preserve_details"):
+        prompt_styles = []
     for i in range(max(image_number, 1)):
         p_txt, n_txt = process_prompt(
-            gen_data["style_selection"], gen_data["prompt"], gen_data["negative"], gen_data
+            prompt_styles, gen_data["prompt"], gen_data["negative"], gen_data
         )
 
         distance = float(i) / max(image_number - 1.0, 1.0) # Use max() to avoid div. by 0
@@ -255,7 +268,8 @@ def _process(gen_data):
                     gen_data=gen_data,
                     callback=callback if "silent" not in gen_data else None,
                 )
-            except InterruptProcessingException as iex:
+            except model_management.InterruptProcessingException:
+                shared.state["interrupted"] = True
                 stop_batch = True
                 imgs = []
             except Exception as iex:
@@ -292,6 +306,9 @@ def _process(gen_data):
                 "comment": settings.default_settings.get("meta_comment", ""),
                 "software": "RuinedFooocus",
             }
+            if "upscale" in pipeline.pipeline_type:
+                prompt.update(width=x.shape[1], height=x.shape[0],
+                              upscaler=modules.controlnet.get_settings(gen_data)["upscaler"])
             metadata = PngInfo()
             # if True:
             #     def handle_whitespace(string: str):
@@ -345,6 +362,7 @@ def _process(gen_data):
     return res
 
 def worker():
+    global interrupt_ruined_processing
     global buffer, outputs
 
     pipeline = modules.pipelines.update(
@@ -426,13 +444,22 @@ def worker():
         except:
             pass
 
-        results = pipeline.process(gen_data)
+        try:
+            results = pipeline.process(gen_data)
+        except Exception as error:
+            traceback.print_exc()
+            results = f"Chat error: {error}"
 
         outputs.append([gen_data["task_id"], "results", results])
 
 
     def handler(gen_data):
         match gen_data["task_type"]:
+            case "external_api":
+                try:
+                    gen_data["_api_job"].run(gen_data["task_id"])
+                finally:
+                    api_jobs.pop(gen_data["task_id"], None)
             case "process":
                 process(gen_data)
             case "api_process":
@@ -447,7 +474,17 @@ def worker():
         time.sleep(0.01)
         if len(buffer) > 0:
             task = buffer.pop(0)
-            handler(task)
+            try:
+                handler(task)
+            except model_management.InterruptProcessingException:
+                shared.state["interrupted"] = True
+                if "_api_job" in task:
+                    task["_api_job"].events.put(("error", "Generation stopped."))
+                else:
+                    add_result(task["task_id"], "results", [])
+            finally:
+                interrupt_ruined_processing = False
+                model_management.interrupt_current_processing(False)
             gc.collect()
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
@@ -457,16 +494,20 @@ def worker():
 def add_task(gen_data):
     global current_task, buffer
 
-    current_task += 1
-    task_id = current_task 
-    gen_data["task_id"] = task_id
-    buffer.append(gen_data.copy())
+    with task_lock:
+        current_task += 1
+        task_id = current_task
+        gen_data["task_id"] = task_id
+        if "_api_job" in gen_data:
+            api_jobs[task_id] = gen_data["_api_job"]
+        buffer.append(gen_data.copy())
     return task_id
 
 # Pipelines use this to add results
 def add_result(task_id, flag, product):
     global outputs
-
+    if task_id in api_jobs:
+        return
     outputs.append([task_id, flag, product])
 
 # Use the task_id from add_task() to wait for data
