@@ -292,6 +292,9 @@ def download_models():
 
 
 from argparser import args
+from modules.startup_port import configure_port
+
+configure_port(args)
 
 REINSTALL_ALL = False
 if os.path.exists("reinstall"):
