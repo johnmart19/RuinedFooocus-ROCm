@@ -1,7 +1,8 @@
+from modules.video_preview import video_callback
 import numpy as np
 import os
 import torch
-import einops
+from modules.gguf_loader import load_diffusion_model as load_gguf_model
 import traceback
 import cv2
 
@@ -24,12 +25,7 @@ import comfy.utils
 from comfy.sd import load_checkpoint_guess_config
 from tqdm import tqdm
 
-#from calcuis_gguf.pig import load_gguf_sd, GGMLOps, GGUFModelPatcher, load_gguf_clip
-#from calcuis_gguf.pig import DualClipLoaderGGUF as DualCLIPLoaderGGUF
-#from comfyui_gguf.nodes import gguf_sd_loader as load_gguf_sd, DualCLIPLoaderGGUF, GGUFModelPatcher
-#from comfyui_gguf.ops import GGMLOps
-from molbal_comfyui_gguf.nodes import gguf_sd_loader as load_gguf_sd, DualCLIPLoaderGGUF, GGUFModelPatcher
-from molbal_comfyui_gguf.ops import GGMLOps
+from molbal_comfyui_gguf.nodes import gguf_sd_loader as load_gguf_sd, DualCLIPLoaderGGUF
 
 from nodes import (
     CLIPTextEncode,
@@ -68,11 +64,10 @@ class pipeline:
     model_base_patched = None
     conditions = None
 
-    ggml_ops = GGMLOps()
 
     # Optional function
     def parse_gen_data(self, gen_data):
-        gen_data["original_image_number"] = gen_data["image_number"] 
+        gen_data["original_image_number"] = gen_data.get("video_duration", gen_data["image_number"])
         gen_data["image_number"] = 1
         gen_data["show_preview"] = False
         return gen_data
@@ -88,12 +83,6 @@ class pipeline:
         self.model_hash_patched = ""
         self.conditions = None
 
-# FIXME? Add default model for video
-#        default_name = path_manager.get_folder_file_path(
-#            "checkpoints",
-#            settings.default_settings.get("base_model", "sd_xl_base_1.0_0.9vae.safetensors"),
-#        )
-#        default = shared.models.get_file("checkpoints", default_name)
         default = None
 
         filename = str(
@@ -111,15 +100,10 @@ class pipeline:
             with torch.torch.inference_mode():
                 try:
                     if filename.endswith(".gguf"):
-                        sd = load_gguf_sd(filename)
-                        unet = comfy.sd.load_diffusion_model_state_dict(
-                            sd, model_options={"custom_operations": self.ggml_ops}
-                        )
-                        unet = GGUFModelPatcher.clone(unet)
-                        unet.patch_on_device = True
+                        unet = load_gguf_model(filename)
                     else:
+                        # Let ComfyUI choose a supported dtype for this device.
                         model_options = {}
-                        model_options["dtype"] = torch.float8_e4m3fn # FIXME should be a setting
                         unet = comfy.sd.load_diffusion_model(filename, model_options=model_options)
 
                     clip_paths = []
@@ -167,10 +151,11 @@ class pipeline:
 
                     print(f"Loading VAE: {vae_name}")
                     if str(vae_path).endswith(".gguf"):
-                        sd = load_gguf_sd(str(vae_path))
+                        sd, extra = load_gguf_sd(str(vae_path), handle_prefix=None)
+                        metadata = extra.get("metadata", {})
                     else:
-                        sd = comfy.utils.load_torch_file(str(vae_path))
-                    vae = comfy.sd.VAE(sd=sd)
+                        sd, metadata = comfy.utils.load_torch_file(str(vae_path), return_metadata=True)
+                    vae = comfy.sd.VAE(sd=sd, metadata=metadata)
 
                     clip_vision = None
                 except Exception as e:
@@ -439,14 +424,14 @@ class pipeline:
     ):
         seed = gen_data["seed"] if isinstance(gen_data["seed"], int) else random.randint(1, 2**32)
 
-        fps = settings.default_settings.get("fps", 30)
+        fps = float(gen_data.get("video_fps", settings.default_settings.get("fps", 30)))
         gen_data["frames"] = 1 + (int(gen_data["original_image_number"] * fps / 4.0) * 4)
 
         if callback is not None:
             worker.add_result(
                 gen_data["task_id"],
                 "preview",
-                (-1, f"Processing text encoding ...", "html/generate_video.jpeg")
+                (-1, f"Processing text encoding ...", "html/logo.png")
             )
 
         if self.conditions is None:
@@ -459,32 +444,7 @@ class pipeline:
         self.textencode("+", positive_prompt, clip_skip)
         self.textencode("-", negative_prompt, clip_skip)
 
-        pbar = comfy.utils.ProgressBar(gen_data["steps"])
-
-        def callback_function(step, x0, x, total_steps):
-            y = self.vae_decode_fake(x0)
-            y = (y * 255.0).detach().cpu().numpy().clip(0, 255).astype(np.uint8)
-            y = einops.rearrange(y, 'b c t h w -> (b h) (t w) c')
-            # Skip callback() since we'll just confuse the preview grid and push updates outselves
-            status = "Generating video"
-
-            maxw = 1920
-            maxh = 1080
-            image = Image.fromarray(y)
-            ow, oh = image.size
-            scale = min(maxh / oh, maxw / ow)
-            image = image.resize((int(ow * scale), int(oh * scale)), Image.LANCZOS)
-
-            worker.add_result(
-                gen_data["task_id"],
-                "preview",
-                (
-                    int(100 * (step / total_steps)),
-                    f"{status} - {step}/{total_steps}",
-                    image
-                )
-            )
-            pbar.update_absolute(step + 1, total_steps, None)
+        callback_function = video_callback(self.model_base_patched.unet, gen_data)
 
         # latent_image
         # t2v or i2v?
@@ -604,7 +564,7 @@ class pipeline:
         # Save mp4
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         mp4_file = file.with_suffix(".mp4")
-        out = cv2.VideoWriter(mp4_file, fourcc, fps, (gen_data["width"], gen_data["height"]))
+        out = cv2.VideoWriter(str(mp4_file), fourcc, fps, (gen_data["width"], gen_data["height"]))
         for frame in pil_images:
             out.write(cv2.cvtColor(np.asarray(frame), cv2.COLOR_BGR2RGB))
         out.release()

@@ -1,9 +1,10 @@
+from modules.video_preview import video_callback
 from safetensors.torch import save_file
 import gc
 import numpy as np
 import os
 import torch
-import einops
+from modules.gguf_loader import load_diffusion_model as load_gguf_model
 import traceback
 import cv2
 import logging
@@ -27,7 +28,6 @@ from modules.pipeline_utils import (
 import comfy.utils
 from comfy.sample import fix_empty_latent_channels
 from comfy.sd import load_checkpoint_guess_config, load_state_dict_guess_config, VAE
-from latent_preview import get_previewer
 from tqdm import tqdm
 
 #from comfyui_gguf.nodes import gguf_sd_loader as load_gguf_sd, DualCLIPLoaderGGUF, GGUFModelPatcher, UnetLoaderGGUF
@@ -59,7 +59,7 @@ from comfy.model_patcher import ModelPatcher
 from comfy_api.latest import Types
 
 class pipeline:
-    pipeline_type = ["video_pipepline"]
+    pipeline_type = ["video_pipeline"]
 
     class StableDiffusionModel:
         def __init__(self, clip, unet, vae, audio_vae=None):
@@ -92,11 +92,12 @@ class pipeline:
 
     # Optional function
     def parse_gen_data(self, gen_data):
-        gen_data["original_image_number"] = 1 + ((int(gen_data["image_number"] / 4.0) + 1) * 4)
+        gen_data["original_image_number"] = gen_data.get("video_duration", 1 + ((int(gen_data["image_number"] / 4.0) + 1) * 4))
         gen_data["image_number"] = 1
         gen_data["show_preview"] = False
         return gen_data
 
+    @staticmethod
     def get_clip_name(shortname):
         # List of short names and default names for different text encoders
         defaults = {
@@ -104,15 +105,19 @@ class pipeline:
             "clip_gemma3_12b": "gemma-3-12b-it-Q4_0.gguf",
             "clip_gemma4_12b": "gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
             "clip_ltx23_text_proj": "ltx-2.3_text_projection_bf16.safetensors",
+            "clip_ltx2_dev": "ltx-2-19b-embeddings_connector_dev_bf16.safetensors",
+            "clip_ltx2_distilled": "ltx-2-19b-embeddings_connector_distill_bf16.safetensors",
             "clip_qwen3vl_32b": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
         }
         return settings.default_settings.get(shortname, defaults[shortname] if shortname in defaults else None)
 
+    @staticmethod
     def get_vae_name(shortname):
         # List of short names and default names for different VAE's
         defaults = {
-            "vae_ltxv_video": "hunyuanvideo15_vae_fp16.safetensors",
             "vae_ltxv23_audio": "LTX23_audio_vae_bf16.safetensors",
+            "vae_ltxv2_audio": "LTX2_audio_vae_bf16.safetensors",
+            "vae_ltxv2_video": "LTX2_video_vae_bf16.safetensors",
             "vae_ltxv23_video": "LTX23_video_vae_bf16.safetensors",
             "vae_ltxv25_audio": "ltx-2.5-audio-vae-bf16.safetensors",
             "vae_ltxv25_video": "ltx-2.5-video-vae-bf16.safetensors",
@@ -122,59 +127,70 @@ class pipeline:
         return settings.default_settings.get(shortname, defaults[shortname] if shortname in defaults else None)
 
     known_model_info = {
-        "LTXV": {
-            "latent": None,
-            "clip_type": comfy.sd.CLIPType.LTXV,
-            "clip_names": [get_clip_name("clip_t5")],
-            "vae_name": get_vae_name("vae_ltxv_video"),
-            "audio_vae_name": None,
-        },
         "LTXAV": {
             "latent": None,
             "clip_type": comfy.sd.CLIPType.LTXV,
-            "clip_names": [get_clip_name("clip_gemma3_12b"), get_clip_name("clip_ltx23_text_proj")],
-            "vae_name": get_vae_name("vae_ltxv23_video"),
-            "audio_vae_name": get_vae_name("vae_ltxv23_audio"),
-            "frame_cnt": "((frames // 8) * 8) + 1",
+            "clip_names": ["clip_gemma3_12b", "clip_ltx23_text_proj"],
+            "vae_name": "vae_ltxv23_video",
+            "audio_vae_name": "vae_ltxv23_audio",
+            "frame_multiple": 8, "frame_offset": 1, "spatial_multiple": 32,
             "flags": ["need_audio_latent"],
             "options": {"guider": "CFGGuider", "scheduler": "LTXVScheduler"}
         },
         "LTXAV2.5": {
             "latent": None,
             "clip_type": comfy.sd.CLIPType.LTXV,
-            "clip_names": [get_clip_name("clip_gemma4_12b")],
-            "vae_name": get_vae_name("vae_ltxv25_video"),
-            "audio_vae_name": get_vae_name("vae_ltxv25_audio"),
-            "frame_cnt": "((frames // 8) * 8) + 1",
+            "clip_names": ["clip_gemma4_12b"],
+            "vae_name": "vae_ltxv25_video",
+            "audio_vae_name": "vae_ltxv25_audio",
+            "frame_multiple": 8, "frame_offset": 1, "spatial_multiple": 32,
             "flags": ["need_audio_latent"],
             "options": {"guider": "CFGGuider", "scheduler": "LTXVScheduler"}
         },
         "MiniMaxH3": {
             "latent": None,
             "clip_type": comfy.sd.CLIPType.MINIMAX,
-            "clip_names": [get_clip_name("clip_qwen3vl_32b")],
-            "vae_name": get_vae_name("vae_minimax_h3_video"),
-            "audio_vae_name": get_vae_name("vae_minimax_h3_audio"),
-            "frame_cnt": "((frames // 17) * 17) + 5",
+            "clip_names": ["clip_qwen3vl_32b"],
+            "vae_name": "vae_minimax_h3_video",
+            "audio_vae_name": "vae_minimax_h3_audio",
+            "frame_multiple": 17, "frame_offset": 5, "spatial_multiple": 32,
             "options": {"fps": 24.0, "guider": "BasicGuider", "scheduler": "BasicScheduler"},
         },
     }
 
-    def get_clip_and_vae(self, unet):
+    def get_clip_and_vae(self, unet, checkpoint=""):
         unet_type = unet.model.__class__.__name__
+        position = None
+        ltx23 = False
 
         # Some detective work...
-        if unet_type == "LTXAV" and unet.model_state_dict().get('diffusion_model.keyframes_abs_pos_embedding', []).shape[1] == 4096:
-            unet_type = "LTXAV2.5"
+        if unet_type == "LTXAV":
+            weights = unet.model_state_dict()
+            position = weights.get('diffusion_model.keyframes_abs_pos_embedding')
+            ltx23 = 'diffusion_model.transformer_blocks.0.attn1.to_gate_logits.weight' in weights
+            if position is not None and position.shape[1] == 4096:
+                unet_type = "LTXAV2.5"
 
-        ret = self.known_model_info.get(unet_type, {})
+        ret = self.known_model_info.get(unet_type, {}).copy()
+        if unet_type == "LTXAV" and not ltx23:
+            connector = "clip_ltx2_distilled" if "distill" in Path(checkpoint).name.lower() else "clip_ltx2_dev"
+            ret.update(clip_names=["clip_gemma3_12b", connector],
+                       vae_name="vae_ltxv2_video", audio_vae_name="vae_ltxv2_audio")
+        ret["clip_names"] = [self.get_clip_name(key) for key in ret["clip_names"]]
+        ret["vae_name"] = self.get_vae_name(ret["vae_name"])
+        ret["audio_vae_name"] = self.get_vae_name(ret["audio_vae_name"])
         ret['unet_type'] = unet_type
         self.model_info = ret
         return ret
 
     def load_base_model(self, name, unet_only=False, input_unet=None, hash=None):
-        if self.model_hash is not None and (self.model_hash == name or self.model_hash == hash):
+        components = {key: value for key, value in settings.default_settings.items()
+                      if key.startswith(("clip_", "vae_"))}
+        if (self.model_hash is not None
+                and self.model_hash in (name, hash)
+                and components == getattr(self, "component_settings", None)):
             return
+        self.component_settings = components
 
         self.model_base = None
         self.model_hash = None
@@ -182,6 +198,7 @@ class pipeline:
         self.model_patched_hash = None
         self.conditions = None
         self.model_info = None
+        self.load_error = None
 
         default = None
 
@@ -210,27 +227,12 @@ class pipeline:
 
         unet = None
 
-        filename = str(filename) # FIXME use Path and suffix instead?
-        if filename.endswith(".gguf") or unet_only:
+        filename = str(filename)
+        if Path(filename).suffix.lower() == ".gguf" or unet_only:
             with torch.torch.inference_mode():
                 try:
-                    if filename.endswith(".gguf"):
-                        try:
-                            sd, extra = load_gguf_sd(filename)
-                        except:
-                            extra = {}
-                            sd = load_gguf_sd(filename)
-
-                        self.ggml_ops.Linear.dequant_dtype = None
-                        self.ggml_ops.Linear.patch_dtype = None
-                        self.logger.setLevel(logging.ERROR) # Supress error messages
-                        unet = comfy.sd.load_diffusion_model_state_dict(
-                            sd, model_options={"custom_operations": self.ggml_ops}, metadata=extra.get("metadata", {})
-                        )
-                        self.logger.setLevel(logging.WARNING)
-
-                        unet = GGUFModelPatcher.clone(unet)
-                        unet.patch_on_device = True
+                    if Path(filename).suffix.lower() == ".gguf":
+                        unet = load_gguf_model(filename)
                     elif input_unet is not None:
                         if isinstance(input_unet, ModelPatcher):
                             unet = GGUFModelPatcher.clone(input_unet)
@@ -248,28 +250,13 @@ class pipeline:
                                 print(f"ERROR: {e}")
                                 traceback.print_exc()
                     else:
+                        # ComfyUI selects a dtype supported by this model and device.
                         model_options = {}
-                        model_options["dtype"] = torch.bfloat16 # FIXME should be a setting
                         unet = comfy.sd.load_diffusion_model(filename, model_options=model_options)
 
                     # Get text-encoders (clip) and vae to match the unet
-                    model_info = self.get_clip_and_vae(unet)
+                    model_info = self.get_clip_and_vae(unet, filename)
                     self.model_info = model_info
-
-                    # Special massaging of Lumina2 unet
-# FIXME 
-                    if model_info.get('model_sampling', None):
-                        match model_info['model_sampling'][0]:
-                            case 'AuraFlow':
-                                unet = ModelSamplingAuraFlow().patch_aura(
-                                    model=unet,
-                                    shift=model_info['model_sampling'][1]
-                                )[0]
-                            case 'SD3':
-                                unet = ModelSamplingSD3().patch(
-                                    model=unet,
-                                    shift=model_info['model_sampling'][1]
-                                )[0]
 
                     # Load everything...
                     clip_paths = []
@@ -303,6 +290,7 @@ class pipeline:
 
 
                     if model_info['vae_name'] == "pixel_space":
+                        metadata = None
                         sd = {}
                         sd["pixel_space_vae"] = torch.tensor(1.0)
                     else:
@@ -313,8 +301,8 @@ class pipeline:
                         )
                         print(f"Loading VAE: {model_info['vae_name']}")
                         if str(vae_path).endswith(".gguf"):
-                            sd = load_gguf_sd(str(vae_path))
-                            metadata = None
+                            sd, extra = load_gguf_sd(str(vae_path), handle_prefix=None)
+                            metadata = extra.get("metadata", {})
                         else:
                             sd, metadata = comfy.utils.load_torch_file(str(vae_path), return_metadata=True)
                     vae = comfy.sd.VAE(sd=sd, metadata=metadata)
@@ -329,9 +317,9 @@ class pipeline:
                             default = os.path.join(path_manager.model_paths["vae_path"], model_info['audio_vae_name'])
                         )
                         print(f"Loading Audio VAE: {model_info['audio_vae_name']}")
-                        if str(vae_path).endswith(".gguf"):
-                            sd = load_gguf_sd(str(audio_vae_path))
-                            metadata = None
+                        if str(audio_vae_path).endswith(".gguf"):
+                            sd, extra = load_gguf_sd(str(audio_vae_path), handle_prefix=None)
+                            metadata = extra.get("metadata", {})
                         else:
                             sd, metadata = comfy.utils.load_torch_file(str(audio_vae_path), return_metadata=True)
 
@@ -363,15 +351,16 @@ class pipeline:
                     clip_vision = None
                 except Exception as e:
                     unet = None
-                    traceback.print_exc()
+                    self.load_error = str(e)
+                    print(f"Could not load video model: {e}")
 
         else:
             try:
                 with torch.torch.inference_mode():
                     unet, clip, vae, clip_vision = load_checkpoint_guess_config(filename)
 
-                if clip == None or vae == None:
-                    raise
+                if clip is None or vae is None:
+                    return self.load_base_model(filename, unet_only=True)
             except:
                 print(f"Trying to load as unet.")
                 self.load_base_model(
@@ -459,30 +448,7 @@ class pipeline:
                 self.model_hash = hash if hash is not None else name
                 self.model_base_patched = self.model_base
                 self.model_patched_hash = None
-                self.model_info = self.get_clip_and_vae(self.model_base_patched.unet)
-
-        # Model Options
-#        try:
-#            self.model_info = self.get_clip_and_vae(self.xl_base.unet)
-#        except:
-#            self.model_info = {}
-        # FIXME.. Remove?
-#        options = self.model_info.get("options", {})
-#        if options.get("ModelNoiseScale", None) is not None:
-#            self.xl_base.unet = ModelNoiseScale().patch(
-#                model=self.xl_base.unet,
-#                noise_scale=options.get("ModelNoiseScale", 0.0),
-#            )[0]
-#        if options.get("HiDreamO1SeamSmoothing", False):
-#            self.model_base.unet = HiDreamO1PatchSeamSmoothing().execute(
-#                model=self.model_base.unet,
-#                start_percent=0.80,
-#                end_percent=1.00,
-#                pattern='single_shift',
-#                passes='ramp_2_4',
-#                blend='median',
-#                strength=1.00,
-#            )[0]
+                self.model_info = self.get_clip_and_vae(self.model_base_patched.unet, filename)
 
         return
 
@@ -505,24 +471,26 @@ class pipeline:
             )
 
             if filename is None:
-                continue
+                raise FileNotFoundError(f"Could not find video LoRA: {name}")
 
             print(f"Loading LoRAs: {name}")
             try:
-                lora = comfy.utils.load_torch_file(filename, safe_load=True)
+                lora = comfy.utils.load_torch_file(str(filename), safe_load=True)
                 unet, clip = comfy.sd.load_lora_for_models(
                     model.unet, model.clip, lora, weight, weight
                 )
                 model = self.StableDiffusionModel(
                     unet=unet,
-                    clip=None,
-                    vae=None,
-                    audio_vae=None,
+                    clip=clip,
+                    vae=model.vae,
+                    audio_vae=model.audio_vae,
                 )
                 loaded_loras += [(name, weight)]
-            except:
-                pass
+            except Exception as error:
+                raise RuntimeError(f"Could not load video LoRA {name}: {error}") from error
         self.model_base_patched = model
+        if self.model_hash_patched != str(loras):
+            self.conditions = None
         self.model_hash_patched = str(loras)
 
         print(f"LoRAs loaded: {loaded_loras}")
@@ -554,21 +522,34 @@ class pipeline:
         gen_data=None,
         callback=None,
     ):
+        if self.model_base_patched is None:
+            raise RuntimeError(getattr(self, "load_error", None) or "Video model is not loaded. Check its required components.")
+
         # Setup
 
         seed = gen_data["seed"] if isinstance(gen_data["seed"], int) else random.randint(1, 2**32)
-        gen_data["frame_rate"] = float(self.model_info.get("options", {}).get("fps", settings.default_settings.get("video_fps", 30.0))) # Get fps from options, or settings
+        gen_data["frame_rate"] = float(gen_data.get("video_fps", self.model_info.get("options", {}).get("fps", settings.default_settings.get("video_fps", 30.0)))) # Get fps from options, or settings
         frames = int(gen_data["original_image_number"] * gen_data["frame_rate"]) # Generate "Frame number" seconds of video
-        frame_number = eval(self.model_info.get("frame_cnt", "frames")) # Massage the frames into something that match what the model require
-        gen_data["width"] = (gen_data["width"] // 32) * 32 # FIXME size clipping should be a option per model type
-        gen_data["height"] = (gen_data["height"] // 32) * 32
+        multiple = self.model_info["frame_multiple"]
+        offset = self.model_info["frame_offset"]
+        frame_number = max(offset, ((frames - offset + multiple - 1) // multiple) * multiple + offset)
+        from modules.video_settings import is_ltx25_distilled
+        two_stage = (self.model_info["unet_type"] == "LTXAV2.5" and
+                     is_ltx25_distilled("LTXV 2.5", gen_data.get("base_model_name", "")))
+        spatial = self.model_info["spatial_multiple"] * (2 if two_stage else 1)
+        gen_data["width"] = max(spatial, (gen_data["width"] // spatial) * spatial)
+        gen_data["height"] = max(spatial, (gen_data["height"] // spatial) * spatial)
+        if self.model_info["unet_type"] == "MiniMaxH3":
+            from comfy_extras.nodes_minimax_h3 import adapt_canvas
+            gen_data["width"], gen_data["height"] = adapt_canvas(gen_data["width"], gen_data["height"])
+
 
         print(f"Using {self.model_info['unet_type']} to generate video.")
         if callback is not None:
             worker.add_result(
                 gen_data["task_id"],
                 "preview",
-                (-1, f"Processing text encoding ...", "html/generate_video.jpeg")
+                (-1, f"Processing text encoding ...", "html/logo.png")
             )
 
         if self.conditions is None:
@@ -578,44 +559,27 @@ class pipeline:
         negative_prompt = gen_data["negative_prompt"]
         clip_skip = 1
 
-        pbar = comfy.utils.ProgressBar(gen_data["steps"])
-
-        def callback_function(step, x0, x, total_steps):
-            previewer = get_previewer(self.model_base_patched.unet.load_device, self.model_base_patched.unet.model.latent_format)
-
-            if previewer:
-                preview_bytes = previewer.decode_latent_to_preview_image(preview_format, x0)
-
-                y = (preview_buytes * 255.0).detach().cpu().numpy().clip(0, 255).astype(np.uint8)
-                y = einops.rearrange(y, 'b c t h w -> (b h) (t w) c')
-
-                maxw = 1920
-                maxh = 1080
-                image = Image.fromarray(y)
-                ow, oh = image.size
-                scale = min(maxh / oh, maxw / ow)
-                image = image.resize((int(ow * scale), int(oh * scale)), Image.LANCZOS)
-            else:
-                image = None
-
-            status = "Generating video"
-            worker.add_result(
-                gen_data["task_id"],
-                "preview",
-                (
-                    int(100 * (step / total_steps)),
-                    f"{status} - {step}/{total_steps}",
-                    image
-                )
-            )
-            pbar.update_absolute(step + 1, total_steps, None)
+        if two_stage:
+            from modules.ltx_refinement import UPSCALER, refine
+            def download_progress(received, total, speed):
+                worker.check_interrupt(gen_data)
+                percent = int(100 * received / total) if total else 0
+                worker.add_result(gen_data["task_id"], "preview",
+                                  (percent, f"Downloading LTX upscaler: {percent}% · {speed / 1048576:.1f} MB/s", None))
+            upscaler_path = path_manager.get_folder_file_path("latent_upscalers", UPSCALER, progress=download_progress)
+        stage_width = gen_data["width"] // 2 if two_stage else gen_data["width"]
+        stage_height = gen_data["height"] // 2 if two_stage else gen_data["height"]
 
         # Get text_encoding
 
         with TimeIt("Text encoding"):
             print("Encoding prompts.")
-            self.textencode("+", positive_prompt, clip_skip)
-            self.textencode("-", negative_prompt, clip_skip)
+            if self.model_info["unet_type"] != "MiniMaxH3":
+                self.textencode("+", positive_prompt, clip_skip)
+                if float(gen_data["cfg"]) != 1.0:
+                    self.textencode("-", negative_prompt, clip_skip)
+
+        negative_conditioning = self.conditions["-"]["cache"] if float(gen_data["cfg"]) != 1.0 else []
 
         with TimeIt("Setting up latents"):
             print("Setting up latents and getting ready to sample.")
@@ -625,32 +589,30 @@ class pipeline:
                 (-1, f"Get initial latents ...", None)
             )
 
-            # Video latent FIXME
-            # i2v?
-            if gen_data["input_image"]:
+            # MiniMax builds its own audiovisual latent and image conditioning below.
+            if gen_data["input_image"] is not None and self.model_info["unet_type"] != "MiniMaxH3":
                 image = np.array(gen_data["input_image"]).astype(np.float32) / 255.0
                 image = torch.from_numpy(image)[None,]
-                # FIXME: check model type here
                 (positive, negative, video_latent) = LTXVImgToVideo().generate(
                     positive = self.conditions["+"]["cache"],
-                    negative = self.conditions["-"]["cache"],
+                    negative = negative_conditioning,
                     image = image,
                     vae = self.model_base_patched.vae,
-                    width = gen_data["width"],
-                    height = gen_data["height"],
+                    width = stage_width,
+                    height = stage_height,
                     length = frame_number,
                     batch_size = 1,
                     strength = 1,
                 )
             else:
                 positive = self.conditions["+"]["cache"]
-                negative = self.conditions["-"]["cache"]
+                negative = negative_conditioning
                 modeltype = self.model_base_patched.unet.model.__class__.__name__
                 match modeltype:
                     case 'LTXAV' | 'LTXAV2.5':
                         video_latent = EmptyLTXVLatentVideo().generate(
-                            width = gen_data["width"],
-                            height = gen_data["height"],
+                            width = stage_width,
+                            height = stage_height,
                             length = frame_number,
                             batch_size = 1,
                         )[0]
@@ -658,10 +620,8 @@ class pipeline:
                         video_latent = None
 
             audio_latent = None
-            if "need_audio_latent" in self.model_info.get("flags", []):
+            if self.model_info["unet_type"] in ("LTXAV", "LTXAV2.5") and "need_audio_latent" in self.model_info.get("flags", []):
                 if self.model_info["audio_vae_name"] is not None:
-                    # Audio latent FIXME
-                    # FIXME: check model type here
                     audio_latent = LTXVEmptyLatentAudio().execute(
                         audio_vae = self.model_base_patched.audio_vae,
                         frames_number = frame_number,
@@ -695,6 +655,8 @@ class pipeline:
                     width = gen_data["width"],
                     height = gen_data["height"],
                     length = frame_number,
+                    first_frame=(torch.from_numpy(np.asarray(gen_data["input_image"], dtype=np.float32) / 255.0)[None]
+                                 if gen_data["input_image"] is not None else None),
                 )
                 # outputs=[io.Conditioning.Output(display_name="positive"), io.Latent.Output()],
 
@@ -719,7 +681,14 @@ class pipeline:
 
             # Sigmas
             scheduler = self.model_info.get("options", {}).get("scheduler", "")
+            if two_stage:
+                scheduler = "LTXDistilled"
             match scheduler:
+                case "LTXDistilled":
+                    ksampler = KSamplerSelect().get_sampler("euler_ancestral")[0]
+                    # Lightricks' fixed first-stage schedule for the distilled model.
+                    sigmas = torch.tensor([1.0, 0.99375, 0.9875, 0.98125, 0.975,
+                                           0.909375, 0.725, 0.421875, 0.0])
                 case "LTXVScheduler":
                     sigmas = LTXVScheduler().execute(
                         steps = gen_data["steps"],
@@ -768,14 +737,6 @@ class pipeline:
             # Sample
             #
 
-        #denoised_output = SamplerCustomAdvanced().execute(
-        #    noise = noise,
-        #    guider = guider,
-        #    sampler = ksampler,
-        #    sigmas = sigmas,
-        #    latent_image = latent,
-        #)
-
             latent_image = latent["samples"]
             latent = latent.copy()
             latent_image = fix_empty_latent_channels(guider.model_patcher, latent_image, latent.get("downscale_ratio_spacial", None))
@@ -785,10 +746,10 @@ class pipeline:
             if "noise_mask" in latent:
                 noise_mask = latent["noise_mask"]
     
-            x0_output = {}
-            #callback = latent_preview.prepare_callback(guider.model_patcher, sigmas.shape[-1] - 1, x0_output)
 
             print("Sampling")
+            callback_function = video_callback(self.model_base_patched.unet, gen_data,
+                                              "Generating video (stage 1/2)" if two_stage else "Generating video")
             samples = guider.sample(
                 noise.generate_noise(latent),
                 latent_image,
@@ -801,6 +762,11 @@ class pipeline:
             )
             samples = samples.to(comfy.model_management.intermediate_device())
 
+        if two_stage:
+            latent = refine({**latent, "samples": samples}, guider, self.model_base_patched.vae,
+                            upscaler_path, gen_data, seed)
+            samples = latent["samples"]
+
         if callback is not None:
             worker.add_result(
                 gen_data["task_id"],
@@ -808,20 +774,14 @@ class pipeline:
                 (-1, f"VAE Decoding ...", None)
             )
 
-        # FIXME is this only for LTXV2?
+        # Preserve latent metadata when preparing the sampler output for decoding.
         out = latent.copy()
         out.pop("downscale_ratio_spacial", None)
         out["samples"] = samples
-        if "x0" in x0_output:
-            x0_out = guider.model_patcher.model.process_latent_out(x0_output["x0"].cpu())
-            if samples.is_nested:
-                latent_shapes = [x.shape for x in samples.unbind()]
-                x0_out = comfy.nested_tensor.NestedTensor(comfy.utils.unpack_latents(x0_out, latent_shapes))
-            denoised_output = latent.copy()
-            denoised_output["samples"] = x0_out
-        else:
-            denoised_output = out
+        denoised_output = out
 
+        video_samples = denoised_output
+        audio_samples = None
         match self.model_info['unet_type']:
             case 'LTXAV' | 'LTXAV2.5':
                 if audio_latent is not None:
@@ -830,21 +790,6 @@ class pipeline:
                     )
                     video_samples = samples[0]
                     audio_samples = samples[1]
-            case "LTXV":
-#                out = latent.copy()
-#                out.pop("downscale_ratio_spacial", None)
-#                out["samples"] = samples
-#                if "x0" in x0_output:
-#                    x0_out = guider.model_patcher.model.process_latent_out(x0_output["x0"].cpu())
-#                    if samples.is_nested:
-#                        latent_shapes = [x.shape for x in samples.unbind()]
-#                        x0_out = comfy.nested_tensor.NestedTensor(comfy.utils.unpack_latents(x0_out, latent_shapes))
-#                    denoised_output = latent.copy()
-#                    denoised_output["samples"] = x0_out
-#                else:
-#                    denoised_output = out
-# FIXME
-                samples = [{"samples": samples}]
             case "MiniMaxH3":
                 samples = denoised_output["samples"]
                 video_samples = {"samples": samples.tensors[0]}
@@ -852,6 +797,10 @@ class pipeline:
                     audio_samples = {"samples": samples.tensors[1]}
                 else:
                     audio_samples = None
+
+        worker.check_interrupt(gen_data)
+        comfy.model_management.unload_model_and_clones(guider.model_patcher)
+        worker.check_interrupt(gen_data)
 
         # Decode video
 
@@ -866,14 +815,9 @@ class pipeline:
         )[0]
 
 
-        if self.model_info['audio_vae_name'] is not None:
+        if audio_samples is not None and self.model_info['audio_vae_name'] is not None:
             # Decode audio
             print(f"VAE decode audio.")
-#FIXME test ltxv2
-#            audio = LTXVAudioVAEDecode().execute(
-#                samples = samples[1],
-#                audio_vae = self.model_base_patched.audio_vae,
-#            )[0]
             try:
                 audio = VAEDecodeAudio().execute(
                     samples = audio_samples,
@@ -948,14 +892,15 @@ class pipeline:
         for image in decoded_latent:
             i = 255. * image.cpu().numpy()
             img = Image.fromarray(np.clip(i, 0, 255).astype(np.uint8))
+            img.thumbnail((512, 512), Image.Resampling.LANCZOS)
             pil_images.append(img)
 
         # Save GIF
-        # FIXME: scale down, gifs are too big
         compress_level=9 # Min = 0, Max = 9
         pil_images[0].save(
             filename.with_suffix(".gif"),
             compress_level=compress_level,
+            comment=json.dumps(data).encode("utf-8"),
             save_all=True,
             duration=int(1000.0/gen_data["frame_rate"]),
             append_images=pil_images[1:],
