@@ -67,7 +67,7 @@ class ImageRequest(BaseModel):
                         description="Complete visual description of the requested image. Put output dimensions in size, not only in this text.")
     model: str = Field(default="image/default", description="Use image/default for the selected checkpoint, or an image/ ID from available_models. Do not use chat model IDs.")
     n: int = Field(default=1, ge=1, le=4)
-    size: str | None = Field(default=None, pattern=r"^(auto|\d+x\d+)$",
+    size: str | None = Field(default=None, pattern=r"^(auto|[0-9]+x[0-9]+)$",
         description="Output WIDTHxHEIGHT. Set when the user requests a resolution; otherwise omit to inherit Main's size. Dimensions must be multiples of 8, 64–2048.")
     response_format: Literal["url", "b64_json"] = "url"
     negative_prompt: str | None = None
