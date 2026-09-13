@@ -168,6 +168,14 @@ def prepare_environment(offline=False):
             print("WARNING: Failed to install/update llm modules.")
             print(e)
 
+    if args.api:
+        print("Check API dependencies")
+        api_requirements = "requirements_api_versions.txt"
+        if not requirements_met(api_requirements):
+            if offline:
+                raise RuntimeError("API dependencies are missing. Launch once without --offline to install them.")
+            run_pip(f'install -r "{api_requirements}"', "API dependencies")
+
 def clone_git_repos(offline=False):
     from modules.launch_util import git_clone
 
