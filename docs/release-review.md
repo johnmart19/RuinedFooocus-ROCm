@@ -71,3 +71,14 @@ The final history folds follow-up corrections into their feature commits. The
 three GPU setup commits remain last so the application changes can be reviewed
 independently. Occupied-port recovery is retained; automatic context growth and
 conversation summarization remain outside this release.
+
+## Optional branch follow-up
+
+`optional` is based on the finalized `development` release and adds two beta
+changes: cached-chat isolation/cleanup and automatic context growth/compaction.
+Port recovery and the portable resolution schema are already in `development`
+and are not duplicated here. Conflict resolution preserves the release's
+reasoning filtering, image-tool history and one-follow-up vision lifetime.
+Replaying these commits and passing focused checks does not qualify either beta
+feature for release; cleanup/migration and long-conversation behavior still need
+runtime review before promotion.

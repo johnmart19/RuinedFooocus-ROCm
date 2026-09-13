@@ -146,7 +146,8 @@ class pipeline:
                 params.endpoint_metrics = False
                 params.use_jinja = True
 
-                self.llm = xlc.Server(params)
+                from modules.xllama_server import EmbeddedServer
+                self.llm = EmbeddedServer(params)
                 try:
                     devices = xlc.get_device_info()
                     self.runtime_label = "/".join(dict.fromkeys(
