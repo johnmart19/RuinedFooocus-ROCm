@@ -1,0 +1,7 @@
+{
+    "latent_upscalers/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors": {
+        "url": "https://huggingface.co/Lightricks/LTX-2.5/resolve/main/latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors",
+        "path": "path_latent_upscalers",
+        "filename": "ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors"
+    }
+}
