@@ -1,4 +1,5 @@
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -9,15 +10,15 @@ os.chdir(root)
 offline = os.environ.get("RF_OFFLINE") == "1" or "--offline" in sys.argv
 
 if not offline:
-    from modules.launch_util import (run, python)
-
-    requirements_file = "requirements_versions.txt"
-    run(
-        f'"{python}" -m pip install -r "{requirements_file}"',
-        "Check pre-requirements",
-        "Couldn't check pre-reqs",
-        live=False,
+    # Bootstrap before importing application helpers, which require packaging.
+    print("Check pre-requirements", flush=True)
+    reinstall_bootstrap = ["--force-reinstall"] if (root / "reinstall").exists() else []
+    subprocess.run(
+        [sys.executable, "-m", "pip", "install", *reinstall_bootstrap, "-r", "requirements_versions.txt"],
+        check=True,
     )
+    # launch.py must not replace pygit2/cffi after the updater loads their DLLs.
+    sys._rf_bootstrap_reinstalled = bool(reinstall_bootstrap)
 
     bupdated = False
     try:
