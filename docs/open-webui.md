@@ -91,6 +91,24 @@ URLs are not fetched by RuinedFooocus tools.
 
 ## Troubleshooting
 
+For local artifact cleanup and the separate Open WebUI database, see
+[Chat storage and cleanup](chat-storage.md).
+
+* **Context nearly full / incomplete tool JSON:** tool definitions, reasoning and
+  repeated tool results all use context, even within the first user turn. Both
+  llama.cpp and xllamacpp check the formatted request before generation. When
+  device memory and model metadata allow, context can double up to 32,768 tokens
+  (without reducing an explicitly configured larger context or changing backend).
+  Otherwise older assistant/tool output is summarized as conversation memory.
+  Distinct user requests and the active tool round remain intact; identical
+  repeated messages are deduplicated. The original Open WebUI history is unchanged; memory
+  is generated for each request, not stored in a shared cross-chat memory bank.
+  Summarization adds latency and can lose detail; keep critical instructions in
+  the system prompt. If the retained request/tools alone are too large, reduce
+  them or increase the configured context. Vision uses runtime image-token counts;
+  older builds without that endpoint need a runtime update. Explicit native server arguments disable
+  automatic growth; unknown hardware memory measurements also prevent growth.
+
 * **No connection:** verify `/v1/models` from the Open WebUI host; check port,
   Windows/WSL/Docker address, firewall and key.
 * **Model not found:** refresh model IDs and choose a downloaded checkpoint/chat

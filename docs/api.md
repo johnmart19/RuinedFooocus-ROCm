@@ -158,3 +158,23 @@ image generation and multipart editing, plus the upscaling/review tools and a
 short Wan video request. Inline vision messages were also checked on CPU with
 both native llama.cpp and xllamacpp. This does not establish NVIDIA, WSL, DirectML,
 every model family, or long-video quality validation.
+# Automatic chat context
+
+Native llama.cpp and xllamacpp requests use the same context management as the chat UI.
+Before inference, the runtime counts the actual chat template, tools and image tokens.
+When safe device headroom and GGUF metadata are available, the loaded context may
+grow up to 32,768 tokens without changing saved settings or the selected backend.
+Older messages are summarized when the request still does not fit. Distinct user
+requests and the active tool round stay verbatim; older assistant/tool outcomes
+become memory. Repeated identical messages are deduplicated during compaction.
+This does not edit the caller's history
+or create persistent, shared memory. Summary generation adds inference latency.
+If retained instructions and tools cannot fit, the API reports an error rather
+than silently cutting a tool call. Older runtimes can fall back to template-based
+text counting; vision requires the runtime's `/v1/chat/completions/input_tokens`
+endpoint and otherwise reports that a runtime update is needed.
+
+Visual input is temporary: older image attachments and marked reviewer feedback
+are excluded from summaries. Only the current user message keeps its image input.
+The latest `image_review` tool result remains available for one follow-up user
+turn; a newer image generation or review supersedes it. Caller history is unchanged.

@@ -145,7 +145,8 @@ class pipeline:
                 params.endpoint_metrics = False
                 params.use_jinja = True
 
-                self.llm = xlc.Server(params)
+                from modules.xllama_server import EmbeddedServer
+                self.llm = EmbeddedServer(params)
                 try:
                     devices = xlc.get_device_info()
                     self.runtime_label = "/".join(dict.fromkeys(
@@ -307,6 +308,8 @@ class pipeline:
                 c['content'] = '\n'.join(item.get('text', '') for item in c['content'])
             if isinstance(c['content'], str):
                 c['content'] = clean_content(c['content'])
+                if c['role'] == 'assistant':
+                    c['content'] = c['content'].split("**Vision model feedback:**", 1)[0].rstrip()
                 if c['role'] == 'assistant' and c['content'].startswith('<think>'):
                     reasoning, separator, content = c['content'][7:].partition('</think>')
                     if separator:
