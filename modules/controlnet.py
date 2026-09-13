@@ -71,11 +71,14 @@ def modes():
 
 
 def get_model(type):
-    #return controlnet_models[type] if type in controlnet_models else None
+    if type not in controlnet_models or controlnet_models[type] is None:
+        return None
     return path_manager.get_file_path(f"cn_{type}", default=None)
 
 
 def get_settings(gen_data):
+    if gen_data.get("controlnet") is not None:
+        return dict(gen_data["controlnet"])
     if "cn_selection" not in gen_data:
         return {}
     if gen_data["cn_selection"] == NEWCN:

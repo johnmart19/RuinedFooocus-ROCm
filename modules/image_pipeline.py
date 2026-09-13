@@ -3,6 +3,7 @@ import numpy as np
 import os
 import sys
 import torch
+from modules.gguf_loader import load_diffusion_model as load_gguf_model
 import traceback
 import math
 import re
@@ -50,6 +51,7 @@ from nodes import (
     ControlNetApplyAdvanced,
     EmptyLatentImage,
     VAEDecode,
+    VAEDecodeTiled,
     VAEEncode,
     VAEEncodeForInpaint,
     DualCLIPLoader,
@@ -98,7 +100,6 @@ class pipeline:
     pipeline_type = ["sdxl", "ssd", "sd3", "flux", "flux2", "lumina2"]
 
     comfy.model_management.DISABLE_SMART_MEMORY = False
-    comfy.model_management.EXTRA_RESERVED_VRAM = 800 * 1024 * 1024
 
     class StableDiffusionModel:
         def __init__(self, unet, vae, clip, clip_vision):
@@ -115,6 +116,7 @@ class pipeline:
             if self.vae is not None:
                 self.vae.first_stage_model.to("meta")
 
+    @staticmethod
     def get_clip_name(shortname):
         # List of short names and default names for different text encoders
         defaults = {
@@ -142,6 +144,7 @@ class pipeline:
         }
         return settings.default_settings.get(shortname, defaults[shortname] if shortname in defaults else None)
 
+    @staticmethod
     def get_vae_name(shortname):
         # List of short names and default names for different VAE's
         defaults = {
@@ -154,7 +157,7 @@ class pipeline:
             "vae_qwen_image": "qwen_image_vae.safetensors",
             "vae_sd": "sd15_vae.safetensors",
             "vae_sd3": "sd3_vae.safetensors",
-            "vae_wan": "pig_wan_vae_fp32-f16.gguf", # FIXME
+            "vae_wan": "wan_2.1_vae.safetensors",
             "vae_sdxl": "sdxl_vae.safetensors",
         }
         return settings.default_settings.get(shortname, defaults[shortname] if shortname in defaults else None)
@@ -166,75 +169,75 @@ class pipeline:
         "Anima": {
             "latent": "SD3",
             "clip_type": comfy.sd.CLIPType.COSMOS,
-            "clip_names": [get_clip_name("clip_qwen3_06b")],
-            "vae_name": get_vae_name("vae_qwen_image"),
+            "clip_names": ["clip_qwen3_06b"],
+            "vae_name": "vae_qwen_image",
             "model_sampling": ('AuraFlow', settings.default_settings.get("anima_image_shift", 5.0)),
         },
         "AuraFlow": {
             "clip_type": comfy.sd.CLIPType.STABLE_DIFFUSION,
-            "clip_names": [get_clip_name("clip_aura")],
-            "vae_name": get_vae_name("vae_auraflow"),
+            "clip_names": ["clip_aura"],
+            "vae_name": "vae_auraflow",
             "model_sampling": ('AuraFlow', settings.default_settings.get("auraflow_shift", 1.73))
         },
         "BaseModel": {
             "clip_type": comfy.sd.CLIPType.STABLE_DIFFUSION,
-            "clip_names": [get_clip_name("clip_l")],
-            "vae_name": get_vae_name("vae_sd")
+            "clip_names": ["clip_l"],
+            "vae_name": "vae_sd"
         },
         "Boogu": {
             "clip_type": comfy.sd.CLIPType.BOOGU,
-            "clip_names": [get_clip_name("clip_qwen3vl_8b_scaled")],
-            "vae_name": get_vae_name("vae_flux"),
+            "clip_names": ["clip_qwen3vl_8b_scaled"],
+            "vae_name": "vae_flux",
         },
         "CosmosPredict2": {
             "latent": "SD3",
             "clip_type": comfy.sd.CLIPType.COSMOS,
-            "clip_names": [get_clip_name("clip_oldt5")],
-            "vae_name": get_vae_name("vae_wan")
+            "clip_names": ["clip_oldt5"],
+            "vae_name": "vae_wan"
         },
         "ErnieImage": {
             "latent": "FLUX2",
             "clip_type": comfy.sd.CLIPType.FLUX2,
-            "clip_names": [get_clip_name("clip_ministral3")],
-            "vae_name": get_vae_name("vae_flux2")
+            "clip_names": ["clip_ministral3"],
+            "vae_name": "vae_flux2"
         },
         "Flux": {
             "latent": "SD3",
             "clip_type": comfy.sd.CLIPType.FLUX,
             "clip_names": [
-                get_clip_name("clip_l"),
-                get_clip_name("clip_t5")
+                "clip_l",
+                "clip_t5"
             ],
-            "vae_name": get_vae_name("vae_flux")
+            "vae_name": "vae_flux"
         },
         "Flux2": {
             "latent": "FLUX2",
             "clip_type": comfy.sd.CLIPType.FLUX2,
-            "clip_names": [get_clip_name("clip_mistral3")],
-            "vae_name": get_vae_name("vae_flux2")
+            "clip_names": ["clip_mistral3"],
+            "vae_name": "vae_flux2"
         },
         "Flux2Klein4B": {
             "latent": "FLUX2",
             "clip_type": comfy.sd.CLIPType.FLUX2,
-            "clip_names": [get_clip_name("clip_qwen3_4b")],
-            "vae_name": get_vae_name("vae_flux2")
+            "clip_names": ["clip_qwen3_4b"],
+            "vae_name": "vae_flux2"
         },
         "Flux2Klein9B": {
             "latent": "FLUX2",
             "clip_type": comfy.sd.CLIPType.FLUX2,
-            "clip_names": [get_clip_name("clip_qwen3_8b")],
-            "vae_name": get_vae_name("vae_flux2")
+            "clip_names": ["clip_qwen3_8b"],
+            "vae_name": "vae_flux2"
         },
         "HiDream": {
             "latent": "SD3",
             "clip_type": comfy.sd.CLIPType.HIDREAM,
             "clip_names": [
-                get_clip_name("clip_g"),
-                get_clip_name("clip_l"),
-                get_clip_name("clip_llama"),
-                get_clip_name("clip_t5")
+                "clip_g",
+                "clip_l",
+                "clip_llama",
+                "clip_t5"
             ],
-            "vae_name": get_vae_name("vae_flux"),
+            "vae_name": "vae_flux",
             "model_sampling": ('SD3', settings.default_settings.get("hidream_shift", 3.0))
         },
         "HiDreamO1": {
@@ -247,54 +250,54 @@ class pipeline:
         "Ideogram4": {
             "latent": "FLUX2",
             "clip_type": comfy.sd.CLIPType.IDEOGRAM4,
-            "clip_names": [get_clip_name("clip_qwen3vl_8b")],
-            "vae_name": get_vae_name("vae_flux2")
+            "clip_names": ["clip_qwen3vl_8b"],
+            "vae_name": "vae_flux2"
         },
         "Krea2": {
             "clip_type": comfy.sd.CLIPType.KREA2,
-            "clip_names": [get_clip_name("clip_qwen3vl_4b_scaled")],
-            "vae_name": get_vae_name("vae_qwen_image"),
+            "clip_names": ["clip_qwen3vl_4b_scaled"],
+            "vae_name": "vae_qwen_image",
         },
         "Lumina2": {
             "latent": "SD3",
             "clip_type": comfy.sd.CLIPType.LUMINA2,
-            "clip_names": [get_clip_name("clip_gemma")],
-            "vae_name": get_vae_name("vae_lumina2"),
+            "clip_names": ["clip_gemma"],
+            "vae_name": "vae_lumina2",
             "model_sampling": ('AuraFlow', settings.default_settings.get("lumina2_shift", 3.0))
         },
         "MageFlow": {
             "latent": "MAGE",
             "clip_type": comfy.sd.CLIPType.MAGE,
-            "clip_names": [get_clip_name("clip_qwen3vl_4b")],
-            "vae_name": get_vae_name("vae_mage_flow"),
+            "clip_names": ["clip_qwen3vl_4b"],
+            "vae_name": "vae_mage_flow",
             "flags": ["has_image_edit"]
         },
         "NewBieImage": {
             "latent": "SD3",
             "clip_type": comfy.sd.CLIPType.NEWBIE,
             "clip_names": [
-                get_clip_name("clip_gemma3"),
-                get_clip_name("clip_jina"),
+                "clip_gemma3",
+                "clip_jina",
             ],
-            "vae_name": get_vae_name("vae_flux"),
+            "vae_name": "vae_flux",
             "model_sampling": ('AuraFlow', settings.default_settings.get("newbieimage_shift", 6.0))
         },
         "PixArt": {
             "clip_type": comfy.sd.CLIPType.PIXART,
-            "clip_names": [get_clip_name("clip_t5")],
-            "vae_name": get_vae_name("vae_pixart"),
+            "clip_names": ["clip_t5"],
+            "vae_name": "vae_pixart",
         },
         "PixelDiTT2I": {
             "latent": "ChromaRadience",
             "clip_type": comfy.sd.CLIPType.PIXELDIT,
-            "clip_names": [get_clip_name("clip_gemma2_it_elm")],
+            "clip_names": ["clip_gemma2_it_elm"],
             "vae_name": "pixel_space",
         },
         "QwenImage": {
             "latent": "SD3",
             "clip_type": comfy.sd.CLIPType.QWEN_IMAGE,
-            "clip_names": [get_clip_name("clip_qwen25")],
-            "vae_name": get_vae_name("vae_qwen_image"),
+            "clip_names": ["clip_qwen25"],
+            "vae_name": "vae_qwen_image",
             "model_sampling": ('AuraFlow', settings.default_settings.get("qwen_image_shift", 3.10)),
             "flags": ["has_image_edit"]
         },
@@ -302,30 +305,30 @@ class pipeline:
             "latent": "SD3",
             "clip_type": comfy.sd.CLIPType.SD3,
             "clip_names": [
-                get_clip_name("clip_l"),
-                get_clip_name("clip_g"),
-                get_clip_name("clip_t5")
+                "clip_l",
+                "clip_g",
+                "clip_t5"
             ],
-            "vae_name": get_vae_name("vae_sd3"),
+            "vae_name": "vae_sd3",
             "model_sampling": ('SD3', settings.default_settings.get("sd3_shift", 3.0))
         },
         "SDXL": {
             "clip_type": comfy.sd.CLIPType.STABLE_DIFFUSION,
             "clip_names": [
-                get_clip_name("clip_l"),
-                get_clip_name("clip_g")
+                "clip_l",
+                "clip_g"
             ],
-            "vae_name": get_vae_name("vae_sdxl")
+            "vae_name": "vae_sdxl"
         },
         "ZImage": {
             "latent": "SD3",
             "clip_type": comfy.sd.CLIPType.LUMINA2,
-            "clip_names": [get_clip_name("clip_qwen3_4b")],
-            "vae_name": get_vae_name("vae_lumina2"),
+            "clip_names": ["clip_qwen3_4b"],
+            "vae_name": "vae_lumina2",
             "model_sampling": ('AuraFlow', settings.default_settings.get("lumina2_shift", 3.0))
         },
     }
-    known_models = known_model_info.keys() # FIXME
+    known_models = known_model_info.keys()
 
     xl_base: StableDiffusionModel = None
     xl_base_hash = None
@@ -366,11 +369,20 @@ class pipeline:
         if unet_type not in self.known_model_info.keys():
             unet_type = "SDXL" # Use SDXL as default
 
-        return self.known_model_info.get(unet_type, None)
+        info = self.known_model_info[unet_type].copy()
+        info["clip_names"] = [self.get_clip_name(key) for key in info["clip_names"]]
+        if info["vae_name"] != "pixel_space":
+            info["vae_name"] = self.get_vae_name(info["vae_name"])
+        return info
 
     def load_base_model(self, name, unet_only=False, input_unet=None, hash=None):
-        if self.xl_base_hash is not None and (self.xl_base_hash == name or self.xl_base_hash == hash):
+        components = {key: value for key, value in settings.default_settings.items()
+                      if key.startswith(("clip_", "vae_"))}
+        if (self.xl_base_hash is not None
+                and self.xl_base_hash in (name, hash)
+                and components == getattr(self, "component_settings", None)):
             return
+        self.component_settings = components
 
         self.xl_base = None
         self.xl_base_hash = None
@@ -411,17 +423,12 @@ class pipeline:
 
         unet = None
 
-        filename = str(filename) # FIXME use Path and suffix instead?
-        if filename.endswith(".gguf") or unet_only:
+        filename = str(filename)
+        if Path(filename).suffix.lower() == ".gguf" or unet_only:
             with torch.torch.inference_mode():
                 try:
-                    if filename.endswith(".gguf"):
-                        sd = load_gguf_sd(filename)[0]
-                        unet = comfy.sd.load_diffusion_model_state_dict(
-                            sd, model_options={"custom_operations": self.ggml_ops}
-                        )
-                        unet = GGUFModelPatcher.clone(unet)
-                        unet.patch_on_device = True
+                    if Path(filename).suffix.lower() == ".gguf":
+                        unet = load_gguf_model(filename)
                     elif input_unet is not None:
                         if isinstance(input_unet, ModelPatcher):
                             unet = GGUFModelPatcher.clone(input_unet)
@@ -438,8 +445,8 @@ class pipeline:
                                 print(f"ERROR: {e}")
                                 traceback.print_exc() 
                     else:
+                        # ComfyUI selects a dtype supported by this model and device.
                         model_options = {}
-                        model_options["dtype"] = torch.float8_e4m3fn # FIXME should be a setting
                         unet = comfy.sd.load_diffusion_model(filename, model_options=model_options)
 
                     # Get text-encoders (clip) and vae to match the unet
@@ -488,6 +495,7 @@ class pipeline:
                             clip_loader.load_data(clip_paths)
                         )
 
+                    metadata = None
                     if model_info['vae_name'] == "pixel_space":
                         sd = {}
                         sd["pixel_space_vae"] = torch.tensor(1.0)
@@ -499,10 +507,11 @@ class pipeline:
                         )
                         print(f"Loading VAE: {model_info['vae_name']}")
                         if str(vae_path).endswith(".gguf"):
-                            sd = load_gguf_sd(str(vae_path))
+                            sd, extra = load_gguf_sd(str(vae_path), handle_prefix=None)
+                            metadata = extra.get("metadata", {})
                         else:
-                            sd = comfy.utils.load_torch_file(str(vae_path))
-                    vae = comfy.sd.VAE(sd=sd)
+                            sd, metadata = comfy.utils.load_torch_file(str(vae_path), return_metadata=True)
+                    vae = comfy.sd.VAE(sd=sd, metadata=metadata)
 
                     clip_vision = None
                 except Exception as e:
@@ -653,13 +662,17 @@ class pipeline:
         return
 
     def refresh_controlnet(self, name=None):
-        if self.xl_controlnet_hash == str(self.xl_controlnet):
+        if self.xl_controlnet_hash == name and self.xl_controlnet is not None:
             return
 
         filename = modules.controlnet.get_model(name)
 
-        if filename is not None and self.xl_controlnet_hash != name:
+        if filename is None and name in ("canny", "depth", "recolour", "sketch"):
+            raise ValueError(f"ControlNet weights are unavailable: {name}")
+        if filename is not None:
             self.xl_controlnet = comfy.controlnet.load_controlnet(str(filename))
+            if self.xl_controlnet is None:
+                raise ValueError(f"ComfyUI could not load ControlNet: {filename}")
             self.xl_controlnet_hash = name
             print(f"ControlNet model loaded: {self.xl_controlnet_hash}")
         if self.xl_controlnet_hash != name:
@@ -676,16 +689,31 @@ class pipeline:
         text = text.strip(", ")
         hash = f"{text} {clip_skip}"
         if hash != self.conditions[id]["text"]:
+            # Keep the model's native CLIP layer intact when switching presets.
+            clip = self.xl_base_patched.clip
             if clip_skip > 1:
-                self.xl_base_patched.clip = CLIPSetLastLayer().set_last_layer(
-                    self.xl_base_patched.clip, clip_skip * -1
-                )[0]
+                clip = CLIPSetLastLayer().set_last_layer(clip, -clip_skip)[0]
             self.conditions[id]["cache"] = CLIPTextEncode().encode(
-                clip=self.xl_base_patched.clip, text=text
+                clip=clip, text=text
             )[0]
         self.conditions[id]["text"] = hash
         update = True
         return update
+
+    def decode_latent(self, samples):
+        vae = self.xl_base_patched.vae
+        latent = samples["samples"]
+        if vae.device.type != "cpu" and latent.ndim == 4 and not latent.is_nested:
+            # Avoid a full decode that exceeds VRAM. Windows can spill into
+            # shared memory instead of raising OOM and triggering Comfy's fallback.
+            memory = comfy.model_management
+            budget = (memory.get_total_memory(vae.device) - memory.extra_reserved_memory()
+                      - vae.patcher.model_size())
+            required = vae.memory_used_decode(latent.shape, vae.vae_dtype)
+            if required > budget:
+                print("Using tiled VAE decoding to fit available VRAM.")
+                return VAEDecodeTiled().decode(vae=vae, samples=samples, tile_size=512)[0]
+        return VAEDecode().decode(vae=vae, samples=samples)[0]
 
     @torch.inference_mode()
     def process(
@@ -727,6 +755,19 @@ class pipeline:
         positive_prompt = gen_data["positive_prompt"]
         negative_prompt = gen_data["negative_prompt"]
         controlnet = modules.controlnet.get_settings(gen_data)
+        control_type = controlnet.get("type", "")
+        if control_type in modules.controlnet.controlnet_models and control_type not in ("upscale", "rembg", "faceswap"):
+            if input_image is None:
+                raise ValueError("Select an Input image in PowerUp for this workflow.")
+            if control_type in ("canny", "depth", "recolour", "sketch"):
+                if not isinstance(self.xl_base_patched.unet.model, SDXL):
+                    raise ValueError("The bundled ControlNet weights require an SDXL checkpoint.")
+                start, stop = float(controlnet["start"]), float(controlnet["stop"])
+                if not 0 <= start < stop <= 1:
+                    raise ValueError("ControlNet requires 0 <= Start < Stop <= 1.")
+            elif control_type == "img2img":
+                if not 0 < float(controlnet.get("denoise", controlnet.get("strength", 1))) <= 1:
+                    raise ValueError("Image-to-image denoise must be greater than 0 and at most 1.")
 
         device = comfy.model_management.get_torch_device()
         switched_prompt = []
@@ -827,14 +868,19 @@ class pipeline:
             controlnet = {}
             controlnet["type"] = "None"
 
-        # FIXME need a good way to check if we are using Flux.1 Kontext
+        # Flux and Kontext share an architecture; only opt in when identified.
         if (
             controlnet["type"] == "None" and
             isinstance(self.xl_base.unet.model, Flux) and
             input_image is not None
         ):
-            controlnet["type"] = "kontext"
-            img2img_mode = True
+            name = gen_data.get("base_model_name", "")
+            path = shared.models.get_file("checkpoints", name)
+            metadata = shared.models.get_models_by_path("checkpoints", path, fetch=False) if path else {}
+            family = shared.models.get_model_base(metadata)
+            if "kontext" in f"{name} {family}".lower():
+                controlnet["type"] = "kontext"
+                img2img_mode = True
 
         if controlnet["type"] != "None" and input_images > 0:
             if callback is not None:
@@ -871,6 +917,7 @@ class pipeline:
                     strength=float(controlnet["strength"]),
                     start_percent=float(controlnet["start"]),
                     end_percent=float(controlnet["stop"]),
+                    vae=self.xl_base_patched.vae,
                 )
                 self.conditions["+"]["text"] = None
                 self.conditions["-"]["text"] = None
@@ -882,12 +929,12 @@ class pipeline:
 
         if img2img_mode:
             # If this isn't the first image, do "Loopback"
-            if "preview_count" in shared.state and shared.state["preview_count"] > 0:
+            if controlnet.get("loopback", True) and shared.state.get("preview_count", 0) > 0:
                 input_image = Image.fromarray(shared.shared_cache["prev_image"]).convert("RGB")
                 input_image = np.array(input_image).astype(np.float32) / 255.0
                 input_image = torch.from_numpy(input_image)[None,]
             if controlnet["type"].lower() == "kontext":
-                input_image = FluxKontextImageScale().scale(input_image)[0]
+                input_image = FluxKontextImageScale().execute(input_image)[0]
 
             latent = VAEEncode().encode(
                 vae=self.xl_base_patched.vae, pixels=input_image
@@ -907,7 +954,7 @@ class pipeline:
                         width=gen_data["width"], height=gen_data["height"], batch_size=1
                     )[0]
                 case 'HunyuanImage':
-                    latent = EmptyHunyuanImageLatent().generate(
+                    latent = EmptyHunyuanImageLatent().execute(
                         width=gen_data["width"], height=gen_data["height"], batch_size=1
                     )[0]
                 case "ChromaRadience":
@@ -915,7 +962,7 @@ class pipeline:
                         width=gen_data["width"], height=gen_data["height"], batch_size=1
                     )[0]
                 case 'SD3':
-                    latent = EmptySD3LatentImage().generate(
+                    latent = EmptySD3LatentImage().execute(
                         width=gen_data["width"], height=gen_data["height"], batch_size=1
                     )[0]
                 case 'MAGE':
@@ -960,7 +1007,7 @@ class pipeline:
 
         # KSampler
 
-        # Use FluxGuidance for Flux (FIXME: clean up this code)
+        # Flux embeds guidance in the conditioning instead of sampler CFG.
         positive_cond = switched_prompt if switched_prompt else self.conditions["+"]["cache"]
         if isinstance(self.xl_base.unet.model, Flux):
             if controlnet.get("type", "") == "kontext":
@@ -1055,9 +1102,7 @@ class pipeline:
                 (-1, f"VAE decoding ...", None)
             )
 
-        decoded_latent = VAEDecode().decode(
-            samples=sampled_latent, vae=self.xl_base_patched.vae
-        )[0]
+        decoded_latent = self.decode_latent(sampled_latent)
         images = [
             np.clip(255.0 * y.cpu().numpy(), 0, 255).astype(np.uint8)
             for y in decoded_latent
