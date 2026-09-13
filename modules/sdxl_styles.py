@@ -1,4 +1,5 @@
 import random
+import re
 import csv
 from os.path import exists
 from csv import DictReader
@@ -131,6 +132,12 @@ def apply_style(style, prompt, negative_prompt, lora_keywords):
 
     for s in style:
         p, n = styles.get(s, default_style)
+        if (s == "Style: sai-cinematic" and p and p.startswith("cinematic film still {prompt}")
+                and re.search(r"\banime\b", prompt, re.IGNORECASE)):
+            p = p.replace("cinematic film still", "cinematic anime illustration", 1)
+            # Do not make the style reject the medium explicitly requested in the prompt.
+            n = ", ".join(tag.strip() for tag in (n or "").split(",")
+                          if tag.strip().lower() not in {"", "anime", "cartoon", "graphic", "painting", "crayon"})
         if p is not None:
             output_prompt = p + ", "
         if n is not None:

@@ -27,11 +27,21 @@ class OneButtonPresets:
         for name, settings in default_data.items():
             if name not in data:
                 data[name] = settings
+            elif "enhancement_focus" in settings:
+                data[name].setdefault("enhancement_focus", settings["enhancement_focus"])
 
         # Sanity check
         for name, settings in data.items():
             if settings['subject'] == '------ all':
                 settings['subject'] = 'all'
+            # Upgrade unchanged bundled anime text, preserving custom preset edits.
+            if name in ("Waifu's", "Husbando's"):
+                for key, old in {
+                    "prefixprompt": "(((masterpiece))), (((best quality))), anime style, 2d,",
+                    "suffixprompt": "key visual",
+                }.items():
+                    if settings.get(key) == old:
+                        settings[key] = default_data[name][key]
 
         try:
             self._save_data(self.OBP_FILE, data)
