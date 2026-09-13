@@ -187,6 +187,9 @@ def create_chat(image_controls=None):
                 llama_msg = gr.Textbox(
                     show_label=False,
                 )
+                clear_cached_chat = gr.Checkbox(value=False,
+                    label="Also delete cached chat data when clearing",
+                    info="Deletes all local chat caches, including chatbot images, and unloads the chat model. Models and settings are kept.")
                 llama_sent = gr.Textbox(visible='hidden')
                 with gr.Accordion("Run Python", open=True, visible=False) as python_panel:
                     load_code = gr.Button("Load code from chat")
@@ -514,7 +517,25 @@ def create_chat(image_controls=None):
         )
         show_reasoning.change(display_history, inputs=[llama_history, show_reasoning],
                               outputs=[llama_chat], api_visibility='undocumented')
-        llama_chat.clear(lambda: [], outputs=[llama_history], api_visibility='undocumented')
+        def clear_chat(delete_cache):
+            result = {llama_history: [], code_runner: ""}
+            if delete_cache:
+                from modules.api_runtime import submit
+                from modules.chat_storage import clear_chat_cache
+                job = submit(lambda job, task_id: clear_chat_cache())
+                kind, value = job.events.get(timeout=600)
+                if kind != "result":
+                    raise gr.Error(str(value))
+                removed, failed = value
+                result.update({llama_use: gr.update(value="Load"),
+                    llama_model_status: f"Cleared {removed} cached files." +
+                        (f" {failed} locked files remain; close other sessions and retry." if failed else ""),
+                    clear_cached_chat: False})
+            return result
+
+        llama_chat.clear(clear_chat, inputs=[clear_cached_chat],
+            outputs=[llama_history, code_runner, llama_use, llama_model_status, clear_cached_chat],
+            api_visibility='undocumented')
         llama_reload.click(
             fn=gr_llama_get_assistants,
             inputs=[llama_source, llama_model],

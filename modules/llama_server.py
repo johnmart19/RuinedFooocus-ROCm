@@ -76,7 +76,9 @@ class Server:
         self.runtime_label = self.backend
         if str(layers) == "0" and self.backend != "CPU":
             self.runtime_label += "; CPU weights"
-        log_path = Path(f"cache/llama.cpp/server-{port}.log")
+        from modules.chat_storage import chat_folder, migrate_legacy_chat_files
+        migrate_legacy_chat_files()
+        log_path = chat_folder("logs") / f"server-{port}.log"
         log_path.parent.mkdir(parents=True, exist_ok=True)
         try:
             with log_path.open("w", encoding="utf-8") as log:

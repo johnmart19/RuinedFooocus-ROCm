@@ -280,6 +280,9 @@ def _process(gen_data):
 
         for x in imgs:
             folder=shared.path_manager.model_paths["temp_outputs_path"]
+            if gen_data.get("_chat_output"):
+                from modules.chat_storage import chat_folder
+                folder = chat_folder("images")
             local_temp_filename = generate_temp_filename(
                 folder=folder,
                 extension="png",
@@ -341,7 +344,7 @@ def _process(gen_data):
                     "parameters": json.dumps(prompt),
                     "file_path": str(Path(local_temp_filename).relative_to(folder))
                 }
-                if "browser" in shared.shared_cache:
+                if "browser" in shared.shared_cache and not gen_data.get("_chat_output"):
                     shared.shared_cache["browser"].add_image(
                         local_temp_filename,
                         Path(local_temp_filename).relative_to(folder),

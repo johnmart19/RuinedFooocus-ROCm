@@ -302,7 +302,14 @@ class ImageBrowser:
             with TimeIt("Update DB"):
                 for folder in [self.base_path] + settings.default_settings.get("archive_folders", []):
                     print(f"    {folder}")
-                    for root, _, files in os.walk(folder):
+                    from modules.chat_storage import chat_root
+                    private_root = chat_root().resolve()
+                    for root, directories, files in os.walk(folder):
+                        if Path(root).resolve().is_relative_to(private_root):
+                            directories[:] = []
+                            continue
+                        directories[:] = [name for name in directories
+                            if (Path(root) / name).resolve() != private_root]
                         for filename in files:
                             if filename.lower().endswith((".png", ".jpg", ".jpeg", ".webp", ".gif", ".mp4", ".webm")):
                                 full_path = Path(root) / filename

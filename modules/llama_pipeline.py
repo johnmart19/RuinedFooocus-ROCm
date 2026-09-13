@@ -47,8 +47,6 @@ def run_llama(system_file, prompt, *, instruction=None):
         llama.load_base_model()
 
         with TimeIt(""):
-            print(f"# System:\n{system_prompt.strip()}\n")
-            print(f"# User:\n{prompt.strip()}\n")
             print(f"# {name}: (Thinking...)")
             try:
 
@@ -68,7 +66,6 @@ def run_llama(system_file, prompt, *, instruction=None):
                 print(f"LLAMA ERROR: {e}")
                 res = prompt
 
-            print(f"{res.strip()}\n")
 
         llama.unload()
 
@@ -164,6 +161,8 @@ class pipeline:
         self.embeddings = None
 
     def index_sources(self, sources):
+        from modules.chat_storage import chat_folder, migrate_legacy_chat_files
+        migrate_legacy_chat_files()
         if not isinstance(sources, list):
             raise ValueError("Chat context must be a list of text or URL sources.")
         documents = []
@@ -173,7 +172,7 @@ class pipeline:
                 raise ValueError("Each chat context source must be [text, content] or [url, address].")
             kind, content = source
             if kind == "url":
-                filename = load_file_from_url(content, model_dir="cache/embeds",
+                filename = load_file_from_url(content, model_dir=str(chat_folder("sources")),
                     progress=True, file_name=url_to_filename(content))
                 content = Path(filename).read_text(encoding="utf-8")
             documents.extend(part.strip() for part in re.split(r"\n\s*\n|\n(?=#)", content)
@@ -436,6 +435,7 @@ class pipeline:
                         gen_data["history"] + [{"role": "assistant", "content": tmp_text}]
                     )
 
+                    tmp_data["_chat_output"] = True
                     results = worker._process(tmp_data.copy())
                     if not results:
                         raise RuntimeError("Image generation produced no image. Check the checkpoint and application log.")
