@@ -1,17 +1,23 @@
 import os
 import sys
+import subprocess
 import version
 import warnings
 from pathlib import Path
 import ssl
 from tempfile import gettempdir
-from modules.shared_functions import broken_torch_platforms
+from modules.rocm_installer import automatic_rocm_plan, install_rocm
+from modules.runtime_support import inspect_installed_rocm, inspect_installed_cuda, inspect_installed_cpu, installed_cuda_platform, select_torch_platform
+from modules.gpu_installer import (
+    preserve_installed_rocm, preserve_installed_cuda, installed_torch_constraints, torch_constraints, torch_install_commands,
+    xllamacpp_index, has_vulkan_xllamacpp, has_cuda_xllamacpp,
+)
+from modules.comfy_compat import configure_torch_allocator
 
 os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
 os.environ["DO_NOT_TRACK"] = "1"
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 os.environ["CMAKE_POLICY_VERSION_MINIMUM"] = "3.5"
-os.environ["PYTORCH_ALLOC_CONF"] = "expandable_segments:True"
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
@@ -110,23 +116,41 @@ def prepare_environment(offline=False):
 
         import torchruntime
         import platform
-        gpus = torchruntime.device_db.get_gpus()
-        if "TORCH_PLATFORM" in os.environ:
-            torch_platform = os.environ["TORCH_PLATFORM"]
-        else:
-            torch_platform = torchruntime.platform_detection.get_torch_platform(gpus)
         os_platform = platform.system()
+        if args.cuda_nightly:
+            from modules.cuda_selection import select_cuda_nightly
+            os.environ["TORCH_PLATFORM"] = select_cuda_nightly(os_platform, os.environ.get("TORCH_PLATFORM"))
+        installed_rocm = inspect_installed_rocm(os_platform, repair=REINSTALL_ALL or REINSTALL_TORCH or args.rocm10)
+        installed_cuda = inspect_installed_cuda(os_platform)
+        installed_cpu = inspect_installed_cpu() if args.cpu else None
+        keep_cpu = bool(installed_cpu and not (REINSTALL_ALL or REINSTALL_TORCH))
+        torch_platform = select_torch_platform(torchruntime, os_platform, installed_rocm, installed_cuda)
+        keep_cuda = preserve_installed_cuda(installed_cuda, torch_platform, REINSTALL_ALL or REINSTALL_TORCH or args.rocm10 or args.cuda_nightly)
+        keep_rocm = preserve_installed_rocm(
+            installed_rocm, torch_platform, REINSTALL_ALL or REINSTALL_TORCH or args.rocm10,
+        )
 
-        # Some platform checks
-        torch_platform, os_platform = broken_torch_platforms(torch_platform, os_platform)
+        rocm_plan = None
+        if args.rocm10:
+            rocm_plan = automatic_rocm_plan(os_platform, "rocm10.0", force=True)
+            if rocm_plan is None:
+                raise RuntimeError("--rocm10 requires a supported AMD GPU on Windows or Linux/WSL.")
+            torch_platform = rocm_plan.platform
+            os.environ["TORCH_PLATFORM"] = torch_platform
+        elif not keep_rocm and not TORCH_FROZEN:
+            rocm_plan = automatic_rocm_plan(os_platform, torch_platform)
+            if rocm_plan:
+                torch_platform = rocm_plan.platform
 
-        packages = []
-        # Ugly fix to get a more up-to-date torch for NVIDIA gpus
-        if torch_platform == "cu128": torch_platform = "cu130"
-        if torch_platform == "cu124": torch_platform = "cu126"
-        if torch_platform.startswith("cu"): packages = ["torch>=2.14.0", "torchaudio>=2.11.0", "torchvision>=0.29.0"]
+        # Forward automatic fallback modes to ComfyUI and chat as well as pip.
+        if torch_platform == "cpu":
+            args.cpu = True
+        elif torch_platform == "directml" and args.directml is None:
+            args.directml = -1
+        os.environ["TORCH_PLATFORM"] = torch_platform
+        configure_torch_allocator(torch_platform, os_platform)
 
-        print(f"Torch platform: {os_platform}: {torch_platform}") # Some debug output
+        print(f"Torch platform: {os_platform}: {torch_platform}")
 
     if offline:
         print("Skip check of required modules.")
@@ -134,47 +158,102 @@ def prepare_environment(offline=False):
         os.environ["FLASH_ATTENTION_SKIP_CUDA_BUILD"] = "TRUE"
 
         # Run torchruntime install
-        if not os.path.exists("freezetorch"):
-            cmds = torchruntime.installer.get_install_commands(torch_platform, packages)
+        if keep_cpu:
+            print(f"Using installed PyTorch {installed_cpu['versions']['torch']} on CPU")
+        elif keep_rocm:
+            print(f"Using installed {os_platform} ROCm PyTorch {installed_rocm['versions']['torch']}")
+        elif keep_cuda:
+            print(f"Using installed {os_platform} CUDA PyTorch {installed_cuda['versions']['torch']}")
+        elif rocm_plan:
+            install_rocm(rocm_plan.args, REINSTALL_ALL or REINSTALL_TORCH or args.rocm10)
+            installed_rocm = inspect_installed_rocm(os_platform)
+            if not installed_rocm:
+                raise RuntimeError("ROCm installation did not provide a valid HIP PyTorch build.")
+            torch_platform = select_torch_platform(torchruntime, os_platform, installed_rocm)
+            keep_rocm = True
+        elif not TORCH_FROZEN:
+            if os_platform == "Windows" and torch_platform.startswith("rocm"):
+                raise RuntimeError(
+                    "Install a compatible Windows ROCm bundle from AMD for this explicit version. "
+                    "Remove reinstall/reinstalltorch after repairing the bundle."
+                )
+            cmds = torch_install_commands(torchruntime, torch_platform, os_platform, nightly=args.cuda_nightly)
             if REINSTALL_ALL or REINSTALL_TORCH:
                 for idx in range(len(cmds)):
                     cmds[idx].insert(0, "--force-reinstall")
             cmds = torchruntime.installer.get_pip_commands(cmds)
-            torchruntime.installer.run_commands(cmds)
+            # Resolve every stage before replacing a working runtime.
+            for command in cmds:
+                subprocess.run([*command, "--dry-run"], check=True)
+            for command in cmds:
+                subprocess.run(command, check=True)
+            if torch_platform == "directml":
+                subprocess.run([python, "-c",
+                    "import torch, torch_directml as dml; "
+                    f"device=dml.device({args.directml}) if {args.directml} >= 0 else dml.device(); "
+                    "x=torch.ones((2,2)).to(device); assert (x@x).cpu()[0,0].item()==2; "
+                    "print('DirectML GPU verified')"], check=True)
+            if torch_platform.startswith("cu"):
+                installed_cuda = inspect_installed_cuda(os_platform)
+                if not installed_cuda or installed_cuda_platform(installed_cuda) != torch_platform:
+                    raise RuntimeError("CUDA installation did not validate the selected runtime. Check the NVIDIA driver and CUDA/Python versions; the reinstall request remains pending.")
+                if args.cuda_nightly:
+                    from packaging.version import Version
+                    if not Version(installed_cuda["versions"]["torch"]).is_devrelease:
+                        raise RuntimeError("CUDA nightly was requested, but installed PyTorch is not a nightly build.")
             torchruntime.configure()
         else:
             print(f"Torch frozen...")
 
+        installed_torch = installed_torch_constraints()
         if REINSTALL_ALL or not requirements_met(modules_file):
             print("This next step may take a while")
-            run_pip(f'install -r "{modules_file}"', "required modules")
+            with torch_constraints(installed_torch) as constraints:
+                run_pip(f'install -r "{modules_file}"{constraints}', "required modules")
+                if REINSTALL_ALL:
+                    # Dependencies were resolved above. Do not reinstall vendor torch from PyPI.
+                    run_pip(f'install --force-reinstall --no-deps -r "{modules_file}"{constraints}', "reinstall required modules")
 
         try:
             xlc_version = "xllamacpp==2026.9.10809"
-            if REINSTALL_ALL or not is_installed(xlc_version):
-                platform_index = {
-                    'cu124': 'https://xorbitsai.github.io/xllamacpp/whl/vulkan',
-                    'cu128': 'https://xorbitsai.github.io/xllamacpp/whl/cu128',
-                    'cu132': 'https://xorbitsai.github.io/xllamacpp/whl/cu132',
-                    'rocm6.4': 'https://xorbitsai.github.io/xllamacpp/whl/rocm-6.4.1',
-                    'rocm7.2': 'https://xorbitsai.github.io/xllamacpp/whl/rocm-7.2.4',
-                    'cpu': 'https://pypi.org/simple',
-                    'vulkan': 'https://xorbitsai.github.io/xllamacpp/whl/vulkan'
-                }
-                if torch_platform not in platform_index:
-                    torch_platform = 'cpu'
-                run_pip(f'install {xlc_version} --index-url {platform_index[torch_platform]}', "XLlamacpp")
+            index = xllamacpp_index(torch_platform, os_platform, version=xlc_version.split("==")[1])
+            needs_vulkan = index.endswith("/vulkan")
+            needs_cuda = index.rsplit("/", 1)[-1] in ("cu128", "cu132")
+            wrong_backend = (needs_vulkan and not has_vulkan_xllamacpp()
+                             or needs_cuda and not has_cuda_xllamacpp())
+            if REINSTALL_ALL or not is_installed(xlc_version) or wrong_backend:
+                with torch_constraints(installed_torch) as constraints:
+                    run_pip(
+                        f'install {xlc_version} --index-url {index} --only-binary=xllamacpp{constraints}',
+                        "XLlamacpp",
+                    )
+                    if REINSTALL_ALL or wrong_backend:
+                        run_pip(f'install --force-reinstall --no-deps {xlc_version} --index-url {index} --only-binary=xllamacpp', "reinstall XLlamacpp backend")
+                if needs_cuda and not has_cuda_xllamacpp():
+                    raise RuntimeError("xllamacpp CUDA installed but no CUDA device is available. Check the NVIDIA driver, or use native llama.cpp with Vulkan.")
         except Exception as e:
+            if REINSTALL_ALL:
+                raise  # Keep the request pending when a requested reinstall fails.
             print("WARNING: Failed to install/update llm modules.")
             print(e)
+
+        if args.rocm10:
+            subprocess.run([python, "-c",
+                "from modules.llama_installer import server_path, runtime_environment; "
+                "server_path(True); runtime_environment(True, reinstall=True)"], check=True)
 
     if args.api:
         print("Check API dependencies")
         api_requirements = "requirements_api_versions.txt"
-        if not requirements_met(api_requirements):
+        if REINSTALL_ALL or not requirements_met(api_requirements):
             if offline:
-                raise RuntimeError("API dependencies are missing. Launch once without --offline to install them.")
-            run_pip(f'install -r "{api_requirements}"', "API dependencies")
+                if not requirements_met(api_requirements):
+                    raise RuntimeError("API dependencies are missing. Launch once without --offline to install them.")
+            else:
+                with torch_constraints(installed_torch) as constraints:
+                    run_pip(f'install -r "{api_requirements}"{constraints}', "API dependencies")
+                    if REINSTALL_ALL:
+                        run_pip(f'install --force-reinstall --no-deps -r "{api_requirements}"{constraints}', "reinstall API dependencies")
 
 def clone_git_repos(offline=False):
     from modules.launch_util import git_clone
@@ -220,24 +299,42 @@ if os.path.exists("reinstall"):
 REINSTALL_TORCH = False
 if os.path.exists("reinstalltorch"):
     REINSTALL_TORCH = True
+TORCH_FROZEN = os.path.exists("freezetorch") and not (REINSTALL_ALL or REINSTALL_TORCH)
 
 if args.gpu_device_id is not None:
     os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu_device_id)
     print("Set device to:", args.gpu_device_id)
 
 offline = os.environ.get("RF_OFFLINE") == "1" or "--offline" in sys.argv or "--iINSTallLEDmYOwNPaCKaGeS" in sys.argv
+if args.cpu and args.directml is not None:
+    raise RuntimeError("Choose --cpu or --directml, not both.")
+if args.directml is not None and args.directml < -1:
+    raise RuntimeError("--directml expects a non-negative GPU index, or no value for the default GPU.")
+if args.cpu or args.directml is not None:
+    os.environ["TORCH_PLATFORM"] = "cpu" if args.cpu else "directml"
+if os.environ.get("TORCH_PLATFORM") == "cpu":
+    args.cpu = True
+elif os.environ.get("TORCH_PLATFORM") == "directml" and args.directml is None:
+    args.directml = -1
+
+if args.rocm10 and (offline or args.cpu or args.directml is not None or os.path.exists("freezetorch")):
+    raise RuntimeError("--rocm10 cannot be combined with offline, CPU, DirectML or freezetorch mode.")
+if args.cuda_nightly and (offline or args.rocm10 or args.cpu or args.directml is not None or TORCH_FROZEN):
+    raise RuntimeError("--cuda-nightly cannot be combined with offline, ROCm, CPU, DirectML or freezetorch mode.")
 
 if offline:
     print("Skip checking python modules.")
+    if REINSTALL_ALL or REINSTALL_TORCH:
+        print("Reinstall request pending: restart without --offline to apply it.")
 
 prepare_environment(offline)
 
-if os.path.exists("reinstall"):
+if not offline and os.path.exists("reinstall"):
     try:
         os.remove("reinstall")
     except:
         print("ERROR: Failed to remove 'reinstall'. Pleae remove manually.")
-if os.path.exists("reinstalltorch"):
+if not offline and os.path.exists("reinstalltorch"):
     try:
         os.remove("reinstalltorch")
     except:

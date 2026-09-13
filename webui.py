@@ -1,18 +1,13 @@
 import torchruntime
 import platform
 import os
-from modules.shared_functions import broken_torch_platforms
-gpus = torchruntime.device_db.get_gpus()
-if "TORCH_PLATFORM" in os.environ:
-    torch_platform = os.environ["TORCH_PLATFORM"]
-else:
-    torch_platform = torchruntime.platform_detection.get_torch_platform(gpus)
-os_platform = platform.system()
-
-# Some platform checks
-torch_platform, os_platform = broken_torch_platforms(torch_platform, os_platform)
-
+from modules.runtime_support import inspect_installed_rocm, select_torch_platform
 from modules.video_settings import VIDEO_FPS, fixed_video_settings, uses_negative_prompt
+
+os_platform = platform.system()
+torch_platform = select_torch_platform(
+    torchruntime, os_platform, inspect_installed_rocm(os_platform),
+)
 
 from argparser import args
 from modules.comfy_compat import configure_torch_compatibility
