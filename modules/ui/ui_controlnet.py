@@ -150,25 +150,27 @@ def add_controlnet_tab(main_view, inpaint_view, prompt, image_number, run_event,
 
         @cn_selection.change(
             api_visibility='undocumented',
-            inputs=[cn_selection],
-            outputs=[cn_name] + cn_outputs + cn_sliders
+            inputs=[cn_selection, cn_type],
+            outputs=cn_outputs + cn_sliders
         )
-        def cn_changed(selection):
+        def cn_changed(selection, control_type):
             if selection != NEWCN:
-                return [gr.update(visible='hidden')] + [gr.update(visible='hidden')] * len(
+                return [gr.update(visible='hidden')] * len(
                     cn_outputs + cn_sliders
                 )
             else:
-                return [gr.update(value="")] + [gr.update(visible=True)] * len(
-                    cn_outputs + cn_sliders
-                )
+                return ([gr.update(value="", visible=True)]
+                        + [gr.update(visible=True)] * (len(cn_outputs) - 1)
+                        + cn_type_changed(control_type, selection))
 
         @cn_type.change(
             api_visibility='undocumented',
-            inputs=[cn_type],
+            inputs=[cn_type, cn_selection],
             outputs=cn_sliders,
         )
-        def cn_type_changed(selection):
+        def cn_type_changed(selection, preset):
+            if preset != NEWCN:
+                return [gr.update(visible='hidden')] * len(cn_sliders)
             # cn_start,cn_stop,cn_strength,cn_edge_low,cn_edge_high, cn_upscaler
             slider_states = {
                 "canny": [True, True, True, True, True, False],

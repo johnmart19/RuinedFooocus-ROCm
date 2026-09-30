@@ -160,14 +160,23 @@ def create_chat(image_controls=None):
 
 
     selected_file = settings.default_settings.get("llama_localfile") or DEFAULT_MODEL
-    default_model = next((name for name, choices in model_catalogue().items()
+    custom_file = (Path(selected_file).is_file() and Path(selected_file).resolve() not in
+                   {Path(path).resolve() for path in local_models().values()})
+    default_model = None if custom_file else next((name for name, choices in model_catalogue().items()
         if any(Path(value).name == Path(selected_file).name for _, value in choices)),
         "Qwen2.5-7B-Instruct-abliterated-v2")
-    default_source = "Local models" if default_model in model_catalogue("Local models") else "Downloadable"
+    saved_local = any(Path(value).name == Path(selected_file).name
+                      for _, value in model_catalogue("Local models").get(default_model, []))
+    default_source = "Local models" if custom_file or saved_local else "Downloadable"
     catalogue = model_catalogue(default_source)
-    if default_model not in catalogue:
+    if not custom_file and default_model not in catalogue:
         default_model = next(iter(catalogue), None)
     default_choices = catalogue.get(default_model, [])
+    default_quant = next((value for _, value in default_choices
+                          if Path(value).name == Path(selected_file).name),
+                         preferred_quant(default_choices) if default_choices else None)
+    if not custom_file:
+        selected_file = default_quant
     html_dir = Path(__file__).resolve().parents[2] / "html"
     with gr.Blocks() as app_llama_chat:
         with gr.Row(elem_id="chat-layout"):
@@ -257,12 +266,15 @@ def create_chat(image_controls=None):
                       .remove-model { flex: 0 0 34px; font-size: 20px; }
                     """)
                 llama_quant = gr.Dropdown(label="Quantization", interactive=True, visible=len(default_choices) > 1,
-                    choices=default_choices, value=preferred_quant(default_choices) if default_choices else None)
+                    choices=default_choices, value=default_quant)
                 with gr.Row(elem_id="chat-model-actions"):
                     llama_use = gr.Button("Load",
-                                          size="md", scale=1, min_width=0)
+                                          size="md", scale=1, min_width=0,
+                                          interactive=bool(default_quant))
                     llama_import = gr.Button("Import GGUF", size="md", scale=1, min_width=0)
-                llama_model_status = gr.Markdown("Load downloads the selected model if needed.")
+                llama_model_status = gr.Markdown(
+                    f"Configured custom model: `{selected_file}`. Send a message to load it."
+                    if custom_file else "Load downloads the selected model if needed.")
                 llama_download = gr.HTML(visible=False)
                 show_reasoning = gr.Checkbox(label="Show reasoning", value=False,
                     info="Only shown when the model returns reasoning.")
