@@ -1,6 +1,8 @@
 """PyTorch and llama.cpp package selection."""
 
 import importlib.metadata
+import hashlib
+import json
 import os
 import re
 import sys
@@ -135,6 +137,32 @@ def has_cuda_xllamacpp():
         return result.returncode == 0 and "RF_CUDA=1" in result.stdout.splitlines()
     except (OSError, subprocess.TimeoutExpired):
         return False
+
+
+def _xllamacpp_installation():
+    distribution = importlib.metadata.distribution("xllamacpp")
+    record = next(file for file in distribution.files or []
+                  if str(file).replace("\\", "/").endswith(".dist-info/RECORD"))
+    record = Path(record.locate())
+    return record.parent / "ruinedfooocus-backend.json", {
+        "version": distribution.version,
+        "record_sha256": hashlib.sha256(record.read_bytes()).hexdigest(),
+    }
+
+
+def xllamacpp_backend_matches(index):
+    """Backend wheels share versions; remember the exact installed wheel source."""
+    try:
+        marker, installation = _xllamacpp_installation()
+        return json.loads(marker.read_text(encoding="utf-8")) == dict(installation, index=index)
+    except (importlib.metadata.PackageNotFoundError, StopIteration, OSError, ValueError):
+        # Untracked/manual installs are replaced once rather than guessed from Torch.
+        return False
+
+
+def record_xllamacpp_backend(index):
+    marker, installation = _xllamacpp_installation()
+    marker.write_text(json.dumps(dict(installation, index=index)), encoding="utf-8")
 
 
 def has_vulkan_xllamacpp():

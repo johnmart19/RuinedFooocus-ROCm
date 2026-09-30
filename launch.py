@@ -11,6 +11,7 @@ from modules.runtime_support import inspect_installed_rocm, inspect_installed_cu
 from modules.gpu_installer import (
     preserve_installed_rocm, preserve_installed_cuda, installed_torch_constraints, torch_constraints, torch_install_commands,
     xllamacpp_index, has_vulkan_xllamacpp, has_cuda_xllamacpp,
+    xllamacpp_backend_matches, record_xllamacpp_backend,
 )
 from modules.comfy_compat import configure_torch_allocator
 
@@ -209,7 +210,8 @@ def prepare_environment(offline=False):
             index = xllamacpp_index(torch_platform, os_platform, version=xlc_version.split("==")[1])
             needs_vulkan = index.endswith("/vulkan")
             needs_cuda = index.rsplit("/", 1)[-1] in ("cu128", "cu132")
-            wrong_backend = (needs_vulkan and not has_vulkan_xllamacpp()
+            wrong_backend = (not xllamacpp_backend_matches(index)
+                             or needs_vulkan and not has_vulkan_xllamacpp()
                              or needs_cuda and not has_cuda_xllamacpp())
             if REINSTALL_ALL or not is_installed(xlc_version) or wrong_backend:
                 with torch_constraints(installed_torch) as constraints:
@@ -221,6 +223,9 @@ def prepare_environment(offline=False):
                         run_pip(f'install --force-reinstall --no-deps {xlc_version} --index-url {index} --only-binary=xllamacpp', "reinstall XLlamacpp backend")
                 if needs_cuda and not has_cuda_xllamacpp():
                     raise RuntimeError("xllamacpp CUDA installed but no CUDA device is available. Check the NVIDIA driver, or use native llama.cpp with Vulkan.")
+                if needs_vulkan and not has_vulkan_xllamacpp():
+                    raise RuntimeError("xllamacpp Vulkan installed but its Vulkan libraries are missing.")
+                record_xllamacpp_backend(index)
         except Exception as e:
             if REINSTALL_ALL:
                 raise  # Keep the request pending when a requested reinstall fails.
