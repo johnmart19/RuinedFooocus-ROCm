@@ -232,7 +232,15 @@ def process_wildcards(wildcard_text, directory=path_manager.paths.get("path_wild
 
 
 def process_prompt(style, prompt, negative, gen_data=[]):
-    if "obp_assume_direct_control" in gen_data and gen_data["obp_assume_direct_control"]:
+    # An empty image-conditioned prompt is intentional, not a request for OBP.
+    image_conditioned = ("input_image" in gen_data and gen_data["input_image"] is not None) or (
+        "inpaint_toggle" in gen_data and gen_data["inpaint_toggle"]
+    )
+    if "obp_assume_direct_control" in gen_data and (
+        gen_data["obp_assume_direct_control"]
+        or (image_conditioned and gen_data.get("obp_image_prompt", False))
+        or (not prompt.strip() and not image_conditioned)
+    ):
         prompt = build_dynamic_prompt(
             insanitylevel=gen_data["obp_insanitylevel"],
             forcesubject=gen_data["obp_subject"],

@@ -19,7 +19,9 @@ subjects = ["all"]
 subjectsubtypesobject = ["all"]
 subjectsubtypeshumanoid = ["all"]
 subjectsubtypesconcept = ["all"]
-modeltypelist = ["SDXL", "Anime Model"]
+modeltypelist = [("SDXL", "SDXL"),
+                 ("Illustrious / NoobAI / Pony", "Anime Model"),
+                 ("FLUX / SD3.5", "Stable Cascade")]
 artists = [
     "all",
     "all (wild)",
@@ -137,7 +139,8 @@ genders = ["all", "male", "female"]
 qualitymodelist = ["highest", "gated"]
 qualitykeeplist = ["keep used", "keep all"]
 
-promptenhancelist = ["none", "hyperprompt", "llama"]
+promptenhancelist = [("None", "none"), ("SuperPrompt", "hyperprompt"),
+                     ("Local chat model", "llama")]
 
 generatevehicle = True
 generateobject = True
@@ -566,7 +569,8 @@ def ui_onebutton(prompt, run_event):
 
         with gr.Row():
             assumedirectcontrol = gr.Checkbox(
-                label="BYPASS SAFETY PROTOCOLS", value=False
+                label="Replace typed prompt", value=False,
+                info="Empty text-only prompts use One Button. Enable to replace typed prompts too."
             )
             add_ctrl("obp_assume_direct_control", assumedirectcontrol)
         
@@ -707,7 +711,7 @@ def ui_onebutton(prompt, run_event):
                     add_ctrl("obp_antistring", antistring)
         with gr.Row():
             promptenhance = gr.Dropdown(
-                choices=promptenhancelist, label="HYPERPROMPTING", value="none"
+                choices=promptenhancelist, label="Prompt enhancement", value="none",
             )
             add_ctrl("OBP_promptenhance", promptenhance)
             
@@ -715,6 +719,7 @@ def ui_onebutton(prompt, run_event):
                 choices=modeltypelist, label="Model type", value="SDXL"
             )
             add_ctrl("OBP_modeltype", modeltype)
+        gr.Markdown("Local chat model uses the GGUF selected in Chatbot settings.")
         with gr.Row():
             gr.Markdown(
                 """
