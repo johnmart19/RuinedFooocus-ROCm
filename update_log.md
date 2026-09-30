@@ -1,3 +1,13 @@
+### 26.09.13
+* Updated Gradio, ComfyUI and ComfyUI-GGUF integration
+* Windows and Linux launchers with automatic GPU/Python detection and improved CUDA, ROCm, Vulkan, CPU and DirectML setup
+* Native llama.cpp and selectable chat runtimes, model downloads, removal, progress and unloading
+* Optional chatbot reasoning and vision feedback, with Qwen3.5 support and improved image generation tools
+* Optional OpenAI-compatible API for chat and image generation
+* Improved Wan and LTX video workflows, model-specific presets, resolutions, previews and cancellation
+* Downloadable upscalers, checkpoint tools, ControlNet controls and improved image-to-image workflows
+* Improved One Button prompts, model metadata/artwork refresh, Image browser video support and UI fixes
+
 ### 26.09.02
 * [LTX 2.5](https://huggingface.co/Lightricks/LTX-2.5) support
 * [MiniMax H3](https://huggingface.co/MiniMaxAI/MiniMax-H3) support
