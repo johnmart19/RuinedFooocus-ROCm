@@ -1,11 +1,11 @@
 from modules.video_preview import video_callback
+from modules.video_output import save_mp4
 import numpy as np
 import os
 import torch
 from modules.gguf_loader import load_diffusion_model as load_gguf_model
 from modules.video_settings import frame_count
 import traceback
-import cv2
 
 import modules.async_worker as worker
 from modules.util import generate_temp_filename
@@ -445,12 +445,7 @@ class pipeline:
             )
 
             # Save mp4
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-            mp4_file = file.with_suffix(".mp4")
-            out = cv2.VideoWriter(str(mp4_file), fourcc, fps, (gen_data["width"], gen_data["height"]))
-            for frame in pil_images:
-                out.write(cv2.cvtColor(np.asarray(frame), cv2.COLOR_BGR2RGB))
-            out.release()
+            save_mp4(file.with_suffix(".mp4"), pil_images, fps)
         except comfy.model_management.InterruptProcessingException:
             raise
         except Exception as error:
