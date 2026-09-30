@@ -1,0 +1,123 @@
+/* Application-owned IDs keep the layout independent of Gradio's generated IDs. */
+.gradio-container {
+  --rf-preview-height: max(320px, calc(100dvh - 250px));
+  --rf-chat-height: max(320px, calc(100dvh - 240px));
+  --rf-gallery-height: max(320px, calc(100dvh - 210px));
+  --text-sm: clamp(12px, .7vw, 16px);
+  --text-md: clamp(14px, .8vw, 18px);
+  --text-lg: clamp(16px, .9vw, 20px);
+  --layout-gap: 8px;
+  --block-padding: 8px 10px;
+}
+.gradio-container .main {
+  max-width: none !important;
+  padding: 10px clamp(8px, 1vw, 24px) !important;
+}
+#app-title { margin: 0; padding: 0; }
+#app-tabs .gr-group .block {
+  border-width: var(--block-border-width, 1px);
+  border-color: var(--block-border-color);
+}
+#app-title h1 { margin: 0 0 4px; font-size: clamp(16px, 1vw, 22px); line-height: 1.3; }
+#app-tabs > .tab-wrapper .tab-container { gap: 2px; }
+#app-tabs > .tab-wrapper [role="tab"] { min-height: 36px; }
+#generation-layout, #browser-layout { align-items: start; gap: 12px; }
+#generation-workspace, #generation-controls, #browser-images, #browser-controls,
+#chat-conversation, #chat-controls { min-width: 0 !important; }
+#prompt-row { align-items: stretch; gap: 8px; }
+#prompt-actions { min-width: 120px; }
+#prompt-actions button { min-height: 44px; }
+#main_view, #inpaint_view { min-width: 0; }
+#main_view img { object-fit: contain; }
+#hint-container { max-height: 150px; overflow: auto; }
+#settings-layout { gap: 12px; align-items: start; }
+#settings-layout > .column { min-width: min(100%, 320px) !important; }
+#checkpoint-tools { gap: 8px; padding: 6px; }
+#checkpoint-tools .row { gap: 8px; }
+#one-button-actions { gap: 6px; }
+#one-button-actions button { min-height: 36px; }
+#style-selection button { border-radius: var(--button-small-radius); }
+#style-selection .token-remove {
+  background: transparent; color: var(--body-text-color); box-shadow: none;
+  border: 0; border-radius: var(--radius-sm); width: 24px; height: 24px;
+}
+#style-selection .token-remove:hover { background: var(--button-secondary-background-fill-hover); }
+
+#chat-layout { --chat-width: calc(100% - clamp(300px, 28vw, 480px) - 26px); gap: 8px; align-items: start; }
+#chat-local-models { background: var(--block-background-fill); }
+#chat-model-source .wrap { display: flex; flex-wrap: nowrap; gap: 4px; }
+#chat-model-source label { flex: 1; min-width: 0; justify-content: center; }
+#chat-model-source label span { margin: 0; }
+#chat-model-source label input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+#chat-model-source label.selected, #chat-model-source label.selected:hover {
+  background: var(--color-accent); border-color: var(--color-accent); color: white;
+}
+#chat-model-source label:not(.selected):hover { background: var(--button-secondary-background-fill-hover); }
+#chat-model-source label:focus-within { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+#chat-model-actions { align-items: stretch; }
+#chat-model-actions button { height: auto; min-height: 36px; padding: 6px 8px; }
+#chat-avatar { width: 100% !important; min-width: 0 !important; }
+#chat-messages .message { max-width: 100%; }
+#chat-messages .prose { max-width: none; line-height: 1.6; overflow-wrap: anywhere; }
+#chat-messages pre { max-width: 100%; overflow-x: auto; white-space: pre; }
+#chat-messages pre code { white-space: pre; overflow-wrap: normal; word-break: normal; }
+#chat-divider {
+  align-self: stretch; padding: 0; width: 10px !important; min-width: 10px !important;
+  min-height: 120px; position: relative;
+}
+#chat-divider .html-container, #chat-divider .prose { width: 100%; height: 100%; }
+#chat-divider [role="separator"] {
+  position: absolute; inset: 0; cursor: col-resize; border-radius: 5px;
+  background: var(--border-color-primary); touch-action: none;
+}
+#chat-divider [role="separator"]:hover, #chat-divider [role="separator"]:focus-visible {
+  background: var(--color-accent); outline: 2px solid var(--color-accent);
+}
+textarea { resize: vertical; }
+.loader-container { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; }
+.loader-container progress {
+  appearance: none; height: 12px; border-radius: 6px; overflow: hidden;
+  background: var(--background-fill-secondary); width: 100%;
+}
+.progress-container { flex: 1 1 180px; min-width: 0; }
+.loader-container progress::-webkit-progress-bar { background: var(--background-fill-secondary); }
+.loader-container progress::-webkit-progress-value { background: var(--color-accent); }
+.loader-container progress::-moz-progress-bar { background: var(--color-accent); }
+.loader-container > span { white-space: normal; overflow-wrap: anywhere; }
+#progress-bar > .generating, .hint-container > .generating { display: none !important; }
+#progress-bar { min-height: 26px; }
+.json-container { max-height: 60dvh; overflow: auto !important; }
+.refresh_button { border: none !important; background: none !important; box-shadow: none !important; }
+.element1 { opacity: .01; }
+#inpaint_sketch { overflow: auto; background: var(--panel-background-fill); }
+
+@media (min-width: 1001px) {
+  #generation-layout, #browser-layout {
+    display: grid; grid-template-columns: minmax(0, 1fr) clamp(340px, 28vw, 640px);
+  }
+  #chat-layout { display: grid; grid-template-columns: minmax(0, var(--chat-width)) 10px minmax(280px, 1fr); }
+}
+@media (max-width: 1000px) {
+  #app-tabs {
+    --rf-preview-height: clamp(280px, 52dvh, 680px);
+    --rf-chat-height: clamp(300px, 58dvh, 720px);
+    --rf-gallery-height: clamp(320px, 65dvh, 720px);
+  }
+  #generation-layout, #browser-layout, #chat-layout { flex-direction: column; }
+  #generation-workspace, #generation-controls, #browser-images, #browser-controls,
+  #chat-conversation, #chat-controls { width: 100%; flex-basis: auto !important; }
+  #chat-divider { display: none; }
+}
+@media (max-width: 600px) {
+  .gradio-container .main { padding: 8px !important; }
+  #app-tabs > .tab-wrapper .tab-container { gap: 0; }
+  #app-tabs > .tab-wrapper [role="tab"] { padding: 8px 7px; font-size: 12px; min-height: 44px; }
+  #app-tabs [role="tab"] { min-height: 44px; }
+  #prompt-row { flex-direction: column; }
+  #prompt-actions { width: 100%; flex-basis: auto !important; }
+  #prompt-actions button, #chat-model-actions button, #one-button-actions button { min-height: 44px; }
+  #settings-layout { flex-direction: column; }
+  #settings-layout > .column { width: 100%; flex-basis: auto !important; }
+  /* Avoid iOS focus zoom without disabling the user's pinch zoom. */
+  #app-tabs input, #app-tabs textarea, #app-tabs select { font-size: 16px; }
+}

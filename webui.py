@@ -129,14 +129,13 @@ def launch_app(args):
             theme = gr.themes.Default()
 
     # Override some settings
-    theme.spacing_lg = '8px'
-    theme.spacing_md = '6px'
-    theme.spacing_sm = '4px'
-    theme.spacing_xl = '8px'
-    theme.spacing_xs = '2px'
-    theme.spacing_xxl = '2px'
-    theme.spacing_xxs = '1px' 
-    theme.text_xxl = '8px' 
+    theme.spacing_lg = '12px'
+    theme.spacing_md = '8px'
+    theme.spacing_sm = '6px'
+    theme.spacing_xl = '16px'
+    theme.spacing_xs = '4px'
+    theme.spacing_xxl = '20px'
+    theme.spacing_xxs = '2px'
 
     # Create the image gallery from the new module
     app_image_browser, browser_refresh_outputs = ui_image_gallery.create_image_gallery()
@@ -158,14 +157,24 @@ def launch_app(args):
     app_llama_chat = ui_llama_chat.create_chat(image_controls)
     app_settings = ui_settings.create_settings()
 
-    main_tabs = gr.TabbedInterface(
-        [shared.gradio_root, app_image_browser, app_llama_chat, app_settings],
-        [t("Main"), t("Image browser"), t("Chat bots"), t("Settings")],
+    main_tabs = gr.Blocks(
         title="RuinedFooocus " + version.version,
         analytics_enabled=False,
+        fill_width=True,
     )
     with main_tabs:
-        top_tabs = next(child for child in main_tabs.children if isinstance(child, gr.Tabs))
+        gr.Markdown("# RuinedFooocus " + version.version, elem_id="app-title")
+        with gr.Tabs(elem_id="app-tabs", overflow_behavior="wrap") as top_tabs:
+            for interface, label in zip(
+                [shared.gradio_root, app_image_browser, app_llama_chat, app_settings],
+                [t("Main"), t("Image browser"), t("Chat bots"), t("Settings")],
+            ):
+                # Include automatically created nested tab groups in the responsive layout.
+                for component in interface.blocks.values():
+                    if isinstance(component, gr.Tabs):
+                        component.overflow_behavior = "wrap"
+                with gr.Tab(label):
+                    interface.render()
         top_tabs.children[1].select(
             ui_image_gallery.browser.update_images, outputs=browser_refresh_outputs,
             concurrency_id="image_browser_refresh",
@@ -349,19 +358,20 @@ with shared.gradio_root as block:
     cfg_timer = gr.Timer(value=5)
     cfg_timer.tick(fn=get_cfg_timestamp, api_visibility='undocumented', outputs=[cfg_timestamp])
 
-    with gr.Row():
-        with gr.Column(scale=5):
+    with gr.Row(elem_id="generation-layout"):
+        with gr.Column(scale=5, min_width=0, elem_id="generation-workspace"):
             main_view = gr.Image(
                 elem_id="main_view",
                 value="html/init_image.png",
-                height=680,
+                height="var(--rf-preview-height)",
                 type="filepath",
                 visible=True,
                 buttons=['download', 'share', 'fullscreen'],
             )
             add_ctrl("main_view", main_view)
             inpaint_view = gr.ImageEditor(
-                height=680,
+                height="var(--rf-preview-height)",
+                elem_id="inpaint_view",
                 type="numpy",
                 visible='hidden',
                 show_label=False,
@@ -412,8 +422,8 @@ with shared.gradio_root as block:
                     metadata_json: gr.update(value=metadata),
                 }
 
-            with gr.Row(elem_classes="type_row"):
-                with gr.Column(scale=5):
+            with gr.Row(elem_id="prompt-row"):
+                with gr.Column(scale=5, min_width=0):
                     with gr.Group():
                         with gr.Group(), gr.Row():
                             prompt = gr.Textbox(
@@ -427,7 +437,7 @@ with shared.gradio_root as block:
                             )
                             add_ctrl("prompt", prompt)
 
-                with gr.Column(scale=1, min_width=0):
+                with gr.Column(scale=1, min_width=0, elem_id="prompt-actions"):
                     run_button = gr.Button(value=t("Generate"), elem_id="generate")
                     stop_button = gr.Button(
                         value=t("Stop"), interactive=False, visible='hidden'
@@ -476,7 +486,7 @@ with shared.gradio_root as block:
                         params = look(image, prompt, gr)
                         return params, [file]
 
-        with gr.Column(scale=2) as right_col:
+        with gr.Column(scale=2, min_width=0, elem_id="generation-controls") as right_col:
             with gr.Tab(label=t("Setting")):
                 preset_accordion = gr.Accordion(
                     label="Preset:",

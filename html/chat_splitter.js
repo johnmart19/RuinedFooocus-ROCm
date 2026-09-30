@@ -1,9 +1,19 @@
 const handle = element.querySelector('[role="separator"]');
 const row = element.closest('#chat-layout');
+const maximumWidth = () => Math.floor((row.clientWidth - 306) / row.clientWidth * 100);
 const setWidth = percent => {
-    percent = Math.max(35, Math.min(85, percent));
+    // Keep the model controls usable even near the desktop/mobile breakpoint.
+    const maximum = maximumWidth();
+    percent = Math.max(35, Math.min(maximum, percent));
     row.style.setProperty('--chat-width', percent + '%');
+    handle.setAttribute('aria-valuemax', Math.floor(maximum));
     handle.setAttribute('aria-valuenow', Math.round(percent));
+};
+const resetWidth = () => {
+    row.style.removeProperty('--chat-width');
+    const conversation = row.querySelector('#chat-conversation');
+    handle.setAttribute('aria-valuemax', maximumWidth());
+    handle.setAttribute('aria-valuenow', Math.round(conversation.clientWidth / row.clientWidth * 100));
 };
 handle.addEventListener('pointerdown', event => {
     handle.focus();
@@ -20,6 +30,14 @@ handle.addEventListener('keydown', event => {
     if (!['ArrowLeft', 'ArrowRight', 'Home'].includes(event.key)) return;
     event.preventDefault();
     const current = Number(handle.getAttribute('aria-valuenow'));
-    setWidth(event.key === 'Home' ? 72 : current + (event.key === 'ArrowLeft' ? -2 : 2));
+    if (event.key === 'Home') resetWidth();
+    else setWidth(current + (event.key === 'ArrowLeft' ? -2 : 2));
 });
-handle.addEventListener('dblclick', () => setWidth(72));
+handle.addEventListener('dblclick', resetWidth);
+const observer = new ResizeObserver(() => {
+    if (row.clientWidth <= 1000) return;
+    if (row.style.getPropertyValue('--chat-width')) {
+        setWidth(Number(handle.getAttribute('aria-valuenow')));
+    } else resetWidth();
+});
+observer.observe(row);

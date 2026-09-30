@@ -60,7 +60,7 @@ def save_clicked(*args):
 
 def create_settings():
     with gr.Blocks() as app_settings:
-        with gr.Row():
+        with gr.Row(elem_id="settings-layout"):
             with gr.Column():
                 gr.Markdown(t("# UI settings"))
                 local_metadata = gr.Checkbox(label="Local model metadata only",
@@ -286,7 +286,7 @@ def create_settings():
                 add_setting("llm_n_predict", llm_n_predict)
                 llm_n_ctx = gr.Number(label="n_ctx", interactive=True, value=settings.default_settings.get("llm_n_ctx", 8192), minimum=0, step=1)
                 add_setting("llm_n_ctx", llm_n_ctx)
-                llm_n_gpu_layers = gr.Number(label="n_gpu_layers", info="-1 offloads all layers to GPU; 0 keeps model weights on CPU.", interactive=True, value=settings.default_settings.get("llm_n_gpu_layers", -1), minimum=-1, step=1)
+                llm_n_gpu_layers = gr.Number(label="n_gpu_layers", info="-1: automatic VRAM fitting in llama.cpp, full offload in xllamacpp. 0: CPU weights.", interactive=True, value=settings.default_settings.get("llm_n_gpu_layers", -1), minimum=-1, step=1)
                 add_setting("llm_n_gpu_layers", llm_n_gpu_layers)
                 llm_chat_history = gr.Number(label="chat_history", info="0 keeps only the current message.", interactive=True, placeholder=7, value=settings.default_settings.get("llm_chat_history", None), minimum=0, step=1)
                 add_setting("llm_chat_history", llm_chat_history)

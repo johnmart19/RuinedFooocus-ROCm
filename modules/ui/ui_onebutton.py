@@ -562,10 +562,10 @@ def ui_onebutton(prompt, run_event):
         return prompt
 
     with gr.Tab(label="One Button"):
-        with gr.Row():
+        with gr.Row(elem_id="one-button-actions"):
             instant_obp = gr.Button(value="Instant OBP", size="sm", min_width = 1)
             random_button = gr.Button(value="Random Prompt", size="sm", min_width = 1)
-            add_random_button = gr.Button(value="+", size="sm", min_width=1)
+            add_random_button = gr.Button(value="+", size="sm", min_width=44, scale=0)
 
         with gr.Row():
             assumedirectcontrol = gr.Checkbox(

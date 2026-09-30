@@ -36,15 +36,16 @@ def apply_metadata(metadata):
     return updates
 
 def create_image_gallery():
-    with gr.Blocks(theme=gr.themes.Soft()) as app_image_browser:
-        with gr.Row():
+    with gr.Blocks() as app_image_browser:
+        with gr.Row(elem_id="browser-layout"):
             # Left side for gallery
-            with gr.Column(scale=2):
+            with gr.Column(scale=2, min_width=0, elem_id="browser-images"):
                 gallery = gr.Gallery(
                     label=t("Images"),
                     show_label=False,
-                    columns=[4],
-                    height=600,
+                    columns=[2, 2, 3, 4, 6, 8],
+                    height="var(--rf-gallery-height)",
+                    elem_id="output-browser",
                     object_fit="contain",
                     value=browser.load_images(1)[0],
                 )
@@ -59,7 +60,7 @@ def create_image_gallery():
                 ib_range = gr.Markdown()
 
             # Right side for metadata and search
-            with gr.Column(scale=1):
+            with gr.Column(scale=1, min_width=0, elem_id="browser-controls"):
                 with gr.Row():
                     update_btn = gr.Button(t("Update DB"), scale=3)
                     copymeta_btn = gr.Button(t("Copy to prompt"), scale=3)

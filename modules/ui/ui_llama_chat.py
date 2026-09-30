@@ -114,7 +114,7 @@ def create_chat(image_controls=None):
 
     def _llama_select_assistant(dropdown):
         if dropdown == "__normal__":
-            return {"name": "Normal", "avatar": None, "system": "",
+            return {"name": "Normal", "avatar": html_dir / "chat_normal.png", "system": "",
                     "embed": "[]", "chatstart": []}
         character = Path(dropdown)
         try:
@@ -177,7 +177,7 @@ def create_chat(image_controls=None):
                 llama_chat = gr.Chatbot(
                     label="",
                     show_label=False,
-                    height=600,
+                    height="var(--rf-chat-height)",
                     resizable=True,
                     elem_id="chat-messages",
                     reasoning_tags=[("<think>", "</think>"), ("<thinking>", "</thinking>")],
@@ -203,8 +203,8 @@ def create_chat(image_controls=None):
                 llama_avatar = gr.Image(
                     value=_llama_select_assistant(default_bot)["avatar"],
                     label=_llama_select_assistant(default_bot)["name"],
-                    height=400,
-                    width=400,
+                    height="clamp(160px, 24dvh, 280px)",
+                    elem_id="chat-avatar",
                     show_label=True,
                     visible=_llama_select_assistant(default_bot)["avatar"] is not None,
                 )
@@ -236,7 +236,7 @@ def create_chat(image_controls=None):
                       label { display: block; margin: 0 0 8px; font-size: var(--block-label-text-size); }
                       details { margin: 0; padding: 0; }
                       summary { cursor: pointer; list-style: none; padding: 6px 12px; min-height: 42px;
-                        margin: 0; box-sizing: border-box; line-height: 28px; border-radius: var(--input-radius);
+                        margin: 0; box-sizing: border-box; line-height: 28px; overflow-wrap: anywhere; border-radius: var(--input-radius);
                         background: var(--input-background-fill); border: 1px solid var(--border-color-primary); }
                       summary::after { content: '▾'; float: right; }
                       .model-options { max-height: 280px; overflow-y: auto; margin-top: 4px;
