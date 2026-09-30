@@ -71,9 +71,10 @@ def torch_install_commands(torchruntime, torch_platform, os_platform, nightly=Fa
     if torch_platform == "cu124" and not (3, 10) <= sys.version_info[:2] <= (3, 13):
         raise RuntimeError("CUDA 12.4 requires Python 3.10–3.13 in RuinedFooocus. Use Python 3.10 or 3.12 for GTX 1080 Ti.")
     # Keep the selected CUDA runtime: newer wheels may drop older GPU support.
-    from modules.cuda_selection import CUDA_PACKAGES, cuda_index, cuda_wheels_available
+    from modules.cuda_selection import CUDA_PACKAGES, cuda_index, cuda_wheels_available, validate_cuda_runtime
     if os_platform not in ("Windows", "Linux") or torch_platform not in (*CUDA_PACKAGES, "cu134"):
         return torchruntime.installer.get_install_commands(torch_platform, [])
+    validate_cuda_runtime(torch_platform, nightly=nightly)
     if not cuda_wheels_available(torch_platform, nightly=nightly):
         raise RuntimeError(f"No {torch_platform} wheel bundle matches Python {sys.version.split()[0]} and this OS/CPU architecture.")
     if nightly or torch_platform == "cu134":

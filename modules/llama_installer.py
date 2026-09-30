@@ -23,14 +23,15 @@ RELEASES = "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/"
 def validate_cuda_backend(backend):
     if not backend.startswith("CUDA "):
         return
-    from modules.cuda_selection import nvidia_info
-    capability, driver = nvidia_info()
+    from modules.cuda_selection import nvidia_devices
+    capabilities, driver = nvidia_devices()
     required = tuple(int(part) for part in backend.split()[1].split("."))
-    if capability is None or driver is None:
+    if not capabilities or driver is None:
         raise RuntimeError("Cannot validate the NVIDIA GPU/driver. Check nvidia-smi or select Vulkan/CPU.")
     if driver < required:
         raise RuntimeError(f"{backend} requires a newer NVIDIA driver; select Vulkan or update the driver.")
-    if (required[0] >= 13 and capability < 7.5) or (required == (12, 4) and capability >= 10):
+    if any(capability < 5 or (required[0] >= 13 and capability < 7.5)
+           or (required == (12, 4) and capability >= 10) for capability in capabilities):
         raise RuntimeError(f"{backend} does not support this GPU architecture. Select a compatible CUDA backend or Vulkan.")
 
 

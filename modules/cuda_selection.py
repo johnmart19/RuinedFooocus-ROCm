@@ -1,6 +1,7 @@
 """CUDA selection using GPU architecture, driver and this interpreter's wheel tags."""
 
 import re
+import csv
 import os
 import shutil
 from pathlib import Path
@@ -61,7 +62,8 @@ def cuda_wheels_available(runtime, nightly=False):
 def select_cuda_nightly(os_platform, override=None):
     if os_platform not in ("Windows", "Linux"):
         raise RuntimeError("--cuda-nightly requires Windows or Linux.")
-    capability, driver = nvidia_info()
+    capabilities, driver = nvidia_devices()
+    capability = min(capabilities) if capabilities else None
     if capability is None or driver is None:
         raise RuntimeError("--cuda-nightly requires an NVIDIA GPU and working nvidia-smi detection.")
     if capability < 7.5:
@@ -78,7 +80,7 @@ def select_cuda_nightly(os_platform, override=None):
     raise RuntimeError(f"No supported CUDA nightly bundle matches Python {sys.version.split()[0]}, this OS/CPU architecture and driver CUDA {driver}. Existing packages were not replaced.")
 
 
-def nvidia_info():
+def nvidia_devices():
     executable = shutil.which("nvidia-smi")
     if executable is None:
         # Driver utilities are not always on PATH, especially in WSL.
@@ -95,41 +97,113 @@ def nvidia_info():
         output = subprocess.check_output([executable], text=True, timeout=15,
                                          stderr=subprocess.DEVNULL)
     except (OSError, subprocess.SubprocessError):
-        return None, None
+        return (), None
     cuda = re.search(r"CUDA (?:UMD )?Version:\s*(\d+)\.(\d+)", output)
     driver = (int(cuda[1]), int(cuda[2])) if cuda else None
     try:
-        capabilities = subprocess.check_output(
-            [executable, "--query-gpu=compute_cap", "--format=csv,noheader"],
+        output = subprocess.check_output(
+            [executable, "--query-gpu=uuid,pci.bus_id,compute_cap", "--format=csv,noheader"],
             text=True, timeout=15, stderr=subprocess.DEVNULL)
-        caps = [float(value.strip()) for value in capabilities.splitlines()]
-        return min(caps), driver
-    except (OSError, subprocess.SubprocessError, ValueError):
-        return None, driver
+        devices = []
+        for row in csv.reader(output.splitlines()):
+            if not row:
+                continue
+            if len(row) != 3:
+                raise RuntimeError("Unexpected nvidia-smi device response. Update the NVIDIA driver.")
+            uuid, bus, capability = (value.strip() for value in row)
+            # An actual adapter with unavailable capability must not become CPU.
+            capability = float(capability) if re.fullmatch(r"\d+\.\d+", capability) else 0.0
+            devices.append((uuid, bus, capability))
+        if not devices:
+            return (), driver
+        visible = os.environ.get("CUDA_VISIBLE_DEVICES")
+        if visible is not None:
+            selectors = [value.strip() for value in visible.split(",")]
+            if visible.strip() in ("", "-1"):
+                raise RuntimeError("CUDA_VISIBLE_DEVICES hides NVIDIA GPUs. Use --cpu explicitly or unset it.")
+            selected = []
+            for selector in selectors:
+                if selector.startswith("GPU-"):
+                    matches = [device for device in devices if device[0].startswith(selector)]
+                elif selector.isdigit():
+                    if len(devices) > 1 and os.environ.get("CUDA_DEVICE_ORDER") != "PCI_BUS_ID":
+                        raise RuntimeError("For multiple NVIDIA GPUs, use GPU UUIDs in CUDA_VISIBLE_DEVICES "
+                                           "or set CUDA_DEVICE_ORDER=PCI_BUS_ID before selecting numeric devices.")
+                    ordered = sorted(devices, key=lambda device: device[1])
+                    index = int(selector)
+                    matches = ordered[index:index + 1]
+                else:
+                    matches = []
+                if len(matches) != 1:
+                    raise RuntimeError("Cannot resolve CUDA_VISIBLE_DEVICES to one NVIDIA GPU per selector. "
+                                       "Use full GPU UUIDs from nvidia-smi -L; MIG setup needs a custom environment.")
+                selected.extend(matches)
+            devices = selected
+        return tuple(device[2] for device in devices), driver
+    except (OSError, subprocess.SubprocessError):
+        # Older drivers may not expose compute_cap. Keep actual NVIDIA presence
+        # distinct from a leftover driver header, especially without PCI in WSL.
+        try:
+            identities = subprocess.check_output(
+                [executable, "--query-gpu=uuid", "--format=csv,noheader"],
+                text=True, timeout=15, stderr=subprocess.DEVNULL)
+            return tuple(0.0 for line in identities.splitlines() if line.strip().startswith("GPU-")), driver
+        except (OSError, subprocess.SubprocessError):
+            return (), driver
+
+
+def nvidia_info():
+    capabilities, driver = nvidia_devices()
+    return min(capabilities) if capabilities else None, driver
 
 
 def cuda_candidates(capability, driver_cuda=None):
+    if capability < 5:
+        return []
     candidates = ["cu126", "cu124"] if capability < 7.5 else ["cu132", "cu130", "cu128"]
     if 7.5 <= capability < 10:
         candidates += ["cu126", "cu124"]
-    if capability >= 12.1:
+    if capability == 11.0 or capability >= 12.1:
         candidates = ["cu132", "cu130"]  # Includes GB10/Spark; Python tags decide ARM wheel availability.
     if driver_cuda:
         candidates = [c for c in candidates if (int(c[2:-1]), int(c[-1])) <= driver_cuda]
     return candidates
 
 
+def validate_cuda_runtime(runtime, nightly=False):
+    """Validate explicit reinstall choices before pip can replace working wheels."""
+    capabilities, driver = nvidia_devices()
+    if not capabilities or driver is None or any(capability == 0 for capability in capabilities):
+        raise RuntimeError("Cannot validate the selected CUDA runtime without NVIDIA GPU and driver information.")
+    if nightly or runtime == "cu134":
+        supported = min(capabilities) >= 7.5 and (int(runtime[2:-1]), int(runtime[-1])) <= driver
+    else:
+        supported = all(runtime in cuda_candidates(capability, driver) for capability in capabilities)
+    if not supported:
+        raise RuntimeError(f"{runtime} is incompatible with the selected NVIDIA GPUs or driver. "
+                           "Remove TORCH_PLATFORM to select a compatible bundle; no packages were replaced.")
+
+
 def select_cuda(gpus):
-    capability, driver = nvidia_info()
-    if capability is None:
-        from torchruntime.gpu_db import get_nvidia_arch
-        capability = get_nvidia_arch({gpu.device_name for gpu in gpus if gpu.vendor_id.lower() == "10de"})
-    if capability is None or capability < 5:
-        raise RuntimeError("This NVIDIA architecture needs an older PyTorch environment.")
-    print(f"NVIDIA compute capability: {capability}; driver CUDA: {driver}; Python: {sys.version.split()[0]}")
-    for candidate in cuda_candidates(capability, driver):
+    capabilities, driver = nvidia_devices()
+    if not capabilities or any(capability == 0 for capability in capabilities):
+        raise RuntimeError("Cannot determine every selected NVIDIA GPU's compute capability. "
+                           "Check nvidia-smi and update the driver; no packages were replaced.")
+    if min(capabilities) < 5:
+        raise RuntimeError("NVIDIA GPUs older than Maxwell need a legacy environment; "
+                           "this application's CUDA bundles require compute capability 5.0 or newer.")
+    if driver is None:
+        raise RuntimeError("Cannot determine the NVIDIA driver's CUDA version. Check nvidia-smi before installing.")
+    print(f"NVIDIA compute capabilities: {capabilities}; driver CUDA: {driver}; Python: {sys.version.split()[0]}")
+    candidates = cuda_candidates(capabilities[0], driver)
+    candidates = [candidate for candidate in candidates
+                  if all(candidate in cuda_candidates(capability, driver) for capability in capabilities)]
+    if not candidates:
+        raise RuntimeError("No CUDA bundle supports all selected NVIDIA GPUs and this driver. "
+                           "Select compatible GPUs with CUDA_VISIBLE_DEVICES (GPU UUIDs) or update the driver.")
+    for candidate in candidates:
         if cuda_wheels_available(candidate):
             return candidate
     raise RuntimeError(f"No compatible CUDA wheel bundle for Python {sys.version.split()[0]}, "
-                       f"GPU compute capability {capability}, driver CUDA {driver}. "
+                       f"GPU compute capabilities {capabilities}, driver CUDA {driver}. "
                        "Use a supported Python environment or update the NVIDIA driver.")
