@@ -17,6 +17,8 @@ parser.add_argument(
     help="Set the listen interface.",
 )
 parser.add_argument("--mcp", action="store_true", help="Start MCP server.")
+parser.add_argument("--api", action="store_true", help="Expose OpenAI-compatible chat/images and an OpenAPI image tool.")
+parser.add_argument("--api-key", default=None, help="API bearer key (or set RF_API_KEY). Required with --api when listening beyond localhost.")
 parser.add_argument("--nobrowser", action="store_true", help="Do not launch in browser.")
 parser.add_argument("--gpu-device-id", type=int, default=None, metavar="DEVICE_ID")
 parser.add_argument("--offline", action="store_true", help="Skip update-check during startup.")
