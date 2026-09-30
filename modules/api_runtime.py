@@ -125,11 +125,76 @@ def chat(payload, selected):
         if "max_completion_tokens" in data:
             data.setdefault("max_tokens", data.pop("max_completion_tokens"))
         model_id = data.pop("model")
-        def emit(chunk):
-            job.emit(dict(chunk, model=model_id))
-        result = pipeline.llm.handle_chat_completions(data, emit if data.get("stream") else None)
-        return dict(result, model=model_id) if result is not None else None
+        return chat_completion(pipeline.llm, data, job, model_id)
     return submit(run)
+
+
+def chat_completion(llm, data, job, model_id):
+    """Keep cancellation checks active even when the client wants one JSON reply."""
+    streaming = data.get("stream", False)
+    request = dict(data, stream=True)
+    if not streaming:
+        request["stream_options"] = {"include_usage": True}
+    result = {"object": "chat.completion", "model": model_id, "choices": []}
+    choices = {}
+
+    def collect(chunk):
+        if job.cancelled.is_set():
+            raise RuntimeError("Request cancelled.")
+        if streaming:
+            job.emit(dict(chunk, model=model_id))
+            return
+        for key in ("id", "created", "system_fingerprint", "usage", "service_tier"):
+            if chunk.get(key) is not None:
+                result[key] = chunk[key]
+        for part in chunk.get("choices", []):
+            index = part["index"]
+            choice = choices.setdefault(index, {"index": index,
+                "message": {"role": "assistant", "content": None}, "finish_reason": None})
+            message = choice["message"]
+            for key, value in part.get("delta", {}).items():
+                if value is None:
+                    continue
+                if key == "tool_calls":
+                    calls = message.setdefault("tool_calls", {})
+                    for fragment in value:
+                        call = calls.setdefault(fragment["index"], {})
+                        for field in ("id", "type"):
+                            if fragment.get(field):
+                                call[field] = fragment[field]
+                        function = call.setdefault("function", {})
+                        for field, text in fragment.get("function", {}).items():
+                            function[field] = function.get(field, "") + (text or "")
+                elif key == "function_call":
+                    function = message.setdefault(key, {})
+                    for field, text in value.items():
+                        function[field] = function.get(field, "") + (text or "")
+                elif key == "role":
+                    message[key] = value
+                elif isinstance(value, str):
+                    message[key] = (message.get(key) or "") + value
+            if part.get("finish_reason") is not None:
+                choice["finish_reason"] = part["finish_reason"]
+            if part.get("logprobs") is not None:
+                logprobs = choice.setdefault("logprobs", {})
+                for key, values in part["logprobs"].items():
+                    if values is not None:
+                        logprobs.setdefault(key, []).extend(values)
+
+    if job.cancelled.is_set():
+        raise RuntimeError("Request cancelled.")
+    llm.handle_chat_completions(request, collect)
+    if job.cancelled.is_set():
+        raise RuntimeError("Request cancelled.")
+    if streaming:
+        return None
+    for index in sorted(choices):
+        choice = choices[index]
+        calls = choice["message"].get("tool_calls")
+        if calls is not None:
+            choice["message"]["tool_calls"] = [calls[i] for i in sorted(calls)]
+        result["choices"].append(choice)
+    return result
 
 
 def decode_image(encoded):

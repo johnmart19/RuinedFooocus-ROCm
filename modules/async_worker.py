@@ -53,6 +53,7 @@ def is_sha256_hash(input_string):
     return True
 
 def _process(gen_data):
+    check_interrupt(gen_data)
     res = []
     metadatastrings = []
     # Named sampling defaults apply first; imported image/JSON metadata wins.
@@ -164,6 +165,8 @@ def _process(gen_data):
     def callback(step, x0, x, total_steps, y):
         global status
         check_interrupt(gen_data)
+        if "silent" in gen_data:
+            return
 
         # If we only generate 1 image, skip the last preview
         if (
@@ -257,6 +260,7 @@ def _process(gen_data):
         denoise = None
         with TimeIt("Pipeline process"):
             try:
+                check_interrupt(gen_data)
                 # Load LoRAs
                 parsed_loras, p_txt, n_txt = parse_loras(p_txt, n_txt)
                 used_loras = loras + parsed_loras
@@ -266,7 +270,7 @@ def _process(gen_data):
 
                 imgs = pipeline.process(
                     gen_data=gen_data,
-                    callback=callback if "silent" not in gen_data else None,
+                    callback=callback,
                 )
             except model_management.InterruptProcessingException:
                 shared.state["interrupted"] = True
