@@ -94,7 +94,7 @@ Or if you want to open a remote port, use
 33. Clip Interrogator, just drag your image onto the main image to generate the prompt
 34. Inpainting, Available in the `PowerUp` tab, simple check the box and it will either take a new image or the selected image in your gallery
 35. Evolve, takes your current generation and evolves it into different variations, best used with a fixed seed!
-36. Support --auth=username/password for rudimentary security (Forced when using --share)
+36. Authenticated LAN access and isolated guest generation ([setup](docs/launchers.md#lan-access-and-guests))
 37. Automatically downloads your Lora triggerwords from civit and displays them for you
 38. Automatic Negative prompt, save yourself the heartache and hassle of writing negative prompts!
 39. If the file `reinstall` exists upgrade xformers and torch to 2.1.2 (to upgrade simply create a blank file called `reinstall`)
