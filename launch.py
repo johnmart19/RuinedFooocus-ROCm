@@ -9,6 +9,7 @@ from modules.shared_functions import broken_torch_platforms
 
 os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
 os.environ["DO_NOT_TRACK"] = "1"
+os.environ["GRADIO_ANALYTICS_ENABLED"] = "False"
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 os.environ["CMAKE_POLICY_VERSION_MINIMUM"] = "3.5"
 os.environ["PYTORCH_ALLOC_CONF"] = "expandable_segments:True"
@@ -200,7 +201,9 @@ def download_models():
 
 from argparser import args
 from modules.startup_port import configure_port
+from modules.web_access import validate_web_access
 
+validate_web_access(args)
 configure_port(args)
 
 REINSTALL_ALL = False

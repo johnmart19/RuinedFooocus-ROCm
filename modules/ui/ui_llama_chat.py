@@ -201,6 +201,7 @@ def create_chat(image_controls=None):
                     js_on_load=(Path(__file__).resolve().parents[2] / "html" / "chat_splitter.js").read_text(encoding="utf-8"))
             with gr.Column(scale=2, min_width=0, elem_id="chat-controls"), gr.Group():
                 llama_avatar = gr.Image(
+                    buttons=['download', 'fullscreen'],
                     value=_llama_select_assistant(default_bot)["avatar"],
                     label=_llama_select_assistant(default_bot)["name"],
                     height="clamp(160px, 24dvh, 280px)",

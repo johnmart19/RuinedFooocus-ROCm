@@ -1,6 +1,7 @@
 import torchruntime
 import platform
 import os
+os.environ["GRADIO_ANALYTICS_ENABLED"] = "False"
 from modules.shared_functions import broken_torch_platforms
 gpus = torchruntime.device_db.get_gpus()
 if "TORCH_PLATFORM" in os.environ:
@@ -73,6 +74,11 @@ import re
 import traceback
 
 import version
+if args.guest:
+    from modules.ui.ui_guest import launch_guest
+    launch_guest(args)
+    raise SystemExit(0)
+
 import modules.async_worker as worker
 import modules.html
 import modules.hints
@@ -118,6 +124,9 @@ def find_unclosed_markers(s):
 
 
 def launch_app(args):
+    from modules.web_access import PrivateResponses, validate_web_access
+    from starlette.middleware import Middleware
+    validate_web_access(args)
     inbrowser = not args.nobrowser
     favicon_path = "logo.ico"
 
@@ -189,7 +198,7 @@ def launch_app(args):
         inbrowser=inbrowser,
         server_name=args.listen,
         server_port=args.port,
-        share=args.share,
+        share=False,
         auth=(
             args.auth.split("/", 1)
             if isinstance(args.auth, str) and "/" in args.auth
@@ -199,10 +208,12 @@ def launch_app(args):
         favicon_path=favicon_path,
         css=modules.html.css,
         js=modules.html.scripts,
-        allowed_paths=["html", "/", path_manager.model_paths["temp_outputs_path"]]
+        allowed_paths=["html", str(path_manager.model_paths["temp_outputs_path"])]
+        + [str(path) for path in shared.models.cache_paths.values()]
         + settings.get("archive_folders", []),
+        app_kwargs={"middleware": [Middleware(PrivateResponses)]},
         enable_monitoring=False,
-        pwa=True,
+        pwa=False,
         mcp_server=args.mcp,
         prevent_thread_lock=True,
     )
@@ -371,7 +382,7 @@ with shared.gradio_root as block:
                 height="var(--rf-preview-height)",
                 type="filepath",
                 visible=True,
-                buttons=['download', 'share', 'fullscreen'],
+                buttons=['download', 'fullscreen'],
             )
             add_ctrl("main_view", main_view)
             inpaint_view = gr.ImageEditor(
@@ -380,7 +391,7 @@ with shared.gradio_root as block:
                 type="numpy",
                 visible='hidden',
                 show_label=False,
-                buttons=['download', 'share', 'fullscreen'],
+                buttons=['download', 'fullscreen'],
                 layers=False,
                 interactive=True,
                 transforms=(),
@@ -405,7 +416,7 @@ with shared.gradio_root as block:
                 preview=False,
                 interactive=False,
                 visible='hidden',
-                buttons=['download', 'share', 'fullscreen'],
+                buttons=['download', 'fullscreen'],
                 value=["html/init_image.png"],
             )
 
@@ -500,6 +511,7 @@ with shared.gradio_root as block:
                 with preset_accordion:
                     with gr.Group(), gr.Column():
                         preset_image = gr.Image(
+                            buttons=['download', 'fullscreen'],
                             placeholder="Select or drop preset image here",
                             show_label=False,
                             type="filepath",
@@ -515,7 +527,7 @@ with shared.gradio_root as block:
                             rows=[3],
                             object_fit="contain",
                             visible=True,
-                            buttons=['download', 'share', 'fullscreen'],
+                            buttons=['download', 'fullscreen'],
                             min_width=60,
                             selected_index=None,
                             value=path_manager.get_presets(),
@@ -834,7 +846,7 @@ with shared.gradio_root as block:
                             rows=[3],
                             object_fit="contain",
                             visible=True,
-                            buttons=None,
+                            buttons=[],
                             min_width=60,
                             value=list(
                                 map(
@@ -936,7 +948,7 @@ with shared.gradio_root as block:
                             columns=[2],
                             rows=[3],
                             object_fit="contain",
-                            buttons=None,
+                            buttons=[],
                             min_width=60,
                             value=list(
                                 map(
@@ -979,7 +991,7 @@ with shared.gradio_root as block:
                             rows=[3],
                             object_fit="contain",
                             visible=True,
-                            buttons=None,
+                            buttons=[],
                             min_width=60,
                             value=default_active,
                         )
@@ -1598,16 +1610,6 @@ with shared.gradio_root as block:
 
     add_api()
 
-if isinstance(args.auth, str) and not "/" in args.auth:
-    if len(args.auth):
-        print(
-            f'\nERROR! --auth need be in the form of "username/password" not "{args.auth}"\n'
-        )
-    if args.share:
-        print(
-            f"\nWARNING! Will not enable --share without proper --auth=username/password\n"
-        )
-        args.share = False
 if args.api:
     from modules.openai_api import install, validate_options
     api_key = validate_options(args)

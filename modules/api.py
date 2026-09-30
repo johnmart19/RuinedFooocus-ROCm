@@ -131,7 +131,11 @@ def add_api():
     gr.api(get_last_image, api_name="last_image")
 
 def add_fastapi():
-    async def last_image(w: int = 0, h: int = 0, format: str = "PNG"):
+    from fastapi import Request
+    from modules.web_access import require_ui_login
+
+    async def last_image(request: Request, w: int = 0, h: int = 0, format: str = "PNG"):
+        require_ui_login(request)
         filename = get_last_image()
         img = Image.open(filename)
         ow, oh = img.size

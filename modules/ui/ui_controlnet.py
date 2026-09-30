@@ -236,6 +236,7 @@ def add_controlnet_tab(main_view, inpaint_view, prompt, image_number, run_event,
                 return gr.update()
 
         input_image = gr.Image(
+            buttons=['download', 'fullscreen'],
             label=t("Image to video" if initial_video else "Image to image"),
             type="pil",
             visible=True,

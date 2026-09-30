@@ -41,6 +41,7 @@ def create_image_gallery():
             # Left side for gallery
             with gr.Column(scale=2, min_width=0, elem_id="browser-images"):
                 gallery = gr.Gallery(
+                    buttons=['download', 'download_all', 'fullscreen'],
                     label=t("Images"),
                     show_label=False,
                     columns=[2, 2, 3, 4, 6, 8],
