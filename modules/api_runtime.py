@@ -295,6 +295,13 @@ def images(payload, selected):
         result = worker._process(dict(data, task_id=task_id, _api_job=job))
         if not result or len(result) != data["image_number"]:
             raise RuntimeError("Image generation failed or was cancelled; see the application log.")
+        if family in VIDEO_FPS:
+            # Pipelines return GIF previews for the owner's gallery. API and
+            # guest clients need the accompanying video, including its audio.
+            videos = [Path(path).with_suffix(".mp4") for path in result]
+            if any(not path.is_file() or path.stat().st_size == 0 for path in videos):
+                raise RuntimeError("Video encoding failed; no completed MP4 output is available.")
+            return [str(path) for path in videos]
         return result
     return submit(run)
 
