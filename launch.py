@@ -153,7 +153,9 @@ def prepare_environment(offline=False):
             if REINSTALL_ALL or not is_installed(xlc_version):
                 platform_index = {
                     'cu124': 'https://xorbitsai.github.io/xllamacpp/whl/vulkan',
+                    'cu126': 'https://xorbitsai.github.io/xllamacpp/whl/vulkan',
                     'cu128': 'https://xorbitsai.github.io/xllamacpp/whl/cu128',
+                    'cu130': 'https://xorbitsai.github.io/xllamacpp/whl/cu128',
                     'cu132': 'https://xorbitsai.github.io/xllamacpp/whl/cu132',
                     'rocm6.4': 'https://xorbitsai.github.io/xllamacpp/whl/rocm-6.4.1',
                     'rocm7.2': 'https://xorbitsai.github.io/xllamacpp/whl/rocm-7.2.4',
@@ -162,7 +164,8 @@ def prepare_environment(offline=False):
                 }
                 if torch_platform not in platform_index:
                     torch_platform = 'cpu'
-                run_pip(f'install {xlc_version} --index-url {platform_index[torch_platform]}', "XLlamacpp")
+                index_url=platform_index[torch_platform]
+                run_pip(f'install {xlc_version} --index-url {index_url}', f"XLlamacpp from {index_url}")
         except Exception as e:
             print("WARNING: Failed to install/update llm modules.")
             print(e)
