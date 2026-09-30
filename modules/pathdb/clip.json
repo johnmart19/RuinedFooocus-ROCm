@@ -79,13 +79,13 @@
         "path": "path_clip",
         "filename": "gemma-3-4b-it-Q5_K_M.gguf"
     },
-    "clip/gemma_3_4b_it_bf16.gguf": {
+    "clip/gemma_3_4b_it_bf16.safetensors": {
         "url": "https://huggingface.co/woctordho/comfyui-gemma-3-4b-it/resolve/main/gemma_3_4b_it_bf16.safetensors",
         "path": "path_clip",
-        "filename": "gemma_3_4b_it_bf16.gguf"
+        "filename": "gemma_3_4b_it_bf16.safetensors"
     },
     "clip/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors": {
-        "url": "https://huggingface.co/dummy9996/LTX-2.5-22b-ungate/resolve/main/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
+        "url": "https://huggingface.co/Lightricks/LTX-2.5/resolve/main/text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
         "path": "path_clip",
         "filename": "gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors"
     },
@@ -278,6 +278,16 @@
         "url": "https://huggingface.co/city96/t5-v1_1-xxl-encoder-gguf/resolve/main/t5-v1_1-xxl-encoder-f32.gguf",
         "path": "path_clip",
         "filename": "t5-v1_1-xxl-encoder-f32.gguf"
+    },
+    "clip/ltx-2-19b-embeddings_connector_dev_bf16.safetensors": {
+        "url": "https://huggingface.co/Kijai/LTXV2_comfy/resolve/main/text_encoders/ltx-2-19b-embeddings_connector_dev_bf16.safetensors",
+        "path": "path_clip",
+        "filename": "ltx-2-19b-embeddings_connector_dev_bf16.safetensors"
+    },
+    "clip/ltx-2-19b-embeddings_connector_distill_bf16.safetensors": {
+        "url": "https://huggingface.co/Kijai/LTXV2_comfy/resolve/main/text_encoders/ltx-2-19b-embeddings_connector_distill_bf16.safetensors",
+        "path": "path_clip",
+        "filename": "ltx-2-19b-embeddings_connector_distill_bf16.safetensors"
     },
     "clip/umt5_xxl_fp16.safetensors": {
         "url": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/text_encoders/umt5_xxl_fp16.safetensors",

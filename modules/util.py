@@ -99,8 +99,10 @@ def get_lora_hashes(model):
     )
 
 def _get_model_thumbnail(cache_path, not_found="html/warning.png"):
-    if cache_path in shared_cache:
-        return shared_cache[cache_path]
+    cached = shared_cache.get(cache_path)
+    if cached is not None and Path(cached).is_file():
+        return cached
+    shared_cache.pop(cache_path, None)
     suffixes = [".jpeg", ".jpg", ".png", ".gif"]
     for suffix in suffixes:
         filename = cache_path.with_suffix(suffix)
@@ -151,12 +153,12 @@ def get_model_path(model, folders):
 
 def get_checkpoint_path(model, folders=None):
     if folders is None:
-        folders = [path_manager_model_paths["modelfile_path"]]
+        folders = [path_manager.model_paths["modelfile_path"]]
     return get_model_path(model, folders)
 
 def get_lora_path(model, folders=None):
     if folders is None:
-        folders = [path_manager_model_paths["lorafile_path"]]
+        folders = [path_manager.model_paths["lorafile_path"]]
     return get_model_path(model, folders)
 
 def url_to_filename(url):
