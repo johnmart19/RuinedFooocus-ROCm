@@ -48,29 +48,15 @@ git_repos = [
     {
         "name": "ComfyUI",
         "path": "ComfyUI",
-        "url": "https://github.com/comfyanonymous/ComfyUI",
-        "hash": "725e6ec60621c6f001af04769173e7dbb3c53541",
+        "url": "https://github.com/comfy-org/ComfyUI",
+        "hash": "fb2315f11db0ebfaafa9099a5df5227dc6bb42bc",
         "add_path": "ComfyUI",
     },
-#    {
-#        "name": "Calcuis-GGUF",
-#        "path": "calcuis_gguf",
-#        "url": "https://github.com/calcuis/gguf",
-#        "hash": "34a4e030afea0137c5e781e07400bdbe00e9d524",
-#        "add_path": "",
-#    },
-#    {
-#        "name": "ComfyUI-GGUF",
-#        "path": "comfyui_gguf",
-#        "url": "https://github.com/city96/ComfyUI-GGUF",
-#        "hash": "6ea2651e7df66d7585f6ffee804b20e92fb38b8a",
-#        "add_path": "",
-#    },
     {
         "name": "molbal/ComfyUI-GGUF",
         "path": "molbal_comfyui_gguf",
         "url": "https://github.com/molbal/ComfyUI-GGUF",
-        "hash": "72c8990f22b86b06a4c9f4cad628d18825160f79",
+        "hash": "48de657b3aa830ae6981960e928b31cb51fd16aa",
         "add_path": "",
     },
 ]
@@ -93,12 +79,13 @@ def prepare_environment(offline=False):
             "Couldn't check pip",
             live=False,
         )
-        run(
-            f'"{python}" -m pip install -r "{requirements_file}"',
-            "Check pre-requirements",
-            "Couldn't check pre-reqs",
-            live=False,
-        )
+        if not getattr(sys, "_rf_bootstrap_reinstalled", False):
+            run(
+                f'"{python}" -m pip install {"--force-reinstall " if REINSTALL_ALL else ""}-r "{requirements_file}"',
+                "Check pre-requirements",
+                "Couldn't check pre-reqs",
+                live=False,
+            )
         run(
             f'"{python}" -m pip uninstall -y llama-cpp-python',
             "Check for old modules",
@@ -149,7 +136,7 @@ def prepare_environment(offline=False):
             run_pip(f'install -r "{modules_file}"', "required modules")
 
         try:
-            xlc_version = "xllamacpp==2026.7.9873"
+            xlc_version = "xllamacpp==2026.9.11063"
             if REINSTALL_ALL or not is_installed(xlc_version):
                 platform_index = {
                     'cu124': 'https://xorbitsai.github.io/xllamacpp/whl/vulkan',
