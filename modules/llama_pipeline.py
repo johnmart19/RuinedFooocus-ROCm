@@ -366,7 +366,7 @@ class pipeline:
                 result['text'] = "[The model returned no answer. Try rephrasing your message.]"
             text = response_text()
 
-            if settings.default_settings.get("enable_llm_tools", False) and result['tool']['function'] is not None:
+            if tools and result['tool']['function'] is not None:
                 try:
                     if result['finish_reason'] == 'length':
                         raise ValueError("The image tool call was cut off. Increase the output token limit and try again.")
