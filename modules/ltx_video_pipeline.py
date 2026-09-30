@@ -22,6 +22,7 @@ from modules.pipeline_utils import (
 )
 
 import comfy.utils
+import comfy.sample
 from comfy.sd import load_checkpoint_guess_config
 from tqdm import tqdm
 
@@ -34,7 +35,7 @@ from nodes import (
     VAEDecode,
 )
 
-from comfy_extras.nodes_custom_sampler import SamplerCustom, RandomNoise, BasicScheduler, KSamplerSelect, BasicGuider
+from comfy_extras.nodes_custom_sampler import RandomNoise, BasicScheduler, KSamplerSelect, BasicGuider
 from comfy_extras.nodes_lt import EmptyLTXVLatentVideo, LTXVImgToVideo, LTXVConditioning, LTXVScheduler
 from comfy_extras.nodes_lt import ModelSamplingLTXV
 from comfy_extras.nodes_flux import FluxGuidance
@@ -359,17 +360,32 @@ class pipeline:
             (-1, f"Generating ...", None)
         )
 
-        samples = SamplerCustom().sample(
+        # Follow SamplerCustom's latent preparation while keeping our cancellation
+        # and webpage progress callback connected to every sampling step.
+        worker.check_interrupt(gen_data)
+        samples = latent_image.copy()
+        latent = comfy.sample.fix_empty_latent_channels(
+            self.model_base_patched.unet, samples["samples"],
+            samples.get("downscale_ratio_spacial"), samples.get("downscale_ratio_temporal"),
+        )
+        noise = comfy.sample.prepare_noise(latent, seed, samples.get("batch_index"))
+        samples["samples"] = comfy.sample.sample_custom(
             model=self.model_base_patched.unet,
-            add_noise=True,
-            noise_seed=seed,
+            noise=noise,
             cfg=float(gen_data["cfg"]),
             positive=positive,
             negative=negative,
             sampler=ksampler,
             sigmas=sigmas,
-            latent_image=latent_image,
-        )[0]
+            latent_image=latent,
+            noise_mask=samples.get("noise_mask"),
+            callback=callback_function,
+            disable_pbar=not comfy.utils.PROGRESS_BAR_ENABLED,
+            seed=seed,
+        )
+        samples.pop("downscale_ratio_spacial", None)
+        samples.pop("downscale_ratio_temporal", None)
+        worker.check_interrupt(gen_data)
 
         if callback is not None:
             worker.add_result(
