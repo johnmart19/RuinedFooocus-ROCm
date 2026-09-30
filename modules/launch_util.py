@@ -9,6 +9,7 @@ import logging
 from pathlib import Path
 import importlib.metadata
 import packaging.version
+from packaging.requirements import InvalidRequirement, Requirement
 
 logging.getLogger("torch.distributed.nn").setLevel(logging.ERROR)  # sshh...
 logging.getLogger("xformers").addFilter(
@@ -44,6 +45,7 @@ def git_clone(url, dir, name, hash=None):
         remote.fetch()
         commit = repo.get(hash)
         repo.checkout_tree(commit, strategy=pygit2.GIT_CHECKOUT_FORCE)
+        repo.set_head(commit.id)
         print(f"{name} update check complete.")
     except Exception as e:
         print(f"Git clone failed for {name}: {str(e)}")
@@ -116,7 +118,10 @@ def run(
 
 
 def run_pip(command, desc=None, live=default_command_live):
-    index_url_line = f" --index-url {index_url}" if index_url != "" else ""
+    index_url_line = (
+        f" --index-url {index_url}"
+        if index_url and "--index-url" not in command else ""
+    )
     return run(
         f'"{python}" -m pip {command} --prefer-binary{index_url_line}',
         desc=f"Installing {desc}",
@@ -133,38 +138,19 @@ def pip_rm(pkgs, desc=None, live=default_command_live):
     )
 
 def requirements_met(requirements_file):
-    """
-    Does a simple parse of a requirements.txt file to determine if all rerqirements in it
-    are already installed. Returns True if so, False if not installed or parsing fails.
-    """
-
+    """Check applicable PEP 508 requirements, including markers and local versions."""
     with open(requirements_file, "r", encoding="utf8") as file:
         for line in file:
-            if line.strip() == "" or line.startswith("--"):
+            line = line.strip()
+            if not line or line.startswith(("#", "--")):
                 continue
-
-            m = re.match(re_requirement, line)
-            if m is None:
-                return False
-
-            package = m.group(1).strip()
-            version_required = (m.group(2) or "").strip()
-
             try:
-                version_installed = re.sub(
-                    r"\+.*$",
-                    "",
-                    importlib.metadata.version(package)
-                )
-            except Exception:
+                requirement = Requirement(line.split(" #", 1)[0])
+                if requirement.marker and not requirement.marker.evaluate():
+                    continue
+                installed = importlib.metadata.version(requirement.name)
+                if not requirement.specifier.contains(installed, prereleases=True):
+                    return False
+            except (InvalidRequirement, importlib.metadata.PackageNotFoundError, ValueError):
                 return False
-
-            if version_required == "":
-                continue
-
-            if packaging.version.parse(version_required) != packaging.version.parse(
-                version_installed
-            ):
-                return False
-
     return True

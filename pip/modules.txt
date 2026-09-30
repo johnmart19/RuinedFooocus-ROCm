@@ -5,7 +5,7 @@ pyyaml==6.0.2
 tqdm==4.67.3
 psutil==6.1.0
 pytorch_lightning==1.9.4
-gradio[mcp]==6.20.0
+gradio[mcp]==6.27.0
 diffusers==0.32.1
 imageio-ffmpeg==0.5.1
 ftfy==6.1.1
@@ -13,8 +13,11 @@ clip_interrogator==0.6.0
 opencv-python-headless==4.11.0.86
 kornia==0.7.3
 sentencepiece==0.2.1
-spandrel==0.3.4
+spandrel==0.4.2
+spandrel_extra_arches==0.2.0
 imageio[pyav]==2.34.1 
+av==17.1.0; python_version < "3.11"
+av==18.1.0; python_version >= "3.11"
 beautifulsoup4==4.12.3
 protobuf==4.25.4
 rembg==2.0.69
@@ -31,8 +34,8 @@ transformers==5.13.0
 tokenizers==0.22.1
 xmltodict==0.14.2
 websockets==15.0.1
-comfy-kitchen==0.2.30
-comfy-aimdo==0.4.13
+comfy-kitchen==0.2.33
+comfy-aimdo==0.5.3
 requests==2.33.1
 charset_normalizer==3.4.7
 urllib3==2.6.3
