@@ -16,30 +16,12 @@ packages and backends without updating the checkout. Offline mode suppresses
 checkpoint metadata lookups; some missing auxiliary model files can still download.
 See [launcher selection](launchers.md) for existing environments and `PYTHON` overrides.
 
-### Verified Windows NVIDIA setup (2026-09-30)
+### NVIDIA validation and hardware limits
 
-A clean RTX 4060 8 GB installation with driver 617.14 and Python 3.12.10
-automatically selected PyTorch 2.14.0 + CUDA 13.2. A CUDA matrix calculation,
-the 20-test regression suite and `pip check` passed. The driver reported CUDA
-UMD 13.4; that did not require a nightly PyTorch installation.
-
-Qwen 2.5 7B Q4_K_M answered a text question and emitted a valid requested image
-tool call with native llama.cpp b10917 on both Vulkan (Auto) and CUDA 13.3,
-and xllamacpp 2026.9.10809 on CUDA. Runtimes were tested sequentially and unloaded
-between runs. These short checks are functional tests, not comparative benchmarks. AMD
-Windows RX 7900 XTX execution was verified in the earlier review; a new AMD
-clean installation was not repeated on this NVIDIA machine.
-
-JANKU v7.77 generated an 832×1216 image through the API using **Illustrious XL**:
-30 steps, CFG 5, Euler ancestral, normal schedule and CLIP Skip 2. The PNG's
-metadata confirmed those settings. The request completed in approximately 26 seconds;
-the inspected image followed the main prompt details, and a subsequent API chat
-request succeeded. The same profile and seed were then verified through the
-Gradio Generate button, including the rendered preview and saved metadata.
-No additional LoRAs or embeddings were used.
-
-This validates this RTX 4060 configuration, not Pascal, WSL, DirectML or every
-video/vision workflow. Keep the CUDA 12.4 guidance for older Pascal GPUs.
+See [NVIDIA validation and AMD handoff](nvidia-validation.md) for the RTX 4060
+execution results, architecture coverage, multi-GPU selection, and remaining
+hardware tests. Detection is based on compute capability rather than a list of
+GeForce product names; detecting a GPU does not establish support for every model.
 
 ## Runtime selection
 
@@ -179,9 +161,11 @@ Installer validation includes simulated GTX 1080 Ti/RTX 4090 detection on both
 OS paths and official wheel-index checks. Only the RTX 4060 execution described
 above was rechecked on NVIDIA hardware in this release review.
 
-Automatic NVIDIA fallback detection requires an actual device capability from
+Automatic NVIDIA fallback detection requires an actual adapter from
 `nvidia-smi`; a leftover CUDA driver header alone cannot select NVIDIA on an AMD
-machine. Installed CUDA and ROCm bundles use separate probes, and offline UI
+machine. An adapter whose capability cannot be queried gets a diagnostic instead
+of a silent CPU install. CUDA installation and native CUDA chat validate all
+selected NVIDIA GPUs; incompatible mixed architectures require device selection. Installed CUDA and ROCm bundles use separate probes, and offline UI
 startup reports the compatible installed bundle. Explicit CPU/DirectML choices
 remain authoritative. The 42 vendor/override regression cases cover both Windows
 and Linux paths, including WSL without PCI discovery; simulated cases are not
