@@ -4,7 +4,11 @@ cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
 if [[ ! -f ./venv/bin/activate ]]; then
     python_bin="${PYTHON:-python3}"
     if ! command -v "$python_bin" >/dev/null 2>&1; then
-        echo "Python not found: $python_bin. Install Python 3 or set PYTHON to its executable." >&2
+        echo "Python not found: $python_bin. Install Python 3.10 or newer or set PYTHON to its executable." >&2
+        exit 1
+    fi
+    if ! "$python_bin" -c 'import sys; sys.exit(sys.version_info < (3, 10))'; then
+        echo "RuinedFooocus requires Python 3.10 or newer. Set PYTHON to a supported executable." >&2
         exit 1
     fi
     echo "Creating Python environment in ./venv..."

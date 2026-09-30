@@ -86,7 +86,7 @@ def automatic_rocm_plan(os_platform, selected_platform, force=False):
                 return None
     targets = targets or detect_rocm_targets(os_platform)
     if not targets:
-        if selected_platform.startswith("rocm"):
+        if force or override == target_platform or selected_platform.startswith("rocm"):
             raise RuntimeError(
                 "ROCm requested, but no AMD GFX target could be determined. "
                 "Check the AMD driver and clinfo (Windows) or rocminfo (Linux/WSL)."
