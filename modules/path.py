@@ -272,6 +272,7 @@ class PathManager:
         )
 
         print(f"Downloading {file_info['url']}...")
+        file_path.parent.mkdir(parents=True, exist_ok=True)
         temporary = None
         headers = {}
         huggingface = urlparse(file_info["url"]).hostname == "huggingface.co"
