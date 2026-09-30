@@ -155,7 +155,7 @@ class Erniehancer:
             self.clip = clip_loader.load_patcher(
                 self.clip_paths,
                 self.clip_type,
-                clip_loader.load_data(clip_paths)
+                clip_loader.load_data(self.clip_paths)
             )
 
     def execute(self, prompt, image=None, thinking=False):

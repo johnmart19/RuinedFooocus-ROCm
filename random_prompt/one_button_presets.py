@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 import shutil
+from modules.config_io import save_json
 
 
 class OneButtonPresets:
@@ -27,11 +28,21 @@ class OneButtonPresets:
         for name, settings in default_data.items():
             if name not in data:
                 data[name] = settings
+            elif "enhancement_focus" in settings:
+                data[name].setdefault("enhancement_focus", settings["enhancement_focus"])
 
         # Sanity check
         for name, settings in data.items():
             if settings['subject'] == '------ all':
                 settings['subject'] = 'all'
+            # Upgrade unchanged bundled anime text, preserving custom preset edits.
+            if name in ("Waifu's", "Husbando's"):
+                for key, old in {
+                    "prefixprompt": "(((masterpiece))), (((best quality))), anime style, 2d,",
+                    "suffixprompt": "key visual",
+                }.items():
+                    if settings.get(key) == old:
+                        settings[key] = default_data[name][key]
 
         try:
             self._save_data(self.OBP_FILE, data)
@@ -42,15 +53,14 @@ class OneButtonPresets:
     def _load_data(self, file_path):
         if not file_path.exists():
             shutil.copy(self.DEFAULT_OBP_FILE, file_path)
-        return json.load(open(file_path))
+        with open(file_path, encoding="utf-8") as file:
+            return json.load(file)
 
     def _save_data(self, file_path, data):
-        with open(file_path, "w") as f:
-            json.dump(data, f, indent=2)
+        save_json(file_path, data)
 
     def save_obp_preset(self, perf_options):
-        with open(self.OBP_FILE, "w") as f:
-            json.dump(perf_options, f, indent=2)
+        self._save_data(self.OBP_FILE, perf_options)
         self.opb_presets = self.load_obp_presets()
 
     def get_obp_preset(self, name):
