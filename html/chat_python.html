@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<style>
+  :root { font: 14px system-ui; --block-background-fill: #f4f4f5; --input-background-fill: #fff;
+    --body-text-color: #27272a; --border-color-primary: #d4d4d8; --button-secondary-background-fill: #e4e4e7; }
+  body { margin: 0; padding: 12px; background: var(--block-background-fill); color: var(--body-text-color); }
+  label { display: block; margin: 10px 0 4px; }
+  textarea, pre { box-sizing: border-box; width: 100%; font: 14px/1.5 monospace; tab-size: 4; }
+  textarea, pre, select, button { background: var(--input-background-fill); color: var(--body-text-color);
+    border: 1px solid var(--border-color-primary); border-radius: 6px; }
+  textarea { resize: vertical; padding: 8px; }
+  #code { height: 250px; white-space: pre; }
+  #output { height: 150px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: 8px; }
+  button, select { padding: 6px 12px; }
+  select { max-width: 100%; }
+  button { background: var(--button-secondary-background-fill); cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  p { margin: 8px 0; }
+</style>
+<label for="blocks">Code from chat</label><select id="blocks"></select>
+<p>Select a snippet to review below. Only Run Python executes it.</p>
+<label for="code">Review / edit code</label><textarea id="code" spellcheck="false" placeholder="Write or paste Python here"></textarea>
+<div id="input-area" hidden><label for="stdin">Script input (optional)</label>
+<textarea id="stdin" rows="2" placeholder="One answer per input() call. Empty means a blank answer."></textarea></div>
+<p>Runs in your browser. First run downloads Python. Desktop apps, GPU libraries and some network requests are unsupported.</p>
+<button id="run">Run Python</button> <button id="stop" disabled>Stop</button> <span id="status" role="status">Ready</span>
+<pre id="output" aria-label="Python output"></pre>
+<script>
+const blocks = __CODE_BLOCKS__;
+const byId = id => document.getElementById(id);
+window.addEventListener('message', event => {
+  if (event.source !== parent || event.data?.type !== 'python-theme') return;
+  document.documentElement.style.colorScheme = event.data.scheme === 'dark' ? 'dark' : 'light';
+  for (const name of ['block-background-fill', 'input-background-fill', 'body-text-color',
+                      'border-color-primary', 'button-secondary-background-fill']) {
+    const color = event.data.colors?.[name];
+    if (color && CSS.supports('color', color)) document.documentElement.style.setProperty('--' + name, color);
+  }
+});
+blocks.forEach((code, index) => {
+  const title = code.split('\n').find(line => /^\s*(?:def |class |#)/.test(line))
+    || code.split('\n').find(line => line.trim()) || 'Empty editor';
+  const count = code.trim().split('\n').length;
+  const label = code.trim() ? `${index + 1}. ${title.trim().slice(0, 70)} (${count} ${count === 1 ? 'line' : 'lines'})`
+    : 'New Python script';
+  byId('blocks').add(new Option(label, index));
+});
+function updateInput() { byId('input-area').hidden = !/\binput\s*\(/.test(byId('code').value); }
+byId('code').value = blocks[0];
+byId('blocks').onchange = () => { byId('code').value = blocks[byId('blocks').value]; updateInput(); };
+byId('code').addEventListener('input', updateInput);
+updateInput();
+let worker, timer;
+function finish(status) {
+  clearTimeout(timer);
+  if (worker) worker.terminate();
+  worker = null;
+  byId('run').disabled = false;
+  byId('stop').disabled = true;
+  byId('status').textContent = status;
+}
+function executePython() {
+  self.onmessage = async ({data}) => {
+    try {
+      importScripts('https://cdn.jsdelivr.net/pyodide/v0.27.7/full/pyodide.js');
+      const quiet = () => {};
+      const py = await loadPyodide({stdout: quiet, stderr: quiet});
+      const lines = data.stdin.split('\n');
+      let missingInput = false;
+      py.setStdin({stdin: () => {
+        postMessage({needsInput: true});
+        if (lines.length) return lines.shift();
+        missingInput = true;
+        return null;
+      }});
+      let length = 0;
+      const output = text => {
+        length += text.length + 1;
+        if (length > 50000) throw new Error('Output limit reached (50,000 characters).');
+        postMessage({output: text + '\n'});
+      };
+      const quietPackages = {messageCallback: quiet, errorCallback: quiet};
+      await py.loadPackagesFromImports(data.code, quietPackages);
+      if (/\b(?:requests|urllib)\b/.test(data.code)) {
+        await py.loadPackage('pyodide-http', quietPackages);
+        await py.runPythonAsync('import pyodide_http\npyodide_http.patch_all()');
+      }
+      py.setStdout({batched: output});
+      py.setStderr({batched: output});
+      postMessage({status: 'Running'});
+      try { await py.runPythonAsync(data.code); }
+      catch (error) {
+        const message = missingInput ? 'This script needs more input. Add one answer per line, then run again.'
+          : String(error).trim().split('\n').pop();
+        postMessage({output: message, done: missingInput ? 'Input needed' : 'Error'});
+        return;
+      }
+      postMessage({done: 'Finished'});
+    } catch (error) {
+      postMessage({output: String(error).trim().split('\n').pop(), done: 'Could not run Python'});
+    }
+  };
+}
+byId('run').onclick = () => {
+  byId('output').textContent = '';
+  byId('status').textContent = 'Loading Python…';
+  byId('run').disabled = true;
+  byId('stop').disabled = false;
+  const url = URL.createObjectURL(new Blob([`(${executePython.toString()})()`], {type: 'text/javascript'}));
+  try { worker = new Worker(url); }
+  catch (error) { byId('output').textContent = String(error); finish('Error'); }
+  finally { URL.revokeObjectURL(url); }
+  if (!worker) return;
+  worker.onmessage = ({data}) => {
+    if (data.needsInput) byId('input-area').hidden = false;
+    if (data.output) {
+      const output = byId('output');
+      output.textContent = (output.textContent + data.output).slice(0, 50000);
+      output.scrollTop = output.scrollHeight;
+      if (output.textContent.length >= 50000) { finish('Stopped: output limit'); return; }
+    }
+    if (data.status) {
+      byId('status').textContent = data.status;
+      clearTimeout(timer);
+      timer = setTimeout(() => finish('Stopped: 60-second limit'), 60000);
+    }
+    if (data.done) finish(data.done);
+  };
+  worker.onerror = event => { byId('output').textContent = event.message; finish('Error'); };
+  timer = setTimeout(() => finish('Python download timed out; try again'), 180000);
+  worker.postMessage({code: byId('code').value, stdin: byId('stdin').value});
+};
+byId('stop').onclick = () => finish('Stopped');
+window.addEventListener('pagehide', () => finish('Stopped'));
+</script>
+</html>
