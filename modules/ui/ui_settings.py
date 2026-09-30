@@ -7,6 +7,17 @@ from shared import state, add_setting, performance_settings, resolution_settings
 
 t = translate
 
+
+def model_choices(model_type, key, default):
+    choices = list(models.names[model_type])
+    choices += [name for name in path_manager.get_folder_list(model_type) if name not in choices]
+    if model_type == "loras":
+        choices.insert(0, "None")
+    selected = settings.default_settings.get(key, default)
+    if selected and selected not in choices:
+        choices.append((f"{selected} (not found)", selected))
+    return choices
+
 def save_clicked(*args):
     ui_data = {}
     # Overwrite current settings
@@ -20,7 +31,7 @@ def save_clicked(*args):
             "path_loras",
             "path_wildcards",
         ]:
-            settings.default_settings[key] = settings.default_settings[key].splitlines()
+            settings.default_settings[key] = (val or "").splitlines() if isinstance(val, str) or val is None else val
 
         # Remove empty keys
         if settings.default_settings[key] == None or settings.default_settings[key] == "":
@@ -37,6 +48,10 @@ def save_clicked(*args):
 
     settings.set_settings_path(ui_data.get("ui_settings_name", None))
     settings.save_settings()
+    from argparser import args as launch_args
+    import os
+    models.offline = (launch_args.offline or os.environ.get("RF_OFFLINE") == "1"
+                      or settings.default_settings.get("local_model_metadata", False))
     path_manager.set_settings_path(ui_data.get("ui_settings_name", None))
     path_manager.save_paths()
 
@@ -48,6 +63,10 @@ def create_settings():
         with gr.Row():
             with gr.Column():
                 gr.Markdown(t("# UI settings"))
+                local_metadata = gr.Checkbox(label="Local model metadata only",
+                    value=settings.default_settings.get("local_model_metadata", False),
+                    info="Skip online model and artwork lookups.")
+                add_setting("local_model_metadata", local_metadata)
                 with gr.Row():
                     image_number = gr.Number(label=t("Image Number"), interactive=True, value=settings.default_settings.get("image_number", 1))
                     add_setting("image_number", image_number)
@@ -75,11 +94,15 @@ def create_settings():
                 add_setting("negative_prompt", negative_prompt)
                 auto_negative_prompt = gr.Checkbox(label=t("Auto Negative Prompt"), interactive=True, value=settings.default_settings.get("auto_negative_prompt", False))
                 add_setting("auto_negative_prompt", auto_negative_prompt)
+                performance_choices = list(performance_settings.performance_options) + [performance_settings.CUSTOM_PERFORMANCE]
+                saved_performance = settings.default_settings.get("performance", "SDXL")
+                if saved_performance not in performance_choices:
+                    saved_performance = performance_settings.CUSTOM_PERFORMANCE
                 performance = gr.Dropdown(
                     label=t("Performance"),
                     interactive=True,
-                    choices=list(performance_settings.performance_options.keys()),
-                    value=settings.default_settings.get("performance", "Speed"),
+                    choices=performance_choices,
+                    value=saved_performance,
                 )
                 add_setting("performance", performance)
                 resolution = gr.Dropdown(
@@ -117,7 +140,7 @@ def create_settings():
                 base_model = gr.Dropdown(
                     label=t("Base Model"),
                     interactive=True,
-                    choices=models.names['checkpoints'],
+                    choices=model_choices("checkpoints", "base_model", "sd_xl_base_1.0_0.9vae.safetensors"),
                     value=settings.default_settings.get("base_model", "sd_xl_base_1.0_0.9vae.safetensors"),
                 )
                 add_setting("base_model", base_model)
@@ -125,7 +148,7 @@ def create_settings():
                     lora_1_model = gr.Dropdown(
                         label=t("LoRA {id} Model", mapping={'id': 1}),
                         interactive=True,
-                        choices=["None"] + models.names['loras'],
+                        choices=model_choices("loras", "lora_1_model", "None"),
                         value=settings.default_settings.get("lora_1_model", "None"),
                     )
                     lora_1_weight = gr.Number(label=t("Lora {id} Weight", mapping={'id': 1}), value=settings.default_settings.get("lora_1_weight", 1.0), step=0.05)
@@ -133,7 +156,7 @@ def create_settings():
                     lora_2_model = gr.Dropdown(
                         label=t("LoRA {id} Model", mapping={'id': 2}),
                         interactive=True,
-                        choices=["None"] + models.names['loras'],
+                        choices=model_choices("loras", "lora_2_model", "None"),
                         value=settings.default_settings.get("lora_2_model", "None"),
                     )
                     lora_2_weight = gr.Number(label=t("Lora {id} Weight", mapping={'id': 2}), value=settings.default_settings.get("lora_2_weight", 1.0), step=0.05)
@@ -141,7 +164,7 @@ def create_settings():
                     lora_3_model = gr.Dropdown(
                         label=t("LoRA {id} Model", mapping={'id': 3}),
                         interactive=True,
-                        choices=["None"] + models.names['loras'],
+                        choices=model_choices("loras", "lora_3_model", "None"),
                         value=settings.default_settings.get("lora_3_model", "None"),
                     )
                     lora_3_weight = gr.Number(label=t("Lora {id} Weight", mapping={'id': 3}), value=settings.default_settings.get("lora_3_weight", 1.0), step=0.05)
@@ -149,7 +172,7 @@ def create_settings():
                     lora_4_model = gr.Dropdown(
                         label=t("LoRA {id} Model", mapping={'id': 4}),
                         interactive=True,
-                        choices=["None"] + models.names['loras'],
+                        choices=model_choices("loras", "lora_4_model", "None"),
                         value=settings.default_settings.get("lora_4_model", "None"),
                     )
                     lora_4_weight = gr.Number(label=t("Lora {id} Weight", mapping={'id': 4}), value=settings.default_settings.get("lora_4_weight", 1.0), step=0.05)
@@ -157,7 +180,7 @@ def create_settings():
                     lora_5_model = gr.Dropdown(
                         label=t("LoRA {id} Model", mapping={'id': 5}),
                         interactive=True,
-                        choices=["None"] + models.names['loras'],
+                        choices=model_choices("loras", "lora_5_model", "None"),
                         value=settings.default_settings.get("lora_5_model", "None"),
                     )
                     lora_5_weight = gr.Number(label=t("Lora {id} Weight", mapping={'id': 5}), value=settings.default_settings.get("lora_5_weight", 1.0), step=0.05)
@@ -222,16 +245,50 @@ def create_settings():
                 add_setting("path_wildcards", path_wildcards)
 
                 gr.Markdown(t("# Chatbot settings"))
+                from modules.llama_runtime_info import runtime_choices
+                llm_runtime = gr.Dropdown(label="Chat runtime", choices=runtime_choices(),
+                                          value=settings.default_settings.get("llm_runtime", "llama.cpp"))
+                add_setting("llm_runtime", llm_runtime)
+                runtime_signature = gr.State(str(runtime_choices()))
+
+                def refresh_runtime_label(previous):
+                    choices = runtime_choices()
+                    signature = str(choices)
+                    if signature == previous:
+                        return gr.skip(), gr.skip()
+                    return gr.update(choices=choices), signature
+
+                gr.Timer(2).tick(refresh_runtime_label, inputs=runtime_signature,
+                    outputs=[llm_runtime, runtime_signature], queue=False, api_visibility='undocumented')
+                from modules.llama_installer import backend_choices
+                llama_backend = gr.Dropdown(label="llama.cpp backend", choices=backend_choices(),
+                    value=settings.default_settings.get("llama_backend", "Auto"),
+                    info="Save settings, then load or chat to switch. LLAMA_SERVER overrides this selection.",
+                    visible=llm_runtime.value == "llama.cpp")
+                add_setting("llama_backend", llama_backend)
+                llm_runtime.change(lambda runtime: gr.update(visible=runtime == "llama.cpp"),
+                    inputs=llm_runtime, outputs=llama_backend, api_visibility='undocumented')
+                with gr.Accordion("Installed chat runtimes", open=False):
+                    runtime_details = gr.Markdown("Click Refresh to inspect installed versions and devices.")
+                    runtime_refresh = gr.Button("Refresh", size="sm")
+                    gr.Markdown("Detected devices are separate from PyTorch. CPU mode and GPU-layer settings still apply.")
+                    from modules.llama_runtime_info import runtime_info
+                    runtime_refresh.click(runtime_info, outputs=runtime_details, api_visibility='undocumented')
                 curr_localfile = settings.default_settings.get("llama_localfile", None)
-                llama_localfile = gr.Dropdown(label="Local Llama file", interactive=True, choices=[curr_localfile, None]+path_manager.get_folder_list("llm"), value=curr_localfile,)
+                llama_localfile = gr.Textbox(label="Custom GGUF path", interactive=True,
+                    info="Optional local file. Chat model and quantization selection is in Chat bots.",
+                    value=curr_localfile)
                 add_setting("llama_localfile", llama_localfile)
-                llm_n_predict = gr.Number(label="n_predict", interactive=True, placeholder=-1, value=settings.default_settings.get("llm_n_predict", None), minimum=-1, step=1)
+                llama_server_args = gr.Textbox(label="Extra llama.cpp arguments", placeholder="Optional, e.g. --reasoning off",
+                                               value=settings.default_settings.get("llama_server_args", ""))
+                add_setting("llama_server_args", llama_server_args)
+                llm_n_predict = gr.Number(label="n_predict", info="Maximum output tokens; -1 means no fixed limit.", interactive=True, value=settings.default_settings.get("llm_n_predict") or -1, minimum=-1, step=1)
                 add_setting("llm_n_predict", llm_n_predict)
-                llm_n_ctx = gr.Number(label="n_ctx", interactive=True, placeholder=2048, value=settings.default_settings.get("llm_n_ctx", None), minimum=0, step=1)
+                llm_n_ctx = gr.Number(label="n_ctx", interactive=True, value=settings.default_settings.get("llm_n_ctx", 8192), minimum=0, step=1)
                 add_setting("llm_n_ctx", llm_n_ctx)
-                llm_n_gpu_layers = gr.Number(label="n_gpu_layers", interactive=True, placeholder=0, value=settings.default_settings.get("llm_n_gpu_layers", None), minimum=-1, step=1)
+                llm_n_gpu_layers = gr.Number(label="n_gpu_layers", info="-1 offloads all layers to GPU; 0 keeps model weights on CPU.", interactive=True, value=settings.default_settings.get("llm_n_gpu_layers", -1), minimum=-1, step=1)
                 add_setting("llm_n_gpu_layers", llm_n_gpu_layers)
-                llm_chat_history = gr.Number(label="chat_history", interactive=True, placeholder=7, value=settings.default_settings.get("llm_chat_history", None), minimum=0, step=1)
+                llm_chat_history = gr.Number(label="chat_history", info="0 keeps only the current message.", interactive=True, placeholder=7, value=settings.default_settings.get("llm_chat_history", None), minimum=0, step=1)
                 add_setting("llm_chat_history", llm_chat_history)
                 enable_llm_tools = gr.Checkbox(label=t("Enable image generation"), value=settings.default_settings.get("enable_llm_tools", False))
                 add_setting("enable_llm_tools", enable_llm_tools)
@@ -301,6 +358,25 @@ def create_settings():
                 clip_vision = gr.Dropdown(label="clip_vision", interactive=True, choices=[None]+path_manager.get_folder_list("clip_vision"), value=settings.default_settings.get("clip_vision", None),)
                 add_setting("clip_vision", clip_vision)
 
+                with gr.Accordion("Additional text encoders", open=False):
+                    for key, label in {
+                        "clip_gemma2_it_elm": "PixelDiT Gemma 2",
+                        "clip_ernie_enhancer": "Ernie prompt enhancer",
+                        "clip_gemma3": "NewBieImage Gemma 3",
+                        "clip_qwen3vl_4b": "Mage-Flow Qwen3 VL",
+                        "clip_qwen3vl_4b_scaled": "Krea 2 Qwen3 VL",
+                        "clip_gemma3_12b": "LTX 2 / 2.3 Gemma 3",
+                        "clip_ltx23_text_proj": "LTX 2.3 text projection",
+                        "clip_ltx2_dev": "LTX 2 Dev connector",
+                        "clip_ltx2_distilled": "LTX 2 Distilled connector",
+                        "clip_gemma4_12b": "LTX 2.5 Gemma 4",
+                        "clip_qwen3vl_32b": "MiniMax H3 Qwen3 VL",
+                    }.items():
+                        component = gr.Dropdown(label=label, interactive=True,
+                            choices=[None] + path_manager.get_folder_list("clip"),
+                            value=settings.default_settings.get(key))
+                        add_setting(key, component)
+
                 gr.Markdown(t("# Shift"))
                 auraflow_shift = gr.Textbox(label="AuraFlow shift", interactive=True, placeholder=1.73, value=settings.default_settings.get("auraflow_shift", None))
                 add_setting("auraflow_shift", auraflow_shift)
@@ -339,6 +415,24 @@ def create_settings():
                 vae_wan_22 = gr.Dropdown(label="WAN 2.2 VAE", interactive=True, choices=[None]+path_manager.get_folder_list("vae"), value=settings.default_settings.get("vae_wan_22", None),)
                 add_setting("vae_wan_22", vae_wan_22)
 
+                with gr.Accordion("Additional VAEs", open=False):
+                    for key, label in {
+                        "vae_mage_flow": "Mage-Flow",
+                        "vae_ltxv": "LTX Video",
+                        "vae_ltxv23_audio": "LTX 2.3 audio",
+                        "vae_ltxv2_audio": "LTX 2 audio",
+                        "vae_ltxv2_video": "LTX 2 video",
+                        "vae_ltxv23_video": "LTX 2.3 video",
+                        "vae_ltxv25_audio": "LTX 2.5 audio",
+                        "vae_ltxv25_video": "LTX 2.5 video",
+                        "vae_minimax_h3_audio": "MiniMax H3 audio",
+                        "vae_minimax_h3_video": "MiniMax H3 video",
+                    }.items():
+                        component = gr.Dropdown(label=label, interactive=True,
+                            choices=[None] + path_manager.get_folder_list("vae"),
+                            value=settings.default_settings.get(key))
+                        add_setting(key, component)
+
         with gr.Row(), gr.Group():
             ui_settings_name = gr.Text(
                 label=t("Name"),
@@ -366,10 +460,10 @@ def create_settings():
         # These files are checked in launch.py to trigger a --force-reinstall
         def trigger_reinstall_all():
             Path('reinstall').touch()
-            gr.Info("'reinstall' file created. Python modules will be reinstalled next restart.")
+            gr.Info("Application Python packages and Torch will be reinstalled on the next online restart, using this Python environment. Overrides freezetorch.")
         def trigger_reinstall_torch():
             Path('reinstalltorch').touch()
-            gr.Info("'reinstalltorch' file created. Torch modules will be reinstalled next restart.")
+            gr.Info("Torch will be reinstalled for the selected GPU runtime on the next online restart. Overrides freezetorch.")
 
         with gr.Group(), gr.Row():
             reinstall_all_btn = gr.Button(t("Trigger reinstall of all python modules"))

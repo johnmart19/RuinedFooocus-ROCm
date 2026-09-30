@@ -16,12 +16,15 @@ import modules.hashbang_pipeline as hashbang_pipeline
 import modules.ltx_video_pipeline as ltx_video_pipeline
 import modules.video_pipeline as video_pipeline
 import modules.controlnet as controlnet
+from modules.video_settings import VIDEO_PIPELINES
 
 class NoPipeLine:
     pipeline_type = []
 
 def update(gen_data):
     prompt = gen_data["prompt"] if "prompt" in gen_data else ""
+    if "_api_job" in gen_data:
+        prompt = ""  # API image prompts are text, not local search/hashbang commands.
     cn_settings = controlnet.get_settings(gen_data)
     cn_type = cn_settings["type"] if "type" in cn_settings else ""
 
@@ -79,10 +82,17 @@ def update(gen_data):
                     path = shared.models.get_models_by_path("checkpoints", file)
                     baseModel = shared.models.get_model_base(path)
                 baseModelName = gen_data['base_model_name']
+            video_type = VIDEO_PIPELINES.get(baseModel)
+            if video_type:
+                if state["pipeline"] is None or video_type not in state["pipeline"].pipeline_type:
+                    factories = {"wan_video": wan_video_pipeline, "hunyuan_video": hunyuan_video_pipeline,
+                                 "ltx_video": ltx_video_pipeline, "video_pipeline": video_pipeline}
+                    state["pipeline"] = factories[video_type].pipeline()
+                return state["pipeline"]
             if state["pipeline"] is None:
                 state["pipeline"] = NoPipeLine()
 
-            elif (
+            if (
                 baseModel == "Hunyuan Video" or
                 Path(gen_data['base_model_name']).parts[0] == "Hunyuan Video" or
                 str(Path(file).name).startswith("hunyuan-video-t2v-") or
