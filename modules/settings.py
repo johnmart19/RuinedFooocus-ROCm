@@ -3,6 +3,7 @@ from os.path import exists
 from pathlib import Path
 import time
 import shared
+from modules.config_io import save_json
 
 class SettingsManager:
     DEFAULT_SETTINGS = {
@@ -13,7 +14,7 @@ class SettingsManager:
         "style": ["Style: sai-cinematic"],
         "prompt": "",
         "negative_prompt": "",
-        "performance": "Speed",
+        "performance": "SDXL",
         "resolution": "1152x896 (4:3)",
         "base_model": "sd_xl_base_1.0_0.9vae.safetensors",
         "lora_1_model": "None",
@@ -49,7 +50,7 @@ class SettingsManager:
         else:
             path = Path(f"settings/{self.subfolder}/settings.json")
         if not path.parent.exists():
-            path.parent.mkdir()
+            path.parent.mkdir(parents=True, exist_ok=True)
         self.settings_path = path
 
     def load_settings(self):
@@ -73,11 +74,8 @@ class SettingsManager:
                 self.default_settings[key] = [self.default_settings[key]]
 
         if changed:
-            with open(self.settings_path, "w") as f:
-                json.dump(self.default_settings, f, indent=2)
+            save_json(self.settings_path, self.default_settings)
 
     def save_settings(self):
-        # FIXME: Add some error checks and exception handling
-        with open(self.settings_path, "w") as f:
-            json.dump(self.default_settings, f, indent=2)
+        save_json(self.settings_path, self.default_settings)
         shared.update_cfg()

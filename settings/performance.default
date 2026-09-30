@@ -1,10 +1,123 @@
 {
-    "Speed": {"custom_steps": 30, "cfg": 8, "sampler_name": "dpmpp_2m_sde_gpu", "scheduler": "karras", "clip_skip": 1},
-    "Quality": {"custom_steps": 60, "cfg": 8, "sampler_name": "dpmpp_2m_sde_gpu", "scheduler": "karras", "clip_skip": 1},
-    "Lcm": {"custom_steps": 4, "cfg": 1.5, "sampler_name": "lcm", "scheduler": "sgm_uniform", "clip_skip": 1},
-    "Lightning": {"custom_steps": 4, "cfg": 2, "sampler_name": "dpmpp_sde", "scheduler": "karras", "clip_skip": 1},
-    "Pony XL": {"custom_steps": 30, "cfg": 8.5, "sampler_name": "euler_ancestral", "scheduler": "simple", "clip_skip": 2},
-    "SD3": {"custom_steps": 30, "cfg": 5, "sampler_name": "dpmpp_2m", "scheduler": "sgm_uniform", "clip_skip": 1},
-    "Flux": {"custom_steps": 20, "cfg": 3, "sampler_name": "euler", "scheduler": "beta", "clip_skip": 1}
+  "Wan 2.1": {
+    "video_models": [
+      "Wan Video"
+    ],
+    "custom_steps": 30,
+    "cfg": 6,
+    "sampler_name": "uni_pc",
+    "scheduler": "simple",
+    "clip_skip": 1,
+    "recommended_resolutions": "832x480, 480x832"
+  },
+  "Qwen Image": {
+    "custom_steps": 50,
+    "cfg": 4,
+    "sampler_name": "euler",
+    "scheduler": "simple",
+    "clip_skip": 1,
+    "recommended_resolutions": "1328x1328, 1664x928, 928x1664"
+  },
+  "Z-Image Turbo": {
+    "custom_steps": 8,
+    "cfg": 1,
+    "sampler_name": "res_multistep",
+    "scheduler": "simple",
+    "clip_skip": 1,
+    "recommended_resolutions": "1024x1024"
+  },
+  "SDXL": {
+    "custom_steps": 30,
+    "cfg": 7,
+    "sampler_name": "dpmpp_2m",
+    "scheduler": "karras",
+    "clip_skip": 1,
+    "recommended_resolutions": "1024x1024, 832x1216, 1216x832"
+  },
+  "Illustrious XL": {
+    "custom_steps": 30,
+    "cfg": 5,
+    "sampler_name": "euler_ancestral",
+    "scheduler": "normal",
+    "clip_skip": 2,
+    "recommended_resolutions": "1024x1024, 832x1216, 1216x832"
+  },
+  "Pony XL": {
+    "custom_steps": 30,
+    "cfg": 8.5,
+    "sampler_name": "euler_ancestral",
+    "scheduler": "simple",
+    "clip_skip": 2,
+    "recommended_resolutions": "1024x1024, 832x1216, 1216x832"
+  },
+  "NoobAI XL": {
+    "custom_steps": 28,
+    "cfg": 5.5,
+    "sampler_name": "euler_ancestral",
+    "scheduler": "normal",
+    "clip_skip": 1,
+    "recommended_resolutions": "1024x1024, 832x1216, 1216x832"
+  },
+  "FLUX.1 dev": {
+    "custom_steps": 20,
+    "cfg": 3.5,
+    "sampler_name": "euler",
+    "scheduler": "simple",
+    "clip_skip": 1,
+    "recommended_resolutions": "1024x1024"
+  },
+  "FLUX.1 schnell": {
+    "custom_steps": 4,
+    "cfg": 0,
+    "sampler_name": "euler",
+    "scheduler": "simple",
+    "clip_skip": 1,
+    "recommended_resolutions": "1024x1024"
+  },
+  "SD3.5": {
+    "custom_steps": 28,
+    "cfg": 4.5,
+    "sampler_name": "euler",
+    "scheduler": "sgm_uniform",
+    "clip_skip": 1,
+    "recommended_resolutions": "1024x1024"
+  },
+  "Hunyuan Video": {
+    "video_models": ["Hunyuan Video"],
+    "custom_steps": 20,
+    "cfg": 6,
+    "sampler_name": "euler",
+    "scheduler": "simple",
+    "clip_skip": 1,
+    "recommended_resolutions": "848x480"
+  },
+  "LTX Video": {
+    "video_models": ["LTXV"],
+    "custom_steps": 30,
+    "cfg": 3,
+    "sampler_name": "euler",
+    "scheduler": "simple",
+    "clip_skip": 1,
+    "recommended_resolutions": "768x512"
+  },
+  "LTX 2.5 Distilled": {
+    "video_models": ["LTXV 2.5"],
+    "custom_steps": 8,
+    "cfg": 1,
+    "sampler_name": "euler_ancestral",
+    "scheduler": "simple",
+    "clip_skip": 1,
+    "recommended_resolutions": "1536x1024"
+  },
+  "Wan 2.2 5B": {
+    "video_models": [
+      "Wan 2.2 5B"
+    ],
+    "custom_steps": 20,
+    "cfg": 5,
+    "sampler_name": "uni_pc",
+    "scheduler": "simple",
+    "clip_skip": 1,
+    "recommended_resolutions": "1280x704, 704x1280"
+  }
 }
-
