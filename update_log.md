@@ -1,3 +1,9 @@
+### 26.09.30
+* Updated Gradio with responsive Main, Image browser, Chat bots and Settings layouts for desktop and mobile
+* Improved clean Windows/Linux setup, NVIDIA/AMD detection and runtime selection
+* Normal chatbot artwork, clearer setup guides and consolidated feature documentation
+* Launcher validation and release cleanup
+
 ### 26.09.13
 * Updated Gradio, ComfyUI and ComfyUI-GGUF integration
 * Windows and Linux launchers with automatic GPU/Python detection and improved CUDA, ROCm, Vulkan, CPU and DirectML setup

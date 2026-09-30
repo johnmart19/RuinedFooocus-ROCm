@@ -26,7 +26,9 @@ UMD 13.4; that did not require a nightly PyTorch installation.
 Qwen 2.5 7B Q4_K_M answered a text question and emitted a valid requested image
 tool call with native llama.cpp b10917 on both Vulkan (Auto) and CUDA 13.3,
 and xllamacpp 2026.9.10809 on CUDA. Runtimes were tested sequentially and unloaded
-between runs. These short checks are functional tests, not comparative benchmarks.
+between runs. These short checks are functional tests, not comparative benchmarks. AMD
+Windows RX 7900 XTX execution was verified in the earlier review; a new AMD
+clean installation was not repeated on this NVIDIA machine.
 
 JANKU v7.77 generated an 832×1216 image through the API using **Illustrious XL**:
 30 steps, CFG 5, Euler ancestral, normal schedule and CLIP Skip 2. The PNG's
@@ -64,13 +66,13 @@ video/vision workflow. Keep the CUDA 12.4 guidance for older Pascal GPUs.
 | cu132 | 2.14.0 | 0.29.0 | 2.11.0 CPU |
 | cu134 (opt-in) | nightly | nightly | 2.11.0 CPU |
 
-The cu132 audio wheel uses PyTorch's [stable ABI](https://github.com/pytorch/audio/blob/main/docs/source/installation.rst).
+The CPU TorchAudio wheel used with cu126/cu130/cu132 uses PyTorch's [stable ABI](https://github.com/pytorch/audio/blob/main/docs/source/installation.rst).
 AMD Windows and ROCm 10 use Vulkan for xllamacpp; image generation uses ROCm.
 Vulkan needs a working driver and may fall back to CPU under WSL.
 
 Run `python entry_with_update.py`, or `python launch.py` to skip Git updates.
-For WSL, create and activate `venv` first; `RuinedFooocus.sh` activates it
-on later runs. Both launchers forward extra arguments.
+On Linux/WSL, `RuinedFooocus.sh` checks for Python 3.10 or newer and creates
+`venv` on first launch, then reuses it on later runs. Both launchers forward extra arguments.
 `freezetorch` skips automatic torch installation. Explicit `reinstalltorch` or
 `reinstall` requests override it for that restart; the freeze file stays intact.
 The launcher installs Python packages, not drivers.
@@ -184,11 +186,6 @@ startup reports the compatible installed bundle. Explicit CPU/DirectML choices
 remain authoritative. The 42 vendor/override regression cases cover both Windows
 and Linux paths, including WSL without PCI discovery; simulated cases are not
 additional physical GPU validation.
-
-On 2026-09-13, rf-setup's Windows Python 3.10.20 embedded download returned 404;
-its Python 3.13.13 download was available. Use the working 3.13.13 option there
-(cu124 wheels include cp313), or create your own Python 3.10/3.12 environment.
-The external setup script's Python download failure happens before this launcher.
 
 To install or repair AMD ROCm 10, run `python launch.py --rocm10` on Windows
 or `./RuinedFooocus.sh --rocm10` on Linux/WSL. This reinstalls the

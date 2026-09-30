@@ -70,3 +70,12 @@ Video LoRAs use the selected weight during both LTX sampling stages. Loading a
 LoRA preserves the text encoder and video/audio VAEs; changing LoRAs invalidates
 cached prompt conditioning. A missing or unreadable LoRA stops the job with its
 filename instead of silently producing an unstyled result.
+
+## Validation limits
+
+Earlier Windows RX 7900 XTX checks completed Wan 2.1 1.3B GGUF and Wan 2.2
+TI2V 5B short clips, plus LTX 2.5 distilled text/image-to-video with audio,
+two-stage refinement and cancellation recovery. These were short functional
+checks, not quality benchmarks or validation of every checkpoint variant.
+NVIDIA video generation, long clips, Hunyuan and MiniMax full workflows have
+not been revalidated in this release. See [workflows](workflows.md) for boundaries.

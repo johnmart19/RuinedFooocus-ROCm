@@ -1,4 +1,57 @@
-# Native chat runtime
+# Chat bots
+
+## Chat models
+
+Under **Chat bots**, choose a character, model and quantization, then click **Load**.
+Qwen 2.5 7B is the default. Models are discovered only in RuinedFooocus's configured model folders;
+missing files download before loading.
+**Import GGUF** copies a file into RuinedFooocus's model folder and keeps the original.
+Select the model and click **Load** to load it. WSL uses
+the Windows picker; native Linux requires a desktop with Zenity, KDialog or Tk.
+**Local** lists installed files; **Cloud** lists files that **Load** can download for local use. After loading, **Unload** releases the model from memory.
+The **×** beside a local model opens a confirmation for the selected quantization:
+keep its file and remove it from the list, or permanently delete the file too.
+Import a hidden file again to restore it to the list.
+RF Linux simulates shell output; enter a command rather than a coding question.
+
+## Images from chat
+
+Enable image generation in Settings > Chatbot settings. Ask the chatbot to draw an image; it can pass a visual prompt to the generator using the current Main settings. The chat model is unloaded before image generation to release memory.
+
+Chat bots opens with **Normal** selected. Image generation is a capability of the
+conversation, not its default purpose. Greetings, questions, stories and descriptions
+receive text responses. Character bots remain available in the selector.
+
+After an image, ask for a change to revise its complete prompt and generate again:
+"Update the prompt for Akame to be on the beach in sunglasses in her black fighting
+suit." The previous generation prompt stays in chat history; unchanged details
+should carry forward. For text without generation, say "Rewrite the prompt only;
+do not generate." Change topic normally, for example "Now write a story about her."
+
+**Force image generation** applies to the next message only and resets when sent.
+It requires an image-tool call even for a short subject such as "a blue teapot".
+This explicit action works even when automatic image-tool selection is disabled
+in Settings. The selected model must support function calling. Failed or truncated
+tool calls are reported rather than presented as successful images.
+
+Tool selection and prompt quality still depend on the model and its context.
+The force option controls the next tool call; it does not guarantee visual identity
+or likeness. Keep chat history enabled when revising earlier images.
+
+## Chat reasoning
+
+Show reasoning is off by default. Enable it to display collapsible thoughts when the model returns them. Full conversation state is retained independently of the display.
+
+## Browser Python runner
+
+Turn on **Enable Python runner** below **Show reasoning** to review and run code; it is off by default.
+**Load code from chat** refreshes the snippets. Select one by its code preview, then click **Run Python**.
+Script input appears for code using `input()`. Empty input supplies a blank answer; **Stop** cancels a run.
+The first run downloads [Pyodide](https://pyodide.org/); supported imported packages load automatically.
+Runs use a temporary browser filesystem, with a 60-second execution limit and capped output.
+Desktop apps, GPU packages and some network requests require a separate local Python environment.
+
+## Native chat runtime
 
 Chat bots use official [llama.cpp b10917](https://github.com/ggml-org/llama.cpp/releases/tag/b10917),
 downloaded on first use into `cache/llama.cpp` and verified against its release checksum.

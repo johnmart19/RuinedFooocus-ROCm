@@ -34,7 +34,7 @@ working `python` or `py -3`. Both forward arguments and start from the checkout.
   can still require downloads. API dependency checks can also run with `--api`.
 
 See [launchers](docs/launchers.md), [Python compatibility](docs/python-compatibility.md),
-and [ComfyUI compatibility](docs/comfy-compatibility.md).
+and [ComfyUI compatibility](docs/python-compatibility.md#comfyui-compatibility).
 
 ## Code map
 
@@ -77,9 +77,9 @@ and [ComfyUI compatibility](docs/comfy-compatibility.md).
   Wallpaper output sizes are not automatically valid model recommendations.
 - Preserve saved configuration overrides when introducing new defaults.
 
-See [metadata](docs/model-metadata.md), [chat models](docs/chat-models.md),
+See [metadata](docs/model-metadata.md), [chat models](docs/chat-runtime.md#chat-models),
 [chat runtime](docs/chat-runtime.md), [presets](docs/model-presets.md),
-[upscalers](docs/upscalers.md), and [video](docs/video.md).
+[upscalers](docs/workflows.md#downloadable-upscalers), and [video](docs/video.md).
 
 ## GPU and video boundaries
 
