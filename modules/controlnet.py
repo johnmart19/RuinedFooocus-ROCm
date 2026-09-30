@@ -4,6 +4,7 @@ import json
 from os.path import exists
 from shared import state
 from shared import path_manager
+from modules.config_io import save_json
 
 DEFAULT_CNSETTINGS_FILE = "settings/powerup.default"
 CNSETTINGS_FILE = "settings/powerup.json"
@@ -20,11 +21,6 @@ controlnet_models = {
     "rembg": None,
     "faceswap": None,
 }
-
-import json
-import os
-import shutil
-
 
 def load_cnsettings():
     settings = {}
@@ -47,8 +43,7 @@ def load_cnsettings():
 
     # If settings were updated, write them back to the file
     if settings_updated:
-        with open(CNSETTINGS_FILE, "w") as f:
-            json.dump(settings, f, indent=2)
+        save_json(CNSETTINGS_FILE, settings)
 
     # Ignore unknown settings
     for key in list(settings.keys()):
@@ -60,8 +55,7 @@ def load_cnsettings():
 
 def save_cnsettings(cn_save_options):
     global controlnet_settings, cn_options
-    with open(CNSETTINGS_FILE, "w") as f:
-        json.dump(cn_save_options, f, indent=2)
+    save_json(CNSETTINGS_FILE, cn_save_options)
     controlnet_settings = cn_save_options
     cn_options = {f"{k}": v for k, v in controlnet_settings.items()}
 
@@ -71,11 +65,14 @@ def modes():
 
 
 def get_model(type):
-    #return controlnet_models[type] if type in controlnet_models else None
+    if type not in controlnet_models or controlnet_models[type] is None:
+        return None
     return path_manager.get_file_path(f"cn_{type}", default=None)
 
 
 def get_settings(gen_data):
+    if gen_data.get("controlnet") is not None:
+        return dict(gen_data["controlnet"])
     if "cn_selection" not in gen_data:
         return {}
     if gen_data["cn_selection"] == NEWCN:
