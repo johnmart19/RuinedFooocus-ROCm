@@ -332,7 +332,7 @@ def upscale(payload, selected):
         if getattr(current, "llm", None) is not None:
             current.unload()
         worker.check_interrupt({"_api_job": job})
-        outputs = pipeline().process({"task_id": task_id, "input_image": image,
+        outputs = pipeline().process({"task_id": task_id, "input_image": image, "_api_job": job,
             "controlnet": {"type": "upscale", "upscaler": selected["name"]}})
         worker.check_interrupt({"_api_job": job})
         if not outputs:
@@ -360,7 +360,9 @@ def review(payload, selected):
     def run(job, task_id):
         import shared
         from modules.llama_pipeline import pipeline
+        from modules import async_worker as worker
         import comfy.model_management as memory
+        worker.check_interrupt({"_api_job": job})
         current = shared.state.get("pipeline")
         original = current.model_settings[0] if getattr(current, "llm", None) is not None and current.model_settings else None
         if getattr(current, "llm", None) is not None:
@@ -371,7 +373,8 @@ def review(payload, selected):
             reviewer.load_base_model(selected["path"])
             if not reviewer.vision_projector:
                 raise ValueError("The review model has no matching vision projector.")
-            return reviewer.complete_text(messages)
+            return reviewer.complete_text(messages,
+                check_cancelled=lambda: worker.check_interrupt({"_api_job": job}))
         finally:
             reviewer.unload()
             if original:

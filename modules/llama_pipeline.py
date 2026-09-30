@@ -189,14 +189,20 @@ class pipeline:
         self.embeddings = embeddings
         self.embeddings_hash = str(sources)
 
-    def complete_text(self, messages):
+    def complete_text(self, messages, check_cancelled=None):
         parts = []
         def collect(chunk):
+            if check_cancelled:
+                check_cancelled()
             for choice in chunk.get("choices", []):
                 content = choice.get("delta", {}).get("content")
                 if content:
                     parts.append(content)
+        if check_cancelled:
+            check_cancelled()
         self.llm.handle_chat_completions({"stream": True, "messages": messages}, collect)
+        if check_cancelled:
+            check_cancelled()
         text = "".join(parts).strip()
         if not text:
             raise RuntimeError("The model returned no review text.")
@@ -207,7 +213,7 @@ class pipeline:
             worker.add_result(gen_data["task_id"], "download", (received, total, speed))
         try:
             self.load_base_model(reviewer, progress=progress)
-            return self.complete_text(messages)
+            return self.complete_text(messages, check_cancelled=lambda: worker.check_interrupt(gen_data))
         finally:
             # The reviewer is a temporary helper, never the conversation owner.
             if reviewer != original or self.llm is None:

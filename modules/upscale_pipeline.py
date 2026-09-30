@@ -14,6 +14,22 @@ from comfy_extras.nodes_upscale_model import ImageUpscaleWithModel
 from PIL import Image
 Image.MAX_IMAGE_PIXELS = None
 
+
+class InterruptibleUpscaler:
+    """Check the current job between tiles without changing ComfyUI globals."""
+
+    def __init__(self, model, gen_data):
+        self.model = model
+        self.gen_data = gen_data
+
+    def __getattr__(self, name):
+        return getattr(self.model, name)
+
+    def __call__(self, image):
+        worker.check_interrupt(self.gen_data)
+        return self.model(image)
+
+
 class pipeline:
     pipeline_type = ["upscale"]
     model_hash = ""
@@ -103,8 +119,9 @@ class pipeline:
                 (-1, f"Upscaling image ...", None)
             )
             decoded_latent = ImageUpscaleWithModel().upscale(
-                upscaler_model, input_image
+                InterruptibleUpscaler(upscaler_model, gen_data), input_image
             )[0]
+            worker.check_interrupt(gen_data)
 
             worker.add_result(
                 gen_data["task_id"],
@@ -120,7 +137,9 @@ class pipeline:
                 "preview",
                 (-1, f"Done ...", None)
             )
-        except:
+        except model_management.InterruptProcessingException:
+            raise
+        except Exception:
             traceback.print_exc()
             worker.add_result(
                 gen_data["task_id"],
