@@ -29,6 +29,8 @@ def powerup_choices(video):
         choices.append(("Image to video", "Image to video"))
     for name, options in sorted(controlnet.cn_options.items(),
                                 key=lambda item: (order.get(item[1]["type"], 8), item[0].casefold())):
+        if name == "Image to image (preserve details)":
+            continue  # Use the image-to-image denoise slider instead of a second preset.
         if options["type"] == "upscale" and name.startswith("Upscale"):
             continue  # Image upscaling is selected with the resolution controls.
         if video and options["type"] not in ("upscale", "rembg"):
