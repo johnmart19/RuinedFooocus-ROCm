@@ -981,6 +981,8 @@ class pipeline:
             self.xl_base_patched.unet, latent_image,
             latent.get("downscale_ratio_spacial"), latent.get("downscale_ratio_temporal"),
         )
+        if architecture == "PixArt" and round(((latent_image.shape[-2] + latent_image.shape[-1]) // 2) / 64) == 0:
+            raise ValueError("PixArt resolution is too small for its positional embeddings. Use 512x512 or a larger supported resolution.")
 
         batch_inds = latent["batch_index"] if "batch_index" in latent else None
         noise = comfy.sample.prepare_noise(latent_image, seed, batch_inds)
