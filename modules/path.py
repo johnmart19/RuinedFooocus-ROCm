@@ -1,7 +1,11 @@
 from pathlib import Path
+from urllib.parse import urlparse
 import json
 import os
+import errno
+import time
 from modules.config_io import save_json
+from tempfile import NamedTemporaryFile
 try:
     # This can fail during the first run
     import requests
@@ -22,11 +26,13 @@ class PathManager:
         "path_preview": "../outputs/preview.jpg",
         "path_faceswap": "../models/faceswap/",
         "path_upscalers": "../models/upscale_models",
+        "path_latent_upscalers": "../models/latent_upscale_models",
         "path_outputs": "../outputs/",
         "path_clip": "../models/clip/",
         "path_clip_vision": "../models/clip_vision/",
         "path_cache": "../cache/",
         "path_llm": "../models/llm",
+        "path_vision": "../models/vision",
         "path_inbox": "../models/inbox",
         "path_presets": "presets",
     }
@@ -105,33 +111,43 @@ class PathManager:
             "modelfile_path": self.get_abspath_folder(self.paths["path_checkpoints"]),
             "diffusers_path": self.get_abspath_folder(self.paths["path_diffusers"]),
             "diffusers_cache_path": self.get_abspath_folder(
-                self.paths["path_diffusers_cache"]
+                self.paths["path_diffusers_cache"], required=True
             ),
             "lorafile_path": self.get_abspath_folder(self.paths["path_loras"]),
             "controlnet_path": self.get_abspath_folder(self.paths["path_controlnet"]),
             "vae_approx_path": self.get_abspath_folder(self.paths["path_vae_approx"]),
             "vae_path": self.get_abspath_folder(self.paths["path_vae"]),
-            "temp_outputs_path": self.get_abspath_folder(self.paths["path_outputs"]),
+            "temp_outputs_path": self.get_abspath_folder(self.paths["path_outputs"], required=True),
             "temp_preview_path": self.get_abspath(self.paths["path_preview"]),
             "faceswap_path": self.get_abspath_folder(self.paths["path_faceswap"]),
             "upscaler_path": self.get_abspath_folder(self.paths["path_upscalers"]),
+            "latent_upscaler_path": self.get_abspath_folder(self.paths["path_latent_upscalers"]),
             "clip_path": self.get_abspath_folder(self.paths["path_clip"]),
             "clip_vision_path": self.get_abspath_folder(self.paths["path_clip_vision"]),
-            "cache_path": self.get_abspath_folder(self.paths["path_cache"]),
+            "cache_path": self.get_abspath_folder(self.paths["path_cache"], required=True),
             "llm_path": self.get_abspath_folder(self.paths["path_llm"]),
             "inbox_path": self.get_abspath_folder(self.paths["path_inbox"]),
-            "preset_path": self.get_abspath_folder(self.paths["path_presets"]),
+            "preset_path": self.get_abspath_folder(self.paths["path_presets"], required=True),
         }
 
-    def get_abspath_folder(self, path):
+    def get_abspath_folder(self, path, required=False):
+        def prepare(folder):
+            directory = self.get_abspath(folder)
+            if not directory.exists():
+                try:
+                    directory.mkdir(parents=True, exist_ok=True)
+                except OSError as error:
+                    if required or error.errno not in (errno.EACCES, errno.EPERM, errno.EROFS):
+                        raise
+                    # Shared model roots can be read-only. Downloads and output
+                    # writes still report their own destination errors when used.
+                    print(f"Directory is unavailable for writing: {directory}")
+            return directory
+
         if isinstance(path, list):
-            rc = []
-            for folder in path:
-                rc.append(self.get_abspath(folder))
+            rc = [prepare(folder) for folder in path]
         else:
-            rc = self.get_abspath(path)
-            if not rc.exists():
-                rc.mkdir(parents=True, exist_ok=True)
+            rc = prepare(path)
         return rc
 
     def get_abspath(self, path):
@@ -140,7 +156,7 @@ class PathManager:
     def get_model_filenames(self, folder_path, cache=None, isLora=False):
         folder_path = Path(folder_path)
         if not folder_path.is_dir():
-            raise ValueError(f"{folder_path} is not a valid directory.")
+            return []
         filenames = []
         for path in folder_path.rglob("*"):
             if path.suffix.lower() in self.EXTENSIONS:
@@ -199,10 +215,24 @@ class PathManager:
             ),
         )
 
-    def get_file_path(self, file_key, default=None):
+    def get_file_path(self, file_key, default=None, progress=None):
         """
         Get the path for a file, downloading it if it doesn't exist.
         """
+        folder, separator, filename = str(file_key).partition("/")
+        if separator:
+            folders = self.paths.get("path_" + folder, [])
+            if not isinstance(folders, list):
+                folders = [folders]
+            for directory in folders:
+                candidate = self.get_abspath(directory) / filename
+                if candidate.is_file():
+                    return candidate
+        if file_key not in self.DOWNLOADABLE_FILES and separator:
+            # Older catalogs use aliases (e.g. lcm_lora) instead of folder/name.
+            file_key = next((key for key, entry in self.DOWNLOADABLE_FILES.items()
+                             if entry["path"] == "path_" + folder
+                             and entry["filename"] == filename), file_key)
         if file_key not in self.DOWNLOADABLE_FILES:
             return default
 
@@ -215,23 +245,29 @@ class PathManager:
         )
 
         if not file_path.exists():
-            self.download_file(file_key)
+            self.download_file(file_key, progress=progress)
 
         return file_path
 
-    def get_folder_file_path(self, folder, filename, default=None):
-        return self.get_file_path(f"{str(folder)}/{str(filename)}", default=default)
+    def get_folder_file_path(self, folder, filename, default=None, progress=None):
+        return self.get_file_path(f"{str(folder)}/{str(filename)}", default=default, progress=progress)
 
     def get_folder_list(self, folder):
         result = []
         for file in self.DOWNLOADABLE_FILES:
-            if file.startswith(f"{folder}/"):
+            if self.DOWNLOADABLE_FILES[file]["path"] == "path_" + folder:
                 result.append(self.DOWNLOADABLE_FILES[file]["filename"])
-        # FIXME: also list files already in folder
-        return result
+        folders = self.paths.get("path_" + folder, [])
+        if not isinstance(folders, list):
+            folders = [folders]
+        for directory in folders:
+            root = self.get_abspath(directory)
+            result.extend(str(path.relative_to(root)) for path in root.rglob("*")
+                          if path.is_file() and path.suffix.lower() in self.EXTENSIONS)
+        return sorted(set(result), key=str.casefold)
 
 
-    def download_file(self, file_key):
+    def download_file(self, file_key, progress=None):
         """
         Download a file if it doesn't exist.
         """
@@ -244,19 +280,48 @@ class PathManager:
         )
 
         print(f"Downloading {file_info['url']}...")
-        response = requests.get(file_info["url"], stream=True)
-        total_size = int(response.headers.get("content-length", 0))
-
-        with open(file_path, "wb") as file, tqdm(
-            desc=file_info["filename"],
-            total=total_size,
-            unit="iB",
-            unit_scale=True,
-            unit_divisor=1024,
-        ) as progress_bar:
-            for data in response.iter_content(chunk_size=1024):
-                size = file.write(data)
-                progress_bar.update(size)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = None
+        headers = {}
+        huggingface = urlparse(file_info["url"]).hostname == "huggingface.co"
+        if huggingface:
+            from huggingface_hub.utils import build_hf_headers
+            headers = build_hf_headers()
+        try:
+            with requests.get(file_info["url"], headers=headers, stream=True, timeout=(15, 60)) as response:
+                if huggingface and response.status_code in (401, 403):
+                    repository = "/".join(urlparse(file_info["url"]).path.strip("/").split("/")[:2])
+                    raise RuntimeError(
+                        f"Cannot download {file_info['filename']}: Hugging Face access is required. "
+                        f"Request access at https://huggingface.co/{repository}, then use hf auth login "
+                        f"or HF_TOKEN. Alternatively, place the file at {file_path}."
+                    )
+                response.raise_for_status()
+                total_size = int(response.headers.get("content-length", 0))
+                received = 0
+                started = last_update = time.monotonic()
+                if progress:
+                    progress(0, total_size, 0)
+                with NamedTemporaryFile(dir=file_path.parent, suffix=".part", delete=False) as file, tqdm(
+                    desc=file_info["filename"], total=total_size,
+                    unit="iB", unit_scale=True, unit_divisor=1024,
+                ) as progress_bar:
+                    temporary = Path(file.name)
+                    for data in response.iter_content(chunk_size=1024 * 1024):
+                        progress_bar.update(file.write(data))
+                        received += len(data)
+                        now = time.monotonic()
+                        if progress and now - last_update >= 0.5:
+                            progress(received, total_size, received / max(now - started, 0.001))
+                            last_update = now
+                if total_size and temporary.stat().st_size != total_size:
+                    raise IOError("Incomplete model download; retry to download again.")
+                os.replace(temporary, file_path)
+                if progress:
+                    progress(received, total_size, received / max(time.monotonic() - started, 0.001))
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
 
         print(f"Downloaded {file_info['filename']} to {file_path}")
 
