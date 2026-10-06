@@ -11,6 +11,7 @@ from modules.video_settings import VIDEO_FPS
 from shared import add_ctrl, path_manager, translate
 import modules.ui.ui_evolve as ui_evolve
 import modules.ui.ui_llama as ui_llama
+from modules.ui.ui_checkpoint_tools import create_ui as create_checkpoint_tools
 from PIL import Image
 
 t = translate
@@ -31,7 +32,7 @@ def powerup_choices(video):
         if video and options["type"] not in ("upscale", "rembg"):
             continue
         choices.append(("Image to image" if name == "Img2Img" else name, name))
-    return choices + [(NEWCN, NEWCN)]
+    return choices + [("Checkpoint tools", "Checkpoint tools"), (NEWCN, NEWCN)]
 
 
 def add_controlnet_tab(main_view, inpaint_view, prompt, image_number, run_event, base_model):
@@ -44,6 +45,8 @@ def add_controlnet_tab(main_view, inpaint_view, prompt, image_number, run_event,
                 value="None",
             )
             add_ctrl("cn_selection", cn_selection)
+
+        checkpoint_tools = create_checkpoint_tools(base_model)
 
         cn_name = gr.Textbox(
             show_label=False,
@@ -277,6 +280,14 @@ def add_controlnet_tab(main_view, inpaint_view, prompt, image_number, run_event,
         inpaint_toggle = gr.Checkbox(label=t("Inpainting"), value=False, visible=not initial_video)
 
         add_ctrl("inpaint_toggle", inpaint_toggle)
+
+        cn_selection.change(
+            lambda selection, checkpoint: [gr.update(visible=selection == "Checkpoint tools"),
+                               gr.update(visible=selection != "Checkpoint tools"),
+                               gr.update(visible=selection != "Checkpoint tools" and not is_video_checkpoint(checkpoint))],
+            inputs=[cn_selection, base_model], outputs=[checkpoint_tools, input_image, inpaint_toggle],
+            api_visibility="undocumented",
+        )
 
         def model_changed(checkpoint, selection):
             video = is_video_checkpoint(checkpoint)
