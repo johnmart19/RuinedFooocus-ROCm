@@ -532,8 +532,8 @@ with shared.gradio_root as block:
                 )
                 add_ctrl("preset_selection", preset_selection)
 
-                performance_add = gr.Button(value="+", size="sm")
-                performance_delete = gr.Button(value="-", size="sm")
+                performance_add = gr.Button(value="+", size="sm", visible=False)
+                performance_delete = gr.Button(value="-", size="sm", visible=False)
                 initial_performance = settings["performance"]
                 initial_model_base = shared.models.get_model_base(
                     shared.models.get_models_by_path("checkpoints", settings["base_model"]))
@@ -549,14 +549,14 @@ with shared.gradio_root as block:
                     label=t("Performance"),
                     choices=initial_performance_choices,
                     value=initial_performance,
-                    buttons=[performance_add, performance_delete],
+                    buttons=[],
                 )
                 add_ctrl("performance_selection", performance_selection, True)
                 performance_help = gr.Markdown(
                     performance_settings.describe(initial_performance),
                 )
                 with gr.Accordion(t("Workflow settings"), open=False):
-                    initial_recipe = performance_settings.get_perf_options(initial_performance)
+                    initial_recipe = performance_settings.get_perf_options(initial_performance, settings["base_model"], initial_model_base)
                     workflow_help = gr.Markdown(performance_settings.describe_workflow(
                         initial_model_base, settings["base_model"], initial_performance,
                         initial_recipe["custom_steps"], initial_recipe["cfg"],
@@ -578,7 +578,7 @@ with shared.gradio_root as block:
                     visible='hidden',
                 )
                 custom_default_values = performance_settings.get_perf_options(
-                    initial_performance
+                    initial_performance, settings["base_model"], initial_model_base
                 ) | initial_fixed
                 custom_steps = gr.Slider(
                     label=t("Custom Steps"),
@@ -624,6 +624,16 @@ with shared.gradio_root as block:
                 )
 
                 add_ctrl("clip_skip", clip_skip)
+
+                with gr.Accordion("Model Defaults", open=False):
+                    recommendation_status = gr.Markdown()
+                    auto_recommendations = gr.Checkbox(label="Automatically refresh recommendations", value=True)
+                    with gr.Row():
+                        recommendation_use = gr.Button("Use model defaults")
+                        recommendation_refresh = gr.Button("Refresh")
+                    with gr.Row():
+                        recommendation_save = gr.Button("Save model settings")
+                        recommendation_reset = gr.Button("Remove saved settings")
 
                 performance_outputs = [
                     perf_name,
@@ -1288,9 +1298,9 @@ with shared.gradio_root as block:
 
             def performance_control_updates(selection, family, checkpoint, editing=False):
                 custom = selection == performance_settings.CUSTOM_PERFORMANCE or editing
-                saving = editing or (custom and family not in VIDEO_FPS)
+                saving = False
                 fixed = fixed_video_settings(family, checkpoint)
-                options = performance_settings.get_perf_options(selection)
+                options = performance_settings.get_perf_options(selection, checkpoint, family)
                 updates = [gr.update(value="", visible=saving), gr.update(visible=saving)]
                 for key in ("cfg", "sampler_name", "scheduler", "clip_skip", "custom_steps"):
                     update = {"visible": custom and key not in fixed}
@@ -1307,6 +1317,47 @@ with shared.gradio_root as block:
                 return updates
 
             video_performance_outputs = performance_outputs + [video_fps, auto_negative_prompt, negative_prompt]
+
+            def refresh_recommendation(selection, family, checkpoint, automatic, force=False):
+                if family in VIDEO_FPS:
+                    return "Checkpoint recommendations currently support image models."
+                store = performance_settings.model_recommendations
+                if force or (automatic and selection == performance_settings.MODEL_PERFORMANCE):
+                    store.refresh(checkpoint, KSampler.SAMPLERS, KSampler.SCHEDULERS, force)
+                from modules.model_recommendations import FAMILY_PRESETS
+                options = performance_settings.get_perf_options(performance_settings.MODEL_PERFORMANCE, checkpoint, family)
+                return store.describe(checkpoint, options, KSampler.SAMPLERS, KSampler.SCHEDULERS,
+                                      family_default=FAMILY_PRESETS.get(family, family) in performance_settings.performance_options)
+
+            recommendation_inputs = [performance_selection, model_family, base_model, auto_recommendations]
+            recommendation_use.click(lambda: performance_settings.MODEL_PERFORMANCE,
+                                     outputs=[performance_selection], api_visibility='undocumented')
+            recommendation_refresh.click(
+                lambda selection, family, checkpoint, automatic: refresh_recommendation(selection, family, checkpoint, automatic, True),
+                inputs=recommendation_inputs, outputs=[recommendation_status], api_visibility='undocumented').then(
+                    performance_control_updates, inputs=[performance_selection, model_family, base_model],
+                    outputs=video_performance_outputs, api_visibility='undocumented')
+
+            def save_checkpoint_override(checkpoint, family, steps, guidance, sampler, schedule, skip):
+                if family in VIDEO_FPS:
+                    raise gr.Error("Checkpoint overrides currently support image models.")
+                performance_settings.model_recommendations.save_override(
+                    checkpoint, dict(custom_steps=steps, cfg=guidance, sampler_name=sampler, scheduler=schedule, clip_skip=skip),
+                    KSampler.SAMPLERS, KSampler.SCHEDULERS)
+                return performance_settings.MODEL_PERFORMANCE
+
+            recommendation_save.click(save_checkpoint_override,
+                inputs=[base_model, model_family, custom_steps, cfg, sampler_name, scheduler, clip_skip],
+                outputs=[performance_selection], api_visibility='undocumented')
+            def reset_checkpoint_override(checkpoint, family):
+                if family in VIDEO_FPS:
+                    raise gr.Error("Checkpoint overrides currently support image models.")
+                performance_settings.model_recommendations.reset_override(checkpoint)
+                return performance_settings.MODEL_PERFORMANCE
+            recommendation_reset.click(reset_checkpoint_override, inputs=[base_model, model_family],
+                outputs=[performance_selection], api_visibility='undocumented').then(
+                    performance_control_updates, inputs=[performance_selection, model_family, base_model],
+                    outputs=video_performance_outputs, api_visibility='undocumented')
             performance_add.click(
                 lambda selection, family, checkpoint: performance_control_updates(selection, family, checkpoint, True),
                 inputs=[performance_selection, model_family, base_model], outputs=video_performance_outputs,
@@ -1336,9 +1387,17 @@ with shared.gradio_root as block:
                     return gr.update()
 
             performance_selection.change(
+                refresh_recommendation, inputs=recommendation_inputs, outputs=[recommendation_status],
+                api_visibility='undocumented').then(
                 performance_control_updates, inputs=[performance_selection, model_family, base_model],
                 outputs=video_performance_outputs, api_visibility='undocumented')
             model_controls_event.then(
+                refresh_recommendation, inputs=recommendation_inputs, outputs=[recommendation_status],
+                api_visibility='undocumented').then(
+                performance_control_updates, inputs=[performance_selection, model_family, base_model],
+                outputs=video_performance_outputs, api_visibility='undocumented')
+            block.load(refresh_recommendation, inputs=recommendation_inputs,
+                       outputs=[recommendation_status], api_visibility='undocumented').then(
                 performance_control_updates, inputs=[performance_selection, model_family, base_model],
                 outputs=video_performance_outputs, api_visibility='undocumented')
 
@@ -1446,7 +1505,7 @@ with shared.gradio_root as block:
             path = evt.value['image']['path']
             preset = Path(path).with_suffix('').name
             show_models = gr.update(visible='hidden') if (0b100 & settings.get("preset_mode", 7)) else gr.update()
-            show_perf = gr.update(visible='hidden') if (0b010 & settings.get("preset_mode", 7)) else gr.update()
+            show_perf = gr.update(visible=False)
             show_size = gr.update(visible='hidden') if (0b001 & settings.get("preset_mode", 7)) else gr.update()
             return {
                 preset_image: gr.update(value=path),
@@ -1471,7 +1530,7 @@ with shared.gradio_root as block:
             }
 
         def preset_unselect(performance_selection_val, aspect_ratios_selection_val):
-            show_perf = True if (performance_selection_val == performance_settings.CUSTOM_PERFORMANCE) else 'hidden'
+            show_perf = False
             show_size = True if (aspect_ratios_selection_val == resolution_settings.CUSTOM_RESOLUTION) else 'hidden'
 
             return {

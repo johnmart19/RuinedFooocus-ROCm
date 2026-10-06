@@ -6,7 +6,9 @@ from modules.config_io import save_json
 class PerformanceSettings:
     DEFAULT_PERFORMANCE_FILE = Path("settings/performance.default")
     PERFORMANCE_FILE = Path("settings/performance.json")
-    CUSTOM_PERFORMANCE = "Custom..."
+    CUSTOM_PERFORMANCE = "Own settings"
+    MODEL_PERFORMANCE = "Model Defaults"
+    LEGACY_MODEL_PERFORMANCE = "Model settings"
 
     RETIRED_PRESETS = {
         "Speed", "Quality", "Lcm", "Lightning", "SD3", "Flux",
@@ -24,7 +26,9 @@ class PerformanceSettings:
         "clip_skip": 1,
     }
 
-    def __init__(self):
+    def __init__(self, cache_dir="cache/checkpoints", offline=False):
+        from modules.model_recommendations import ModelRecommendations
+        self.model_recommendations = ModelRecommendations(cache_dir=cache_dir, offline=offline)
         self.performance_options = self.load_performance()
 
     def load_performance(self):
@@ -56,16 +60,30 @@ class PerformanceSettings:
         self._save_data(self.PERFORMANCE_FILE, self.legacy_options | perf_options)
         self.performance_options = self.load_performance()
 
-    def get_perf_options(self, name):
+    def get_perf_options(self, name, checkpoint=None, family=None):
+        if name in (self.MODEL_PERFORMANCE, self.LEGACY_MODEL_PERFORMANCE, "Model defaults") and checkpoint:
+            from comfy.samplers import KSampler
+            from modules.model_recommendations import FAMILY_PRESETS
+            metadata = self.model_recommendations.metadata(checkpoint)
+            family = family or metadata.get("baseModel", "Unknown")
+            from modules.video_settings import VIDEO_FPS, is_ltx25_distilled
+            if family in VIDEO_FPS:
+                presets = [options for title, options in self.performance_options.items()
+                           if family in options.get("video_models", [])
+                           and (title != "LTX 2.5 Distilled" or is_ltx25_distilled(family, checkpoint))]
+                return self.default_settings | (presets[0] if presets else {})
+            fallback = self.performance_options.get(FAMILY_PRESETS.get(family, family), {})
+            recipe, _ = self.model_recommendations.recipe(checkpoint, KSampler.SAMPLERS, KSampler.SCHEDULERS)
+            return self.default_settings | fallback | recipe
         # Stale/deleted names must return usable settings, never a string.
         options = self.performance_options.get(name, self.legacy_options.get(name, {}))
         return self.default_settings | options
 
-    def apply(self, gen_data):
+    def apply(self, gen_data, family=None):
         result = gen_data.copy()
         name = result.get("performance_selection")
-        if name and name != self.CUSTOM_PERFORMANCE:
-            options = self.get_perf_options(name)
+        if name and name not in (self.CUSTOM_PERFORMANCE, "Custom..."):
+            options = self.get_perf_options(name, result.get("base_model_name"), family)
             result.update({key: options[key] for key in self.default_settings})
         return result
 
@@ -77,7 +95,7 @@ class PerformanceSettings:
         from modules.video_settings import VIDEO_FPS, fixed_video_settings, is_ltx25_distilled
         values = dict(custom_steps=steps, cfg=cfg, sampler_name=sampler, scheduler=scheduler)
         if selection != self.CUSTOM_PERFORMANCE:
-            values.update(self.get_perf_options(selection))
+            values.update(self.get_perf_options(selection, checkpoint, family))
         values.update(fixed_video_settings(family, checkpoint))
         schedule = values["scheduler"]
         if family in VIDEO_FPS and family.startswith("LTX"):
@@ -95,23 +113,12 @@ class PerformanceSettings:
             if selection == self.CUSTOM_PERFORMANCE:
                 text += "\n\nNo preset is active. Verify the recipe for your exact checkpoint; these values are not a model recommendation."
         else:
-            text += "Custom exposes steps, CFG, sampler, scheduler and Clip Skip.\n\n"
-            text += "**PowerUp → Cheat Code**: Img2Img, SDXL controls, upscaling or background removal. Supply an Input image. For adjustable image-to-image denoise, choose Custom → Img2img → Denoise.\n\n"
-            text += "Select LoRAs in Models. A sampler does not automatically load its required LCM/DMD2 LoRA."
+            options = self.get_perf_options(selection, checkpoint, family)
+            text += f"Clip Skip: {options['clip_skip']}" if selection != self.CUSTOM_PERFORMANCE else ""
         return text
 
     def choices_for_model(self, model_base, checkpoint=None):
-        from modules.video_settings import VIDEO_FPS, is_ltx25_distilled
-        video = model_base in VIDEO_FPS
-        return [name for name, options in self.performance_options.items()
-                if (model_base in options.get("video_models", []) if video
-                    else not options.get("video_models"))
-                and (name != "LTX 2.5 Distilled" or checkpoint is None
-                     or is_ltx25_distilled(model_base, checkpoint))] + [self.CUSTOM_PERFORMANCE]
+        return [self.MODEL_PERFORMANCE, self.CUSTOM_PERFORMANCE]
 
     def selection_for_model(self, family, checkpoint, current):
-        from modules.video_settings import VIDEO_FPS
-        choices = self.choices_for_model(family, checkpoint)
-        if family in VIDEO_FPS:
-            return choices[0]
-        return current if current in choices else self.CUSTOM_PERFORMANCE
+        return self.CUSTOM_PERFORMANCE if current in (self.CUSTOM_PERFORMANCE, "Custom...") else self.MODEL_PERFORMANCE

@@ -238,7 +238,7 @@ def images(payload, selected):
         performance = shared.performance_settings.selection_for_model(family, selected["name"], performance)
     elif performance not in choices:
         raise ValueError("Performance preset is not available for this model family.")
-    values = shared.performance_settings.get_perf_options(performance)
+    values = shared.performance_settings.get_perf_options(performance, selected["name"], family)
     if performance == shared.performance_settings.CUSTOM_PERFORMANCE:
         values.update({key: defaults[key] for key in values if key in defaults})
     for source, target in (("steps", "custom_steps"), ("cfg", "cfg"), ("sampler", "sampler_name"),
@@ -278,7 +278,7 @@ def images(payload, selected):
         control = None
         values.update(video_duration=payload.get("duration", 3), video_fps=payload.get("fps", VIDEO_FPS[family]))
     data = dict(values, task_type="tool_call", prompt=payload["prompt"],
-        base_model_name=selected["name"], performance_selection="Custom...",
+        base_model_name=selected["name"], performance_selection=shared.performance_settings.CUSTOM_PERFORMANCE,
         aspect_ratios_selection="Custom...", custom_width=width, custom_height=height,
         negative=payload.get("negative_prompt", defaults.get("negative", "")),
         loras=loras, style_selection=payload.get("styles", defaults.get("style_selection", settings["style"])),

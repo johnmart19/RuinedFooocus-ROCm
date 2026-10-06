@@ -56,3 +56,4 @@ models/upscale_models/*.jpeg
 .gradio/flagged/dataset1.csv
 cache/images.db
 settings/pip.json
+/settings/model_settings.json

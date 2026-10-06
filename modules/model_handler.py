@@ -364,6 +364,14 @@ class Models:
                           else self.search_civitai_with_hash(hash))
                 if remote:
                     data = data | remote
+                if hash and not data.get("id") and not data.get("hf_repo_id"):
+                    # Identity discovery must not depend on needing new artwork.
+                    from modules.model_sources import huggingface_preview
+                    header = self.read_safetensors_header(path).get("__metadata__", {})
+                    source = header.get("modelspec.source", "") if isinstance(header, dict) else ""
+                    fallback = huggingface_preview(path, hash, source)
+                    if fallback:
+                        data = data | fallback
                 if hash:
                     # An existing files entry may lack hashes. setdefault on the
                     # outer key alone loses the computed hash and rehashes on

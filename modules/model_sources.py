@@ -10,6 +10,67 @@ import requests
 _civitai_not_found = {}
 
 
+def huggingface_recommendations(repository, sha256):
+    """Read bounded JSON/card data only after matching a cached checkpoint hash.
+
+    The hash is compared locally with the public manifest, never sent to HF.
+    Pin card/config reads to the matched repository revision. No weights/code.
+    """
+    if (not isinstance(repository, str)
+            or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*", repository)
+            or not isinstance(sha256, str) or not re.fullmatch(r"[a-fA-F0-9]{64}", sha256)):
+        return None
+
+    def read(url, limit, as_json=False, params=None):
+        with requests.get(url, params=params, timeout=(5, 15), stream=True) as response:
+            response.raise_for_status()
+            chunks = []
+            size = 0
+            for chunk in response.iter_content(16384):
+                size += len(chunk)
+                if size > limit:
+                    raise ValueError("Recommendation metadata exceeds size limit")
+                chunks.append(chunk)
+            body = b"".join(chunks).decode("utf-8")
+            if as_json:
+                import json
+                return json.loads(body)
+            return body
+
+    try:
+        info = read(f"https://huggingface.co/api/models/{repository}", 2*1024*1024,
+                    as_json=True, params={"blobs": "true"})
+        if not isinstance(info, dict) or info.get("id") != repository:
+            return None
+        siblings = info.get("siblings", [])
+        if not isinstance(siblings, list) or not any(
+                isinstance(item, dict) and isinstance(item.get("lfs"), dict)
+                and item["lfs"].get("sha256", "").lower() == sha256.lower()
+                for item in siblings if isinstance(item, dict)):
+            return None
+        revision = info.get("sha")
+        if not isinstance(revision, str) or not re.fullmatch(r"[a-fA-F0-9]{40}", revision):
+            return None
+        names = {item.get("rfilename") for item in siblings if isinstance(item, dict) and isinstance(item.get("rfilename"), str)}
+        result = {"description": "", "generationConfig": {},
+                  "source": f"Hugging Face {repository} @ {revision[:12]} (repository-wide settings)",
+                  "source_url": f"https://huggingface.co/{repository}/blob/{revision}/README.md"}
+        base = f"https://huggingface.co/{repository}/resolve/{revision}/"
+        if "README.md" in names:
+            result["description"] = read(base+"README.md", 200000)
+        if "generation_config.json" in names:
+            try:
+                config = read(base+"generation_config.json", 64000, as_json=True)
+                if isinstance(config, dict):
+                    result["generationConfig"] = config
+            except (requests.RequestException, ValueError, UnicodeError):
+                pass  # A valid card remains useful without a generation config.
+        return result
+    except (requests.RequestException, ValueError, UnicodeError, AttributeError) as error:
+        print(f"Hugging Face recommendation lookup failed: {error}")
+        return None
+
+
 def civitai_metadata(endpoint):
     import time
     for host in ("civitai.com", "civitai.red"):

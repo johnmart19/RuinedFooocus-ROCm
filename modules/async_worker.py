@@ -57,7 +57,9 @@ def _process(gen_data):
     res = []
     metadatastrings = []
     # Named sampling defaults apply first; imported image/JSON metadata wins.
-    gen_data = shared.performance_settings.apply(gen_data)
+    initial_family = shared.models.get_model_base(shared.models.get_models_by_path(
+        "checkpoints", gen_data.get("base_model_name", "")))
+    gen_data = shared.performance_settings.apply(gen_data, initial_family)
     if "_api_job" not in gen_data:
         gen_data = process_metadata(gen_data)
 
@@ -68,7 +70,7 @@ def _process(gen_data):
             family, gen_data.get("base_model_name", "")):
         gen_data["performance_selection"] = shared.performance_settings.selection_for_model(
             family, gen_data.get("base_model_name", ""), None)
-        gen_data = shared.performance_settings.apply(gen_data)
+        gen_data = shared.performance_settings.apply(gen_data, family)
     gen_data = constrain_video_settings(gen_data, family)
 
     pipeline = modules.pipelines.update(gen_data)

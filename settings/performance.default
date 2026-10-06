@@ -1,4 +1,12 @@
 {
+  "Anima": {
+    "custom_steps": 30,
+    "cfg": 4,
+    "sampler_name": "euler",
+    "scheduler": "normal",
+    "clip_skip": 1,
+    "recommended_resolutions": "1024x1024; Anima family fallback, verify your exact checkpoint"
+  },
   "Wan 2.1": {
     "video_models": [
       "Wan Video"
