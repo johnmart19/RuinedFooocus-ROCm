@@ -572,6 +572,8 @@ class pipeline:
             self.xl_base_patched = None
             self.xl_base_patched_hash = None
         else:
+            from modules.model_attention import configure_qwen_attention
+            configure_qwen_attention(unet)
             self.xl_base = self.StableDiffusionModel(
                 unet=unet, clip=clip, vae=vae, clip_vision=clip_vision
             )
