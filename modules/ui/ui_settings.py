@@ -7,6 +7,17 @@ from shared import state, add_setting, performance_settings, resolution_settings
 
 t = translate
 
+
+def model_choices(model_type, key, default):
+    choices = list(models.names[model_type])
+    choices += [name for name in path_manager.get_folder_list(model_type) if name not in choices]
+    if model_type == "loras":
+        choices.insert(0, "None")
+    selected = settings.default_settings.get(key, default)
+    if selected and selected not in choices:
+        choices.append((f"{selected} (not found)", selected))
+    return choices
+
 def save_clicked(*args):
     ui_data = {}
     # Overwrite current settings
@@ -37,6 +48,10 @@ def save_clicked(*args):
 
     settings.set_settings_path(ui_data.get("ui_settings_name", None))
     settings.save_settings()
+    from argparser import args as launch_args
+    import os
+    models.offline = (launch_args.offline or os.environ.get("RF_OFFLINE") == "1"
+                      or settings.default_settings.get("local_model_metadata", False))
     path_manager.set_settings_path(ui_data.get("ui_settings_name", None))
     path_manager.save_paths()
 
@@ -48,6 +63,10 @@ def create_settings():
         with gr.Row():
             with gr.Column():
                 gr.Markdown(t("# UI settings"))
+                local_metadata = gr.Checkbox(label="Local model metadata only",
+                    value=settings.default_settings.get("local_model_metadata", False),
+                    info="Skip online model and artwork lookups.")
+                add_setting("local_model_metadata", local_metadata)
                 with gr.Row():
                     image_number = gr.Number(label=t("Image Number"), interactive=True, value=settings.default_settings.get("image_number", 1))
                     add_setting("image_number", image_number)
@@ -117,7 +136,7 @@ def create_settings():
                 base_model = gr.Dropdown(
                     label=t("Base Model"),
                     interactive=True,
-                    choices=models.names['checkpoints'],
+                    choices=model_choices("checkpoints", "base_model", "sd_xl_base_1.0_0.9vae.safetensors"),
                     value=settings.default_settings.get("base_model", "sd_xl_base_1.0_0.9vae.safetensors"),
                 )
                 add_setting("base_model", base_model)
@@ -125,7 +144,7 @@ def create_settings():
                     lora_1_model = gr.Dropdown(
                         label=t("LoRA {id} Model", mapping={'id': 1}),
                         interactive=True,
-                        choices=["None"] + models.names['loras'],
+                        choices=model_choices("loras", "lora_1_model", "None"),
                         value=settings.default_settings.get("lora_1_model", "None"),
                     )
                     lora_1_weight = gr.Number(label=t("Lora {id} Weight", mapping={'id': 1}), value=settings.default_settings.get("lora_1_weight", 1.0), step=0.05)
@@ -133,7 +152,7 @@ def create_settings():
                     lora_2_model = gr.Dropdown(
                         label=t("LoRA {id} Model", mapping={'id': 2}),
                         interactive=True,
-                        choices=["None"] + models.names['loras'],
+                        choices=model_choices("loras", "lora_2_model", "None"),
                         value=settings.default_settings.get("lora_2_model", "None"),
                     )
                     lora_2_weight = gr.Number(label=t("Lora {id} Weight", mapping={'id': 2}), value=settings.default_settings.get("lora_2_weight", 1.0), step=0.05)
@@ -141,7 +160,7 @@ def create_settings():
                     lora_3_model = gr.Dropdown(
                         label=t("LoRA {id} Model", mapping={'id': 3}),
                         interactive=True,
-                        choices=["None"] + models.names['loras'],
+                        choices=model_choices("loras", "lora_3_model", "None"),
                         value=settings.default_settings.get("lora_3_model", "None"),
                     )
                     lora_3_weight = gr.Number(label=t("Lora {id} Weight", mapping={'id': 3}), value=settings.default_settings.get("lora_3_weight", 1.0), step=0.05)
@@ -149,7 +168,7 @@ def create_settings():
                     lora_4_model = gr.Dropdown(
                         label=t("LoRA {id} Model", mapping={'id': 4}),
                         interactive=True,
-                        choices=["None"] + models.names['loras'],
+                        choices=model_choices("loras", "lora_4_model", "None"),
                         value=settings.default_settings.get("lora_4_model", "None"),
                     )
                     lora_4_weight = gr.Number(label=t("Lora {id} Weight", mapping={'id': 4}), value=settings.default_settings.get("lora_4_weight", 1.0), step=0.05)
@@ -157,7 +176,7 @@ def create_settings():
                     lora_5_model = gr.Dropdown(
                         label=t("LoRA {id} Model", mapping={'id': 5}),
                         interactive=True,
-                        choices=["None"] + models.names['loras'],
+                        choices=model_choices("loras", "lora_5_model", "None"),
                         value=settings.default_settings.get("lora_5_model", "None"),
                     )
                     lora_5_weight = gr.Number(label=t("Lora {id} Weight", mapping={'id': 5}), value=settings.default_settings.get("lora_5_weight", 1.0), step=0.05)

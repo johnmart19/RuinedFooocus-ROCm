@@ -167,6 +167,7 @@ def launch_app(args):
         css=modules.html.css,
         js=modules.html.scripts,
         allowed_paths=["html", "/", path_manager.model_paths["temp_outputs_path"]]
+        + [str(path) for path in shared.models.cache_paths.values()]
         + settings.get("archive_folders", []),
         enable_monitoring=False,
         pwa=True,
@@ -1134,6 +1135,24 @@ with shared.gradio_root as block:
                 }
 
                 return results
+
+            # Refresh thumbnails when the background metadata scan finishes.
+            model_revision = gr.State(-1)
+
+            def update_model_previews(revision, model_filter, lora_filter, active_loras):
+                current = shared.models.revision
+                if revision == current:
+                    return gr.skip(), gr.skip(), gr.skip()
+                return (current, update_model_filter(model_filter),
+                        update_lora_filter(lora_filter, active_loras))
+
+            cfg_timer.tick(
+                fn=update_model_previews,
+                inputs=[model_revision, modelfilter, lorafilter, lora_active_gallery],
+                outputs=[model_revision, model_gallery, lora_gallery],
+                api_visibility='undocumented',
+                queue=False,
+            )
 
             ui_onebutton.ui_onebutton(prompt, run_event)
 
