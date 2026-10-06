@@ -39,6 +39,7 @@ from modules.launch_util import (
     pip_rm,
     repo_dir,
     requirements_met,
+    reinstall_requirements,
     script_path,
     dir_repos,
 )
@@ -93,12 +94,13 @@ def prepare_environment(offline=False):
             "Couldn't check pip",
             live=False,
         )
-        run(
-            f'"{python}" -m pip install -r "{requirements_file}"',
-            "Check pre-requirements",
-            "Couldn't check pre-reqs",
-            live=False,
-        )
+        if not getattr(sys, "_rf_bootstrap_reinstalled", False):
+            run(
+                f'"{python}" -m pip install {"--force-reinstall " if REINSTALL_ALL else ""}-r "{requirements_file}"',
+                "Check pre-requirements",
+                "Couldn't check pre-reqs",
+                live=False,
+            )
         run(
             f'"{python}" -m pip uninstall -y llama-cpp-python',
             "Check for old modules",
