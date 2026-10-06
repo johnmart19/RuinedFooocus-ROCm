@@ -34,8 +34,14 @@ mutually exclusive groups match the pinned upstream parser. They cover:
 
 `--force-fp16` also implies `--fp16-unet`; `--fast` without values enables all
 upstream performance features. `--disable-comfy-compiler` also disables graphs.
-The legacy `--normalvram` disables DynamicVRAM. The image pipeline respects the
-backend smart-memory setting. The pinned DynamicVRAM controller is initialized
+The legacy `--normalvram` disables DynamicVRAM. Image and video pipelines respect
+backend smart memory: keep reusable diffusion, encoder and VAE weights resident
+when the active stage's weights and workspace fit; offload only when more memory
+is needed. Video sampling, decoding and LTX refinement do not force diffusion
+or encoder unloading at every stage boundary. Temporary refinement upscalers
+are released after use. Explicit VRAM modes and `--cpu-vae` retain their meaning;
+automatic residency does not force GPU-only loading or CPU VAE decoding.
+The pinned DynamicVRAM controller is initialized
 without launching the ComfyUI server.
 
 `--gpu-device-id` retains single-GPU selection. `--cuda-device` accepts a comma

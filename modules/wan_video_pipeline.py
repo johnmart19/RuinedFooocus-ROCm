@@ -396,13 +396,8 @@ class pipeline:
             )
 
             worker.check_interrupt(gen_data)
-            worker.add_result(
-                gen_data["task_id"], "preview",
-                (-1, "Freeing VRAM for VAE decoding ...", None),
-            )
-            # Sampling is finished; keep the patcher for reuse, but free its GPU weights.
-            comfy.model_management.unload_model_and_clones(model_sampling)
-            worker.check_interrupt(gen_data)
+            # Let native VAE memory budgeting retain sampling weights whenever
+            # the decode workspace fits, and offload them under pressure.
 
             if callback is not None:
                 worker.add_result(

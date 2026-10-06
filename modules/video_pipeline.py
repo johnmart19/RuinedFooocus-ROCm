@@ -612,10 +612,8 @@ class pipeline:
                     first_frame=(torch.from_numpy(np.asarray(gen_data["input_image"], dtype=np.float32) / 255.0)[None]
                                  if gen_data["input_image"] is not None else None),
                 )
-                # Conditioning now owns the embeddings; the encoder is not
-                # needed during denoising. Keep host weights for prompt reuse,
-                # but release its GPU residency through the native backend API.
-                comfy.model_management.unload_model_and_clones(self.model_base_patched.clip.patcher)
+                # Native sampling accounts for workspace and evicts the encoder
+                # only when needed; keep it resident when the full recipe fits.
                 # outputs=[io.Conditioning.Output(display_name="positive"), io.Latent.Output()],
 
                 negative = None
@@ -761,8 +759,8 @@ class pipeline:
                     audio_samples = None
 
         worker.check_interrupt(gen_data)
-        comfy.model_management.unload_model_and_clones(guider.model_patcher)
-        worker.check_interrupt(gen_data)
+        # VAE loading frees only the memory required for its decode workspace.
+        # Retain diffusion weights when decoding fits beside them.
 
         # Decode video
 

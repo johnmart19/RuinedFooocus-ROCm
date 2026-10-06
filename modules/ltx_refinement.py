@@ -20,7 +20,7 @@ UPSCALER = "ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors"
 def refine(latent, guider, vae, upscaler_path, gen_data, seed):
     worker.check_interrupt(gen_data)
     worker.add_result(gen_data["task_id"], "preview", (-1, "Upscaling video latents ...", None))
-    model_management.unload_model_and_clones(guider.model_patcher)
+    # Native upscaler loading offloads diffusion weights only if required.
     path = Path(upscaler_path)
     folder_paths.add_model_folder_path("latent_upscale_models", str(path.parent), is_default=True)
     upscaler = LatentUpscaleModelLoader.execute(path.name)[0]
