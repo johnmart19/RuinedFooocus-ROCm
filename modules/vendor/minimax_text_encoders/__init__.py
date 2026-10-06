@@ -194,6 +194,11 @@ def _load_recovered(directory: Path, package: dict[str, Any], variant_id: str):
     target = comfy.supported_models_base.ClipTarget(
         RecoveredMiniMaxTokenizer, _recovered_te_model(recovery, quantization_metadata)
     )
+    state = _translate_recovered_base(state, recovery["ara"]["layers"])
+    adapter = {f"adapter.{key}": value for key, value in load_file(str(adapter_path), device="cpu").items()}
+    ara = {f"model.{key}": value for key, value in load_file(str(ara_path), device="cpu").items()}
+    state.update(adapter)
+    state.update(ara)
     # The base, ARA, and adapter state is loaded below. Keep the empty model on
     # CPU during construction; otherwise CLIP forces GPU placement before the
     # custom RecoveryLinear wrappers have populated weights.
@@ -202,12 +207,11 @@ def _load_recovered(directory: Path, package: dict[str, Any], variant_id: str):
         embedding_directory=folder_paths.get_folder_paths("embeddings"),
         parameters=6_000_000_000,
         model_options={"initial_device": comfy.model_management.text_encoder_offload_device()},
+        # CPU-only CLIP eagerly places the model before returning. Supply the
+        # complete state first so recovery wrappers have initialized weights.
+        state_dict=([state] if comfy.model_management.text_encoder_device()
+                    == comfy.model_management.text_encoder_offload_device() else {}),
     )
-    state = _translate_recovered_base(state, recovery["ara"]["layers"])
-    adapter = {f"adapter.{key}": value for key, value in load_file(str(adapter_path), device="cpu").items()}
-    ara = {f"model.{key}": value for key, value in load_file(str(ara_path), device="cpu").items()}
-    state.update(adapter)
-    state.update(ara)
     missing, unexpected = clip.load_sd(state, full_model=False)
     real_missing = [key for key in (missing or []) if not key.endswith("lm_head.weight")]
     if real_missing or unexpected:
