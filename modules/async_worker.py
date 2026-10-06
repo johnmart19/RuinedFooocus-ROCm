@@ -320,6 +320,11 @@ def _process(gen_data):
             if "upscale" in pipeline.pipeline_type:
                 prompt.update(width=x.shape[1], height=x.shape[0],
                               upscaler=modules.controlnet.get_settings(gen_data)["upscaler"])
+            elif gen_data.get("automatic_upscale_model"):
+                prompt.update(width=x.shape[1], height=x.shape[0],
+                              generation_width=width, generation_height=height,
+                              automatic_upscale=gen_data["automatic_upscale"],
+                              upscaler=gen_data["automatic_upscale_model"])
             metadata = PngInfo()
             # if True:
             #     def handle_whitespace(string: str):

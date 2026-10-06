@@ -41,6 +41,17 @@ is needed. Video sampling, decoding and LTX refinement do not force diffusion
 or encoder unloading at every stage boundary. Temporary refinement upscalers
 are released after use. Explicit VRAM modes and `--cpu-vae` retain their meaning;
 automatic residency does not force GPU-only loading or CPU VAE decoding.
+
+Under the image resolution controls, **Automatic Upscale** offers Off (default),
+2× and 4×, with the final pixel dimensions shown before generation. It runs
+ComfyUI's tiled `ImageUpscaleWithModel` after VAE decoding and before saving;
+it does not change the diffusion resolution or run another sampling pass.
+2× uses RealESRGAN x2plus; 4× uses the anime 6B model for Anima/anime families
+and x4plus otherwise. Weights download through the existing upscaler catalog
+on first use and are cached between prompts. Stop is checked between tiles;
+download/backend failures follow the normal worker error recovery. PNG metadata
+records the final size, original generation size, scale and upscaler. Video and
+the separate PowerUp upscale workflow are unaffected.
 The pinned DynamicVRAM controller is initialized
 without launching the ComfyUI server.
 

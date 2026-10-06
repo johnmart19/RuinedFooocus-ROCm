@@ -697,6 +697,22 @@ with shared.gradio_root as block:
                         value=default_resolution[1],
                     )
                     add_ctrl("custom_height", custom_height)
+                    from modules.automatic_upscale import CHOICES, describe_size
+                    with gr.Group(visible=initial_model_base not in VIDEO_FPS) as automatic_upscale_controls:
+                        automatic_upscale = gr.Dropdown(
+                            label=t("Automatic Upscale"), choices=CHOICES, value="Off",
+                            info=t("Enlarge the finished image with a GPU upscale model. Downloaded on first use."),
+                        )
+                        add_ctrl("automatic_upscale", automatic_upscale)
+                        upscale_size = gr.Markdown(describe_size(
+                            "Off", initial_resolution, default_resolution[0], default_resolution[1],
+                            resolution_settings.aspect_ratios))
+                    def update_upscale_size(scale, resolution, width, height):
+                        return describe_size(scale, resolution, width, height, resolution_settings.aspect_ratios)
+                    for size_control in (automatic_upscale, aspect_ratios_selection, custom_width, custom_height):
+                        size_control.change(update_upscale_size,
+                            inputs=[automatic_upscale, aspect_ratios_selection, custom_width, custom_height],
+                            outputs=[upscale_size], api_visibility='undocumented')
                     ratio_save = gr.Button(
                         value=t("Save"),
                         visible=custom_resolution,
@@ -903,6 +919,8 @@ with shared.gradio_root as block:
                     model_controls_event = base_model.change(model_video_controls, inputs=[base_model, performance_selection],
                                       outputs=[video_controls, image_number, performance_selection, video_fps, model_family, video_checkpoint],
                                       api_visibility='undocumented')
+                    model_controls_event.then(lambda family: gr.update(visible=family not in VIDEO_FPS),
+                        inputs=[model_family], outputs=[automatic_upscale_controls], api_visibility='undocumented')
                     model_controls_event.then(
                         lambda family, current: gr.update(
                             choices=resolution_settings.choices_for_model(family),

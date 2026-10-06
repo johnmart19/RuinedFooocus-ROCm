@@ -1051,6 +1051,8 @@ class pipeline:
             )
 
         decoded_latent = self.decode_latent(sampled_latent)
+        from modules.automatic_upscale import upscale_decoded
+        decoded_latent = upscale_decoded(self, decoded_latent, gen_data, architecture)
         images = [
             np.clip(255.0 * y.cpu().numpy(), 0, 255).astype(np.uint8)
             for y in decoded_latent
