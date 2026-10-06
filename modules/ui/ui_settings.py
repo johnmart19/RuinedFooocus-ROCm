@@ -270,6 +270,30 @@ def create_settings():
                 add_setting("llama_backend", llama_backend)
                 llm_runtime.change(lambda runtime: gr.update(visible=runtime == "llama.cpp"),
                     inputs=llm_runtime, outputs=llama_backend, api_visibility='undocumented')
+                from modules.llama_build import build_capabilities, build_cuda_runtime
+                can_build_cuda = bool(build_capabilities())
+                with gr.Accordion("Build local CUDA runtime", open=False, visible=can_build_cuda):
+                    gr.Markdown("Builds the pinned llama.cpp for Linux/WSL and this NVIDIA GPU. "
+                                "CUDA/CMake dependencies are installed in a separate cache environment. "
+                                "Requires system build tools (Ubuntu: `sudo apt install build-essential git python3-venv`). "
+                                "Compilation may take several minutes and use several GB of disk space.")
+                    build_runtime = gr.Button("Install dependencies and build", size="sm")
+                    build_status = gr.Textbox(label="Build status", lines=6, max_lines=12,
+                                              interactive=False, visible=False)
+
+                    def build_native_runtime():
+                        yield gr.update(interactive=False), gr.update(value="Preparing build…", visible=True), gr.skip()
+                        try:
+                            for message in build_cuda_runtime():
+                                yield gr.skip(), gr.update(value=message), gr.skip()
+                        except Exception as error:
+                            yield gr.update(interactive=True), gr.update(value=str(error)), gr.skip()
+                        else:
+                            yield gr.update(interactive=True), gr.skip(), gr.update(choices=backend_choices())
+
+                    build_runtime.click(build_native_runtime, outputs=[build_runtime, build_status, llama_backend],
+                        concurrency_id="native-runtime-build", concurrency_limit=1, api_visibility='private',
+                        show_progress="hidden")
                 with gr.Accordion("Installed chat runtimes", open=False):
                     runtime_details = gr.Markdown("Click Refresh to inspect installed versions and devices.")
                     runtime_refresh = gr.Button("Refresh", size="sm")
