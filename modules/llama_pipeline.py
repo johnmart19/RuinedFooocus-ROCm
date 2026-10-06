@@ -396,7 +396,7 @@ class pipeline:
                             ("", f"{settings.default_settings.get('lora_4_weight', 1.0)} - {settings.default_settings.get('lora_4_model', 'None')}"),
                             ("", f"{settings.default_settings.get('lora_5_weight', 1.0)} - {settings.default_settings.get('lora_5_model', 'None')}"),
                         ],
-                        'style_selection': settings.default_settings['style'],
+                        'style_selection': [],
                         'seed': -1,
                         'base_model_name': settings.default_settings['base_model'],
                         'performance_selection': settings.default_settings['performance'],

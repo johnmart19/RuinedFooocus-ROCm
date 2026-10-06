@@ -729,10 +729,7 @@ with shared.gradio_root as block:
                         container=True,
                         choices=list(load_styles().keys()),
                         buttons=[style_button],
-                        value=list(
-                            set(settings["style"]) &
-                            set(load_styles().keys())
-                        ),
+                        value=[],
                     )
                     add_ctrl("style_selection", style_selection)
                 image_number = gr.Slider(

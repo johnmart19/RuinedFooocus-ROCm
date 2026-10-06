@@ -281,7 +281,7 @@ def images(payload, selected):
         base_model_name=selected["name"], performance_selection=shared.performance_settings.CUSTOM_PERFORMANCE,
         aspect_ratios_selection="Custom...", custom_width=width, custom_height=height,
         negative=payload.get("negative_prompt", defaults.get("negative", "")),
-        loras=loras, style_selection=payload.get("styles", defaults.get("style_selection", settings["style"])),
+        loras=loras, style_selection=payload.get("styles", []),
         seed=payload.get("seed", -1), image_number=payload.get("n", 1), generate_forever=False,
         cn_selection=None, cn_type=None, input_image=input_image, controlnet=control,
         silent=True, show_preview=False, index=(0, 1))

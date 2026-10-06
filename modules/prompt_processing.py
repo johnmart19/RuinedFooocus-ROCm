@@ -266,7 +266,9 @@ def process_prompt(style, prompt, negative, gen_data=[]):
 
     # styles
     pattern = re.compile(r"<style:([^>]+)>")
-    styles = [] if style is None else style.copy()
+    # Dropdown selections are staged for "Send Style to prompt". Generation
+    # must not invisibly apply them again, including saved/default selections.
+    styles = (style or []).copy() if "task_type" in gen_data and gen_data["task_type"] == "tool_call" else []
     for match in re.finditer(pattern, prompt):
         styles += [f"Style: {match.group(1)}"]
     prompt = re.sub(pattern, "", prompt)
