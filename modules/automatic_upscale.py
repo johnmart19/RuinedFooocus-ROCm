@@ -2,6 +2,9 @@
 
 PRESETS = {
     "Off": (None, 1),
+    "2× Anime (Futsuu)": ("2x-Futsuu-Anime.pth", 2),
+    "2× Anime cleanup (AniScale)": ("2x-AniScale.pth", 2),
+    "2× Anime sharp (AnimeSharp V4 Fast)": ("2x-AnimeSharpV4_Fast_RCAN_PU.safetensors", 2),
     "2× General (RealESRGAN)": ("RealESRGAN_x2plus.pth", 2),
     "4× Anime (RealESRGAN)": ("RealESRGAN_x4plus_anime_6B.pth", 4),
     "4× General (RealESRGAN)": ("RealESRGAN_x4plus.pth", 4),

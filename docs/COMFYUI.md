@@ -56,6 +56,14 @@ on first use and are cached between prompts. Stop is checked between tiles;
 download/backend failures follow the normal worker error recovery. PNG metadata
 records the final size, original generation size, scale and upscaler. Video
 generation is unaffected; the legacy standalone backend remains available.
+
+Native 2× anime choices include [Futsuu Anime](https://openmodeldb.info/models/2x-Futsuu-Anime)
+(compact general animation, WTFPL), [AniScale](https://openmodeldb.info/models/2x-AniScale)
+(compact artifact cleanup, CC-BY-NC-4.0), and
+[AnimeSharp V4 Fast RCAN PU](https://openmodeldb.info/models/2x-AnimeSharpV4-Fast-RCAN-PU)
+(sharpening/detail and compression cleanup, CC-BY-NC-SA-4.0). The latter two
+carry noncommercial licenses. Author/source/license metadata is retained in
+the download catalog. These are true 2× models, without a 4× resize intermediate.
 The pinned DynamicVRAM controller is initialized
 without launching the ComfyUI server.
 
