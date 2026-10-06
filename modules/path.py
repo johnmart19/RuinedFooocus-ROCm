@@ -285,17 +285,12 @@ class PathManager:
         headers = {}
         huggingface = urlparse(file_info["url"]).hostname == "huggingface.co"
         if huggingface:
-            from huggingface_hub.utils import build_hf_headers
-            headers = build_hf_headers()
+            from modules.hub_download import download_hub_file
+            download_hub_file(file_info["url"], file_path, progress)
+            print(f"Downloaded {file_info['filename']} to {file_path}")
+            return
         try:
             with requests.get(file_info["url"], headers=headers, stream=True, timeout=(15, 60)) as response:
-                if huggingface and response.status_code in (401, 403):
-                    repository = "/".join(urlparse(file_info["url"]).path.strip("/").split("/")[:2])
-                    raise RuntimeError(
-                        f"Cannot download {file_info['filename']}: Hugging Face access is required. "
-                        f"Request access at https://huggingface.co/{repository}, then use hf auth login "
-                        f"or HF_TOKEN. Alternatively, place the file at {file_path}."
-                    )
                 response.raise_for_status()
                 total_size = int(response.headers.get("content-length", 0))
                 received = 0
