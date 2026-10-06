@@ -4,9 +4,9 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--settings", type=str, default=None, help="Select setting")
 parser.add_argument("--port", type=int, default=None, help="Set the listen port.")
 parser.add_argument(
-    "--share", action="store_true", help="Set whether to share on Gradio."
+    "--share", action="store_true", help="Unsupported: public tunnels are disabled; use authenticated --listen instead."
 )
-parser.add_argument("--auth", type=str, help="Set credentials username/password.")
+parser.add_argument("--auth", type=str, help="UI credentials username/password (or RF_UI_AUTH). Required for LAN access.")
 parser.add_argument(
     "--listen",
     type=str,
