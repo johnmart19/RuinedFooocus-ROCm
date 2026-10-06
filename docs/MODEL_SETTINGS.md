@@ -1,5 +1,16 @@
 # Checkpoint recommendations
 
+Public cards can supply labelled sampling fields or literal `num_inference_steps`
+and `guidance_scale` arguments. Conflicting examples are ignored. For repackaged
+weights, refresh can follow up to three declared or linked Hugging Face source
+repositories, accepting a creator's settings only when its manifest contains the
+same checkpoint SHA-256. Repository rename redirects are supported. Cards without
+sampling values continue to use fallback defaults; a successful metadata fetch
+does not mean a sampling recommendation was published.
+
+The local checkpoint hash is cached separately from a release's file list, so
+another precision or format in the same release cannot supply its identity.
+
 Choose **Model Defaults** under **Performance** to resolve sampling settings for the selected checkpoint. The recipe combines an available family preset, supported settings from the checkpoint's version metadata, and your saved checkpoint override, in that order. The selector contains only Model Defaults and Own settings. Family presets remain internal defaults.
 
 Open **Model Defaults** to refresh the metadata or manage an override. Automatic refresh runs on page load or checkpoint/performance changes while Model Defaults is selected, at most once per day for successful lookups. Failed lookups retain cached settings and retry after five minutes. You can turn automatic refresh off for the current UI session; explicit Refresh still works. Offline and local-metadata modes prohibit both kinds of network lookup.
@@ -15,3 +26,5 @@ Only supported samplers/schedulers and bounded numeric settings are accepted. St
 Fetched recommendations and overrides live in the ignored `settings/model_settings.json`, separately from read-only checkpoint directories. Family-level defaults are shared application configuration; individual checkpoint settings and public IDs are not shipped in code or the changelog. The UI and worker/API use the same local recipe resolver; API-only calls consume cached metadata and do not trigger remote refresh.
 
 Checkpoint family detection uses the installed backend’s tensor-shape architecture registry for safetensors and GGUF headers. It allocates shape-only meta tensors, never checkpoint weights. Unrecognized or incomplete headers remain unidentified; backend recognition does not guarantee an application pipeline supports the architecture.
+
+Gallery artwork preserves animated frames and refreshes legacy low-resolution caches from published sources. Repository social cards are not model example images. Missing published artwork keeps the existing placeholder; generations are not automatically promoted to gallery artwork. You can provide a local checkpoint preview using the existing `.preview` image files.

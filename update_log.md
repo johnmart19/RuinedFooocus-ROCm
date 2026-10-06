@@ -1,5 +1,13 @@
 ### 26.10.06
+* Add compact MiniMax H3 U16G downloads and recovered 8B INT8 text conditioning with required adapters. Preserve packed Q4 weights instead of permanently expanding them to BF16; keep native base-model sampling defaults and official encoders for image inputs. GPU component checks pass on RX 7900 XTX; full-video speed and quality remain unverified.
+* Use memory-bounded Qwen Image attention on Windows ROCm unless an attention backend is explicitly selected. Preserve sampling settings and other model families.
+* Cache successful dependency maintenance until the app, dependency files or runtime changes. Apply styles only through Send Style to prompt; improve sampling preview defaults, checkpoint identity matching and model artwork decoding.
+* Align image/video sampling with the embedded ComfyUI contracts: latent scale and mask handling, patched-model schedules, VAE metadata/validation and component/LoRA cache invalidation. Report pipeline and audio decoding failures instead of silently substituting results.
+* Keep the task worker alive after startup/model failures and GPU cleanup errors. Show actionable chat errors, restore model controls for retry, and detect a stopped worker instead of waiting forever.
+* Use resumable Hugging Face model downloads, preserving incomplete transfers after network failures and forwarding progress to the UI.
+* Completed embedded ComfyUI compute argument support, including attention, precision, VRAM/offload, allocator, device and experimental performance controls. Fixed implied settings and smart-memory overrides; documented server-only arguments separately.
 * Updated application, Gradio, ComfyUI and GGUF dependencies with Python and runtime compatibility fixes.
+* Updated the [embedded backend](docs/COMFYUI.md) to ComfyUI v0.39.0 and Comfy Kitchen 0.2.37, including expanded attention support and MiniMax-H3 memory/offload fixes. Forwarded offline mode and added compiler/pinned-memory startup overrides.
 * Improved Windows/Linux launchers, setup and GPU detection; added targeted ROCm/CUDA installation, installed-runtime preservation and optional CUDA nightly packages.
 * Preserved the upstream desktop layout while improving narrow-screen controls and image/video browsing.
 * Added native llama.cpp runtime selection, model lifecycle controls, optional local CUDA builds, reasoning and vision/image-review tools.
