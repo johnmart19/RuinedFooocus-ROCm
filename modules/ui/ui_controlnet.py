@@ -6,6 +6,8 @@ from modules.controlnet import (
     NEWCN,
 )
 import gradio as gr
+import shared
+from modules.video_settings import VIDEO_FPS
 from shared import add_ctrl, path_manager, translate
 import modules.ui.ui_evolve as ui_evolve
 import modules.ui.ui_llama as ui_llama
@@ -13,12 +15,32 @@ from PIL import Image
 
 t = translate
 
-def add_controlnet_tab(main_view, inpaint_view, prompt, image_number, run_event):
+def is_video_checkpoint(name):
+    model = shared.models.get_models_by_path("checkpoints", name)
+    return shared.models.get_model_base(model) in VIDEO_FPS
+
+
+def powerup_choices(video):
+    choices = [("None", "None")]
+    order = {"img2img": 0, "canny": 1, "depth": 2, "sketch": 3,
+             "recolour": 4, "upscale": 5, "rembg": 6, "faceswap": 7}
+    if video:
+        choices.append(("Image to video", "Image to video"))
+    for name, options in sorted(controlnet.cn_options.items(),
+                                key=lambda item: (order.get(item[1]["type"], 8), item[0].casefold())):
+        if video and options["type"] not in ("upscale", "rembg"):
+            continue
+        choices.append(("Image to image" if name == "Img2Img" else name, name))
+    return choices + [(NEWCN, NEWCN)]
+
+
+def add_controlnet_tab(main_view, inpaint_view, prompt, image_number, run_event, base_model):
+    initial_video = is_video_checkpoint(base_model.value)
     with gr.Tab(label=t("PowerUp")):
         with gr.Row():
             cn_selection = gr.Dropdown(
                 label=t("Cheat Code"),
-                choices=["None"] + list(cn_options.keys()) + [NEWCN],
+                choices=powerup_choices(initial_video),
                 value="None",
             )
             add_ctrl("cn_selection", cn_selection)
@@ -34,7 +56,8 @@ def add_controlnet_tab(main_view, inpaint_view, prompt, image_number, run_event)
             visible='hidden',
         )
 
-        type_choices=list(map(lambda x: x.capitalize(), controlnet.controlnet_models.keys()))
+        type_choices=[name.capitalize() for name in controlnet.controlnet_models
+                      if not initial_video or name in ("upscale", "rembg")]
         cn_type = gr.Dropdown(
             label=t("Type"),
             choices=type_choices,
@@ -158,7 +181,7 @@ def add_controlnet_tab(main_view, inpaint_view, prompt, image_number, run_event)
 
         @cn_save_btn.click(
             api_visibility='undocumented',
-            inputs=cn_outputs + cn_sliders,
+            inputs=cn_outputs + cn_sliders + [base_model],
             outputs=[cn_selection],
         )
         def cn_save(
@@ -171,6 +194,7 @@ def add_controlnet_tab(main_view, inpaint_view, prompt, image_number, run_event)
             cn_edge_low,
             cn_edge_high,
             upscale_model,
+            checkpoint,
         ):
             if cn_name != "":
                 cn_options = load_cnsettings()
@@ -190,20 +214,37 @@ def add_controlnet_tab(main_view, inpaint_view, prompt, image_number, run_event)
                     )
                 cn_options[cn_name] = opts
                 save_cnsettings(cn_options)
-                choices = list(cn_options.keys()) + [NEWCN]
+                choices = powerup_choices(is_video_checkpoint(checkpoint))
                 return gr.update(choices=choices, value=cn_name)
             else:
                 return gr.update()
 
         input_image = gr.Image(
-            label=t("Input image"),
+            buttons=['download', 'fullscreen'],
+            label=t("Image to video" if initial_video else "Image to image"),
             type="pil",
             visible=True,
         )
         add_ctrl("input_image", input_image)
-        inpaint_toggle = gr.Checkbox(label=t("Inpainting"), value=False)
+        inpaint_toggle = gr.Checkbox(label=t("Inpainting"), value=False, visible=not initial_video)
 
         add_ctrl("inpaint_toggle", inpaint_toggle)
+
+        def model_changed(checkpoint, selection):
+            video = is_video_checkpoint(checkpoint)
+            choices = powerup_choices(video)
+            if selection not in [value for _, value in choices]:
+                selection = "None"
+            types = [name.capitalize() for name in controlnet.controlnet_models
+                     if not video or name in ("upscale", "rembg")]
+            return [gr.update(choices=choices, value=selection),
+                    gr.update(label=t("Image to video" if video else "Image to image")),
+                    gr.update(value=False, visible=not video and selection != "Checkpoint tools"),
+                    gr.update(choices=types, value=types[0])]
+
+        base_model.change(model_changed, inputs=[base_model, cn_selection],
+                          outputs=[cn_selection, input_image, inpaint_toggle, cn_type],
+                          api_visibility="undocumented")
 
         @inpaint_toggle.change(
             api_visibility='undocumented',
