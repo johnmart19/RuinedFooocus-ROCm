@@ -1,24 +1,20 @@
 import torchruntime
 import platform
 import os
-from modules.shared_functions import broken_torch_platforms
-gpus = torchruntime.device_db.get_gpus()
-if "TORCH_PLATFORM" in os.environ:
-    torch_platform = os.environ["TORCH_PLATFORM"]
-else:
-    torch_platform = torchruntime.platform_detection.get_torch_platform(gpus)
 os.environ["GRADIO_ANALYTICS_ENABLED"] = "False"
+from modules.runtime_support import inspect_installed_rocm, inspect_installed_cuda, select_torch_platform
 from modules.video_settings import VIDEO_FPS, fixed_video_settings, uses_negative_prompt
 
 os_platform = platform.system()
-
-# Some platform checks
-torch_platform, os_platform = broken_torch_platforms(torch_platform, os_platform)
+torch_platform = select_torch_platform(
+    torchruntime, os_platform, inspect_installed_rocm(os_platform), inspect_installed_cuda(os_platform),
+)
 
 from argparser import args
 from modules.comfy_compat import configure_torch_compatibility
 configure_torch_compatibility()
 import comfy.cli_args
+comfy.cli_args.args.gpu_only = args.gpu_only
 comfy.cli_args.args.cpu = args.cpu
 comfy.cli_args.args.highvram = args.highvram
 comfy.cli_args.args.normalvram = args.normalvram
@@ -51,10 +47,10 @@ comfy.cli_args.args.bf16_text_enc = args.bf16_text_enc
 
 if torch_platform == "cpu":
     comfy.cli_args.args.cpu = True
-#if args.directml is not None:
-#    comfy.cli_args.args.directml = args.directml
-#elif torch_platform == "directml":
-#    comfy.cli_args.args.directml = -1
+if args.directml is not None:
+    comfy.cli_args.args.directml = args.directml
+elif torch_platform == "directml":
+    comfy.cli_args.args.directml = -1
 
 from pathlib import Path
 import shared

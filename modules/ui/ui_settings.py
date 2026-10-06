@@ -486,10 +486,10 @@ def create_settings():
         # These files are checked in launch.py to trigger a --force-reinstall
         def trigger_reinstall_all():
             Path('reinstall').touch()
-            gr.Info("'reinstall' file created. Python modules will be reinstalled next restart.")
+            gr.Info("Application Python packages and Torch will be reinstalled on the next online restart, using this Python environment. Overrides freezetorch.")
         def trigger_reinstall_torch():
             Path('reinstalltorch').touch()
-            gr.Info("'reinstalltorch' file created. Torch modules will be reinstalled next restart.")
+            gr.Info("Torch will be reinstalled for the selected GPU runtime on the next online restart. Overrides freezetorch.")
 
         with gr.Group(), gr.Row():
             reinstall_all_btn = gr.Button(t("Trigger reinstall of all python modules"))
