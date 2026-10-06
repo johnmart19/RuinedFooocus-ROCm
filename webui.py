@@ -1328,8 +1328,7 @@ with shared.gradio_root as block:
                     hints = update_log.read()
             except:
                 hints = ''
-            with gr.Group(elem_id="changelog-panel"):
-                gr.Markdown(t("Changelog"), elem_id="changelog-heading")
+            with gr.Accordion(t("Changelog"), open=False, elem_id="changelog-panel"):
                 hint_text = gr.Markdown(
                     value=hints,
                     elem_id="hint-container",
