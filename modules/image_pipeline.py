@@ -360,7 +360,10 @@ class pipeline:
                 unet_type = "Flux2Klein4B"
 
         if unet_type not in self.known_model_info.keys():
-            unet_type = "SDXL" # Use SDXL as default
+            raise RuntimeError(
+                f"No default text encoder/VAE configuration for backend model {unet_type}. "
+                "This architecture needs an explicit supported component configuration."
+            )
 
         info = self.known_model_info[unet_type].copy()
         info["clip_names"] = [self.get_clip_name(key) for key in info["clip_names"]]
