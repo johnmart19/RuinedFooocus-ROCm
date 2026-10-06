@@ -241,9 +241,12 @@ def _process(gen_data):
         gen_data["main_view"] = None
 
     stop_batch = False
+    prompt_styles = gen_data["style_selection"]
+    if modules.controlnet.get_settings(gen_data).get("preserve_details"):
+        prompt_styles = []
     for i in range(max(image_number, 1)):
         p_txt, n_txt = process_prompt(
-            gen_data["style_selection"], gen_data["prompt"], gen_data["negative"], gen_data
+            prompt_styles, gen_data["prompt"], gen_data["negative"], gen_data
         )
 
         distance = float(i) / max(image_number - 1.0, 1.0) # Use max() to avoid div. by 0

@@ -324,6 +324,25 @@ def create_settings():
                 clip_vision = gr.Dropdown(label="clip_vision", interactive=True, choices=[None]+path_manager.get_folder_list("clip_vision"), value=settings.default_settings.get("clip_vision", None),)
                 add_setting("clip_vision", clip_vision)
 
+                with gr.Accordion("Additional text encoders", open=False):
+                    for key, label in {
+                        "clip_gemma2_it_elm": "PixelDiT Gemma 2",
+                        "clip_ernie_enhancer": "Ernie prompt enhancer",
+                        "clip_gemma3": "NewBieImage Gemma 3",
+                        "clip_qwen3vl_4b": "Mage-Flow Qwen3 VL",
+                        "clip_qwen3vl_4b_scaled": "Krea 2 Qwen3 VL",
+                        "clip_gemma3_12b": "LTX 2 / 2.3 Gemma 3",
+                        "clip_ltx23_text_proj": "LTX 2.3 text projection",
+                        "clip_ltx2_dev": "LTX 2 Dev connector",
+                        "clip_ltx2_distilled": "LTX 2 Distilled connector",
+                        "clip_gemma4_12b": "LTX 2.5 Gemma 4",
+                        "clip_qwen3vl_32b": "MiniMax H3 Qwen3 VL",
+                    }.items():
+                        component = gr.Dropdown(label=label, interactive=True,
+                            choices=[None] + path_manager.get_folder_list("clip"),
+                            value=settings.default_settings.get(key))
+                        add_setting(key, component)
+
                 gr.Markdown(t("# Shift"))
                 auraflow_shift = gr.Textbox(label="AuraFlow shift", interactive=True, placeholder=1.73, value=settings.default_settings.get("auraflow_shift", None))
                 add_setting("auraflow_shift", auraflow_shift)

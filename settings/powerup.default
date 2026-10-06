@@ -20,6 +20,11 @@
     "Recolour": {"type": "recolour", "strength": 1.0, "start": 0.0, "stop": 1.0},
     "Sketch": {"type": "sketch", "strength": 0.9, "start": 0.0, "stop": 1.0},
     "Img2Img": {"type": "img2img", "start": 0.06, "denoise": 0.64},
+    "Image to image (preserve details)": {"type": "img2img", "denoise": 0.25, "preserve_details": true, "loopback": false},
     "Upscale": {"type": "upscale", "upscaler": "4x-UltraSharp.pth"},
+    "Upscale 2x (general)": {"type": "upscale", "upscaler": "RealESRGAN_x2plus.pth"},
+    "Upscale 4x (general)": {"type": "upscale", "upscaler": "RealESRGAN_x4plus.pth"},
+    "Upscale 4x (anime)": {"type": "upscale", "upscaler": "RealESRGAN_x4plus_anime_6B.pth"},
+    "Restore cropped face": {"type": "upscale", "upscaler": "faceswap/GFPGANv1.4.pth"},
     "RemBG": {"type": "rembg"}
 }

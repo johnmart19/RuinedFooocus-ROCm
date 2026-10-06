@@ -141,25 +141,27 @@ def add_controlnet_tab(main_view, inpaint_view, prompt, image_number, run_event,
 
         @cn_selection.change(
             api_visibility='undocumented',
-            inputs=[cn_selection],
-            outputs=[cn_name] + cn_outputs + cn_sliders
+            inputs=[cn_selection, cn_type],
+            outputs=cn_outputs + cn_sliders
         )
-        def cn_changed(selection):
+        def cn_changed(selection, control_type):
             if selection != NEWCN:
-                return [gr.update(visible='hidden')] + [gr.update(visible='hidden')] * len(
+                return [gr.update(visible='hidden')] * len(
                     cn_outputs + cn_sliders
                 )
             else:
-                return [gr.update(value="")] + [gr.update(visible=True)] * len(
-                    cn_outputs + cn_sliders
-                )
+                return ([gr.update(value="", visible=True)]
+                        + [gr.update(visible=True)] * (len(cn_outputs) - 1)
+                        + cn_type_changed(control_type, selection))
 
         @cn_type.change(
             api_visibility='undocumented',
-            inputs=[cn_type],
+            inputs=[cn_type, cn_selection],
             outputs=cn_sliders,
         )
-        def cn_type_changed(selection):
+        def cn_type_changed(selection, preset):
+            if preset != NEWCN:
+                return [gr.update(visible='hidden')] * len(cn_sliders)
             # cn_start,cn_stop,cn_strength,cn_edge_low,cn_edge_high, cn_upscaler
             slider_states = {
                 "canny": [True, True, True, True, True, False],
@@ -176,6 +178,13 @@ def add_controlnet_tab(main_view, inpaint_view, prompt, image_number, run_event,
             result = []
             for vis in show:
                 result += [gr.update(visible=True if vis else 'hidden')]
+
+            if selection.lower() == "img2img":
+                result[2] = gr.update(visible=True, label=t("Denoise"), minimum=0.01,
+                                      maximum=1.0, value=0.64)
+            else:
+                result[2] = gr.update(visible=show[2], label=t("Strength"), minimum=0.0,
+                                      maximum=2.0, value=1.0)
 
             return result
 
