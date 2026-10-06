@@ -268,9 +268,22 @@ def create_chat(image_controls=None):
                 llama_download = gr.HTML(visible=False)
                 show_reasoning = gr.Checkbox(label="Show reasoning", value=False,
                     info="Only shown when the model returns reasoning.")
-                enable_vision = gr.State(False)
-                vision_include_system = gr.State(False)
-                vision_model = gr.State(None)
+                from modules.llama_vision import model_has_vision, vision_models
+                from shared import path_manager
+                enable_vision = gr.Checkbox(label="Enable Model Vision", value=False)
+                vision_include_system = gr.Checkbox(label="Include system prompt", value=False,
+                    visible=False, info="Include the chatbot's character instructions as image review context.")
+                vision_model = gr.Dropdown(label="Select Model", visible=False,
+                    choices=[(model_label(Path(name).stem), name) for name in vision_models(path_manager)],
+                    value=None, info="Used to inspect images; downloaded when needed.")
+                def vision_controls(enabled, model):
+                    return gr.update(visible=enabled and not model_has_vision(model))
+                enable_vision.change(vision_controls, inputs=[enable_vision, llama_active_model],
+                    outputs=vision_model, api_visibility='undocumented')
+                enable_vision.change(lambda enabled: gr.update(visible=enabled), inputs=enable_vision,
+                    outputs=vision_include_system, api_visibility='undocumented')
+                llama_active_model.change(vision_controls, inputs=[enable_vision, llama_active_model],
+                    outputs=vision_model, api_visibility='undocumented')
                 pending_remove = gr.State(None)
                 remove_dialog = gr.HTML("", elem_id="chat-model-confirm",
                     html_template=(html_dir / "chat_model_remove.html").read_text(encoding="utf-8"),
