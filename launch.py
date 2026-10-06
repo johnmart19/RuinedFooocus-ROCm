@@ -106,12 +106,15 @@ def prepare_environment(offline=False):
         import torchruntime
         import platform
         os_platform = platform.system()
+        if args.cuda_nightly:
+            from modules.cuda_selection import select_cuda_nightly
+            os.environ["TORCH_PLATFORM"] = select_cuda_nightly(os_platform, os.environ.get("TORCH_PLATFORM"))
         installed_rocm = inspect_installed_rocm(os_platform, repair=REINSTALL_ALL or REINSTALL_TORCH or args.rocm10)
         installed_cuda = inspect_installed_cuda(os_platform)
         installed_cpu = inspect_installed_cpu() if args.cpu else None
         keep_cpu = bool(installed_cpu and not (REINSTALL_ALL or REINSTALL_TORCH))
         torch_platform = select_torch_platform(torchruntime, os_platform, installed_rocm, installed_cuda)
-        keep_cuda = preserve_installed_cuda(installed_cuda, torch_platform, REINSTALL_ALL or REINSTALL_TORCH or args.rocm10 or False)
+        keep_cuda = preserve_installed_cuda(installed_cuda, torch_platform, REINSTALL_ALL or REINSTALL_TORCH or args.rocm10 or args.cuda_nightly)
         keep_rocm = preserve_installed_rocm(
             installed_rocm, torch_platform, REINSTALL_ALL or REINSTALL_TORCH or args.rocm10,
         )
@@ -163,7 +166,7 @@ def prepare_environment(offline=False):
                     "Install a compatible Windows ROCm bundle from AMD for this explicit version. "
                     "Remove reinstall/reinstalltorch after repairing the bundle."
                 )
-            cmds = torch_install_commands(torchruntime, torch_platform, os_platform, nightly=False)
+            cmds = torch_install_commands(torchruntime, torch_platform, os_platform, nightly=args.cuda_nightly)
             if REINSTALL_ALL or REINSTALL_TORCH:
                 for idx in range(len(cmds)):
                     cmds[idx].insert(0, "--force-reinstall")
@@ -183,7 +186,7 @@ def prepare_environment(offline=False):
                 installed_cuda = inspect_installed_cuda(os_platform)
                 if not installed_cuda or installed_cuda_platform(installed_cuda) != torch_platform:
                     raise RuntimeError("CUDA installation did not validate the selected runtime. Check the NVIDIA driver and CUDA/Python versions; the reinstall request remains pending.")
-                if False:
+                if args.cuda_nightly:
                     from packaging.version import Version
                     if not Version(installed_cuda["versions"]["torch"]).is_devrelease:
                         raise RuntimeError("CUDA nightly was requested, but installed PyTorch is not a nightly build.")
@@ -299,7 +302,8 @@ elif os.environ.get("TORCH_PLATFORM") == "directml" and args.directml is None:
 
 if args.rocm10 and (offline or args.cpu or args.directml is not None or os.path.exists("freezetorch")):
     raise RuntimeError("--rocm10 cannot be combined with offline, CPU, DirectML or freezetorch mode.")
-
+if args.cuda_nightly and (offline or args.rocm10 or args.cpu or args.directml is not None or TORCH_FROZEN):
+    raise RuntimeError("--cuda-nightly cannot be combined with offline, ROCm, CPU, DirectML or freezetorch mode.")
 
 if offline:
     print("Skip checking python modules.")

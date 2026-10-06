@@ -21,6 +21,7 @@ parser.add_argument("--nobrowser", action="store_true", help="Do not launch in b
 parser.add_argument("--gpu-device-id", type=int, default=None, metavar="DEVICE_ID")
 parser.add_argument("--offline", action="store_true", help="Skip update-check during startup.")
 parser.add_argument("--rocm10", action="store_true", help="Install or repair ROCm 10 packages for a supported AMD GPU (Windows/Linux/WSL).")
+parser.add_argument("--cuda-nightly", action="store_true", help="Install compatible NVIDIA CUDA nightly wheels for this Python (Windows/Linux).")
 parser.add_argument("--iINSTallLEDmYOwNPaCKaGeS", action="store_true", help=argparse.SUPPRESS)
 parser.add_argument("--language", type=str, default='en', help="UI language.")
 parser.add_argument("--clean-cache", action="store_true", help="Purge old cache before starting.")
