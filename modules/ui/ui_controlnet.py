@@ -241,6 +241,39 @@ def add_controlnet_tab(main_view, inpaint_view, prompt, image_number, run_event,
             visible=True,
         )
         add_ctrl("input_image", input_image)
+        random_image_prompt = gr.Checkbox(
+            label=t("Generate random prompt"), value=False,
+            info="Opt in to replacing the prompt with One Button when an input image is supplied.",
+        )
+        add_ctrl("obp_image_prompt", random_image_prompt)
+        with gr.Group(visible=False) as image_prompt_options:
+            gr.Markdown("Uses the One Button settings below; it does not describe the input image. "
+                        "For video, include the desired motion in Subject. Advanced options are in One Button.")
+            for name, label in (("OBP_preset", "One Button Preset"),
+                                ("OBP_promptenhance", "Prompt enhancement"),
+                                ("OBP_modeltype", "Prompt style")):
+                source = shared.get_ctrl(name)
+                mirror = gr.Dropdown(choices=source.choices, value=source.value, label=label)
+                # Input fires only for user edits; change also follows preset updates.
+                mirror.input(lambda value: value, inputs=mirror, outputs=source,
+                             api_visibility="undocumented")
+                source.change(lambda value: value, inputs=source, outputs=mirror,
+                              api_visibility="undocumented")
+            subject_source = shared.get_ctrl("obp_givensubject")
+            subject = gr.Textbox(label=t("Subject"), value=subject_source.value,
+                                 placeholder="Describe the subject and desired action")
+            subject.input(lambda value: value, inputs=subject, outputs=subject_source,
+                          api_visibility="undocumented")
+            subject_source.change(lambda value: value, inputs=subject_source, outputs=subject,
+                                  api_visibility="undocumented")
+        random_image_prompt.change(lambda enabled: gr.update(visible=enabled),
+                                   inputs=random_image_prompt, outputs=image_prompt_options,
+                                   api_visibility="undocumented")
+        cn_selection.change(
+            lambda selection, enabled: [gr.update(visible=selection != "Checkpoint tools"),
+                                        gr.update(visible=enabled and selection != "Checkpoint tools")],
+            inputs=[cn_selection, random_image_prompt], outputs=[random_image_prompt, image_prompt_options],
+            api_visibility="undocumented")
         inpaint_toggle = gr.Checkbox(label=t("Inpainting"), value=False, visible=not initial_video)
 
         add_ctrl("inpaint_toggle", inpaint_toggle)

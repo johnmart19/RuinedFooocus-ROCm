@@ -25,11 +25,14 @@ def llama_names():
         names.sort(key=lambda x: x[0].casefold())
         return names
 
-def run_llama(system_file, prompt):
+def run_llama(system_file, prompt, *, instruction=None):
         name = None
         sys_pat = r"system:.*\n\n"
         system = re.match(sys_pat, prompt, flags=re.M|re.I)
-        if system is not None: # Llama system-prompt provided in the ui-prompt
+        if instruction is not None:
+            name = "Image prompt"
+            system_prompt = instruction
+        elif system is not None: # Llama system-prompt provided in the ui-prompt
             name = "Llama"
             system_prompt = re.sub(r"^[^:]*: *", "", system.group(0), flags=re.M|re.I)
             prompt = re.sub(sys_pat, "", prompt)
@@ -58,7 +61,11 @@ def run_llama(system_file, prompt):
                                      {"role": "user", "content": prompt}],
                     }
                 )
-                res = ret['choices'][0]['text']
+                if instruction is not None:
+                    from modules.prompt_enhancement import image_prompt_result
+                    res = image_prompt_result(ret['choices'][0], prompt)
+                else:
+                    res = ret['choices'][0]['message']['content'] or prompt
             except Exception as e:
                 print(f"LLAMA ERROR: {e}")
                 res = prompt
