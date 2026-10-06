@@ -60,7 +60,7 @@ def save_clicked(*args):
 
 def create_settings():
     with gr.Blocks() as app_settings:
-        with gr.Row():
+        with gr.Row(elem_id="settings-layout"):
             with gr.Column():
                 gr.Markdown(t("# UI settings"))
                 local_metadata = gr.Checkbox(label="Local model metadata only",
