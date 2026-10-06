@@ -19,6 +19,7 @@ from PIL import Image
 from PIL.PngImagePlugin import PngInfo
 from modules.util import generate_temp_filename, TimeIt, get_checkpoint_hashes, get_lora_hashes
 import modules.pipelines
+import comfy.model_management as model_management
 from shared import settings
 
 buffer = []
@@ -26,6 +27,19 @@ outputs = []
 current_task = 0
 
 interrupt_ruined_processing = False
+
+def interrupt_processing():
+    global interrupt_ruined_processing
+    interrupt_ruined_processing = True
+    model_management.interrupt_current_processing(True)
+
+
+def check_interrupt(gen_data):
+    job = gen_data.get("_api_job")
+    if interrupt_ruined_processing or (job is not None and job.cancelled.is_set()):
+        raise model_management.InterruptProcessingException()
+    model_management.throw_exception_if_processing_interrupted()
+
 
 def is_sha256_hash(input_string):
     # Check if the string is exactly 64 characters long
@@ -37,6 +51,7 @@ def is_sha256_hash(input_string):
     return True
 
 def _process(gen_data):
+    check_interrupt(gen_data)
     res = []
     metadatastrings = []
     # Named sampling defaults apply first; imported image/JSON metadata wins.
@@ -145,16 +160,11 @@ def _process(gen_data):
     status = random.choice(lines)
     status = f"{status}"
 
-    class InterruptProcessingException(Exception):
-        pass
-
     def callback(step, x0, x, total_steps, y):
-        global status, interrupt_ruined_processing
-
-        if interrupt_ruined_processing:
-            shared.state["interrupted"] = True
-            interrupt_ruined_processing = False
-            raise InterruptProcessingException()
+        global status
+        check_interrupt(gen_data)
+        if "silent" in gen_data:
+            return
 
         # If we only generate 1 image, skip the last preview
         if (
@@ -180,7 +190,7 @@ def _process(gen_data):
         pheight = int(height * grid_ysize / grid_max)
         if shared.state["preview_grid"] is None:
             shared.state["preview_grid"] = Image.new("RGB", (pwidth, pheight))
-        if y is not None and step != 0: # FIXME: Weird bug where the 0th step has the preview from the last image, so just skip it
+        if y is not None:
             if isinstance(y, Image.Image):
                 image = y
             elif isinstance(y, str):
@@ -245,6 +255,7 @@ def _process(gen_data):
         denoise = None
         with TimeIt("Pipeline process"):
             try:
+                check_interrupt(gen_data)
                 # Load LoRAs
                 parsed_loras, p_txt, n_txt = parse_loras(p_txt, n_txt)
                 used_loras = loras + parsed_loras
@@ -254,9 +265,10 @@ def _process(gen_data):
 
                 imgs = pipeline.process(
                     gen_data=gen_data,
-                    callback=callback if "silent" not in gen_data else None,
+                    callback=callback,
                 )
-            except InterruptProcessingException as iex:
+            except model_management.InterruptProcessingException:
+                shared.state["interrupted"] = True
                 stop_batch = True
                 imgs = []
             except Exception as iex:
@@ -346,6 +358,7 @@ def _process(gen_data):
     return res
 
 def worker():
+    global interrupt_ruined_processing
     global buffer, outputs
 
     pipeline = modules.pipelines.update(
@@ -353,6 +366,10 @@ def worker():
     )
     if not pipeline == None:
         pipeline.load_base_model(settings.default_settings.get("base_model"))
+    # shared.state owns the active pipeline. This thread lives for the entire
+    # session; retaining its startup reference pins the old checkpoint in RAM
+    # even after image/chat switching replaces it in shared.state.
+    del pipeline
 
     def job_start(gen_data):
         shared.state["preview_grid"] = None
@@ -418,8 +435,7 @@ def worker():
 
         pipeline = modules.pipelines.update(gen_data)
         if pipeline == None:
-            print(f"ERROR: No pipeline")
-            return
+            raise RuntimeError("No chat pipeline is available.")
 
         try:
             # See if pipeline wants to pre-parse gen_data
@@ -427,7 +443,11 @@ def worker():
         except:
             pass
 
-        results = pipeline.process(gen_data)
+        try:
+            results = pipeline.process(gen_data)
+        except Exception as error:
+            traceback.print_exc()
+            results = f"Chat error: {error}"
 
         outputs.append([gen_data["task_id"], "results", results])
 
@@ -448,7 +468,28 @@ def worker():
         time.sleep(0.01)
         if len(buffer) > 0:
             task = buffer.pop(0)
-            handler(task)
+            try:
+                handler(task)
+            except model_management.InterruptProcessingException:
+                shared.state["interrupted"] = True
+                if "_api_job" in task:
+                    task["_api_job"].events.put(("error", "Generation stopped."))
+                else:
+                    add_result(task["task_id"], "results", [])
+            except Exception as error:
+                # Loading, metadata and prompt preparation can fail before the
+                # sampling try/except. Always finish the request and keep serving.
+                traceback.print_exc()
+                if "_api_job" in task:
+                    task["_api_job"].events.put(("error", str(error)))
+                elif task.get("task_type") == "llama":
+                    add_result(task["task_id"], "results", f"Chat error: {error}")
+                else:
+                    add_result(task["task_id"], "error", str(error))
+                    add_result(task["task_id"], "results", [])
+            finally:
+                interrupt_ruined_processing = False
+                model_management.interrupt_current_processing(False)
             gc.collect()
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
@@ -467,7 +508,8 @@ def add_task(gen_data):
 # Pipelines use this to add results
 def add_result(task_id, flag, product):
     global outputs
-
+    if task_id is None:
+        return
     outputs.append([task_id, flag, product])
 
 # Use the task_id from add_task() to wait for data
@@ -488,6 +530,10 @@ def task_result(task_id):
                 id, flag, product = matches.pop(0)
                 outputs.remove([id, flag, product])
             break
+
+        # Other queued requests may already have output. Do not busy-spin while
+        # waiting for this task's first event.
+        time.sleep(settings.default_settings.get("update_interval", 0.1))
 
     return (flag, product)
 

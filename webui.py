@@ -303,6 +303,9 @@ def generate_clicked(*args):
         if flag == "preview":
             yield update_preview(product)
 
+        elif flag == "error":
+            gr.Warning(f"Generation failed: {product}")
+
         elif flag == "results":
             yield update_results(product)
             finished = True
@@ -1360,8 +1363,7 @@ with shared.gradio_root as block:
         run_button.click(fn=poke, api_visibility='undocumented', inputs=run_event, outputs=run_event)
 
         def stop_clicked():
-            worker.interrupt_ruined_processing = True
-            shared.state["interrupted"] = False
+            worker.interrupt_processing()
 
         stop_button.click(fn=stop_clicked, api_visibility='undocumented', queue=False)
 
