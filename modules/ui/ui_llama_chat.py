@@ -9,6 +9,7 @@ import re
 from modules.llama_models import (DEFAULT_MODEL, model_catalogue, model_label, preferred_quant,
                                  import_model, local_models, remove_local_model)
 from modules.llama_file_picker import select_gguf
+from modules.chat_code import python_runner
 
 
 def display_history(history, show_reasoning):
@@ -199,6 +200,15 @@ def create_chat(image_controls=None):
                 force_image = gr.Checkbox(label="Force image generation", value=False,
                     info="Generate for your next message, then return to normal chat.")
                 force_image_sent = gr.State(False)
+                with gr.Accordion("Run Python", open=True, visible=False) as python_panel:
+                    load_code = gr.Button("Load code from chat")
+                    code_runner = gr.HTML("", js_on_load=(Path(__file__).resolve().parents[2]
+                        / "html" / "chat_python_theme.js").read_text(encoding="utf-8"))
+            gr.HTML('<div role="separator" tabindex="0" aria-label="Resize chat" '
+                    'aria-orientation="vertical" aria-valuemin="35" aria-valuemax="85" '
+                    'aria-valuenow="72"></div>', elem_id="chat-divider", min_width=12, scale=0,
+                    js_on_load=(Path(__file__).resolve().parents[2] / "html" / "chat_splitter.js").read_text(encoding="utf-8"))
+            with gr.Column(scale=2, min_width=0, elem_id="chat-controls"), gr.Group():
                 llama_avatar = gr.Image(
                     buttons=['download', 'fullscreen'],
                     value=_llama_select_assistant(default_bot)["avatar"],
@@ -284,6 +294,7 @@ def create_chat(image_controls=None):
                     outputs=vision_include_system, api_visibility='undocumented')
                 llama_active_model.change(vision_controls, inputs=[enable_vision, llama_active_model],
                     outputs=vision_model, api_visibility='undocumented')
+                enable_python = gr.Checkbox(label="Enable Python runner", value=False)
                 pending_remove = gr.State(None)
                 remove_dialog = gr.HTML("", elem_id="chat-model-confirm",
                     html_template=(html_dir / "chat_model_remove.html").read_text(encoding="utf-8"),
@@ -315,6 +326,13 @@ def create_chat(image_controls=None):
             if not message.strip():
                 raise gr.Error("Enter a message first.")
             return "", message, bool(force), False
+
+        load_code.click(python_runner, inputs=[llama_history], outputs=[code_runner],
+                        api_visibility='undocumented')
+        enable_python.change(
+            lambda enabled, history: (gr.update(visible=enabled), python_runner(history) if enabled else ""),
+            inputs=[enable_python, llama_history], outputs=[python_panel, code_runner],
+            api_visibility='undocumented')
 
         def llama_respond(message, system, embed, chat_history, model, show_thinking, vision_enabled, review_model, include_system, force, *image_values):
             chat_history = list(chat_history)
