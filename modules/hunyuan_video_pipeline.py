@@ -1,9 +1,11 @@
+from modules.video_preview import video_callback
+from modules.video_output import save_mp4
 import numpy as np
 import os
 import torch
-import einops
+from modules.gguf_loader import load_diffusion_model as load_gguf_model
+from modules.video_settings import frame_count
 import traceback
-import cv2
 
 import modules.async_worker as worker
 from modules.util import generate_temp_filename
@@ -25,11 +27,6 @@ import comfy.model_management
 from comfy.sd import load_checkpoint_guess_config
 from tqdm import tqdm
 
-#from calcuis_gguf.pig import load_gguf_sd, GGMLOps, GGUFModelPatcher
-#from comfyui_gguf.nodes import gguf_sd_loader as load_gguf_sd, GGUFModelPatcher
-#from comfyui_gguf.ops import GGMLOps
-from molbal_comfyui_gguf.nodes import gguf_sd_loader as load_gguf_sd, GGUFModelPatcher
-from molbal_comfyui_gguf.ops import GGMLOps
 
 
 from nodes import (
@@ -67,11 +64,13 @@ class pipeline:
     model_base_patched = None
     conditions = None
 
-    ggml_ops = GGMLOps()
 
     # Optional function
     def parse_gen_data(self, gen_data):
-        gen_data["original_image_number"] = 1 + ((int(gen_data["image_number"] / 4.0) + 1) * 4)
+        if gen_data.get("video_duration") is not None:
+            gen_data["original_image_number"] = frame_count(gen_data["video_duration"], gen_data.get("video_fps", 24))
+        else:
+            gen_data["original_image_number"] = 1 + ((int(gen_data["image_number"] / 4.0) + 1) * 4)
         gen_data["image_number"] = 1
         gen_data["show_preview"] = False
         return gen_data
@@ -88,12 +87,6 @@ class pipeline:
         self.model_hash_patched = ""
         self.conditions = None
 
-# FIXME? Add default model for video
-#        default_name = path_manager.get_folder_file_path(
-#            "checkpoints",
-#            settings.default_settings.get("base_model", "sd_xl_base_1.0_0.9vae.safetensors"),
-#        )
-#        default = shared.models.get_file("checkpoints", default_name)
         default = None
 
         filename = str(
@@ -111,15 +104,10 @@ class pipeline:
             with torch.torch.inference_mode():
                 try:
                     if filename.endswith(".gguf"):
-                        sd = load_gguf_sd(filename)
-                        unet = comfy.sd.load_diffusion_model_state_dict(
-                            sd, model_options={"custom_operations": self.ggml_ops}
-                        )
-                        unet = GGUFModelPatcher.clone(unet)
-                        unet.patch_on_device = True
+                        unet = load_gguf_model(filename)
                     else:
+                        # Let ComfyUI choose a supported dtype for this device.
                         model_options = {}
-                        model_options["dtype"] = torch.float8_e4m3fn # FIXME should be a setting
                         unet = comfy.sd.load_diffusion_model(filename, model_options=model_options)
 
                     clip_paths = []
@@ -281,38 +269,6 @@ class pipeline:
         update = True
         return update
 
-    # From https://github.com/lllyasviel/FramePack/blob/main/diffusers_helper/hunyuan.py#L61C1
-    @torch.no_grad()
-    def vae_decode_fake(self, latents):
-        latent_rgb_factors = [
-            [-0.0395, -0.0331, 0.0445],
-            [0.0696, 0.0795, 0.0518],
-            [0.0135, -0.0945, -0.0282],
-            [0.0108, -0.0250, -0.0765],
-            [-0.0209, 0.0032, 0.0224],
-            [-0.0804, -0.0254, -0.0639],
-            [-0.0991, 0.0271, -0.0669],
-            [-0.0646, -0.0422, -0.0400],
-            [-0.0696, -0.0595, -0.0894],
-            [-0.0799, -0.0208, -0.0375],
-            [0.1166, 0.1627, 0.0962],
-            [0.1165, 0.0432, 0.0407],
-            [-0.2315, -0.1920, -0.1355],
-            [-0.0270, 0.0401, -0.0821],
-            [-0.0616, -0.0997, -0.0727],
-            [0.0249, -0.0469, -0.1703]
-        ]  # From comfyui
-
-        latent_rgb_factors_bias = [0.0259, -0.0192, -0.0761]
-
-        weight = torch.tensor(latent_rgb_factors, device=latents.device, dtype=latents.dtype).transpose(0, 1)[:, :, None, None, None]
-        bias = torch.tensor(latent_rgb_factors_bias, device=latents.device, dtype=latents.dtype)
-
-        images = torch.nn.functional.conv3d(latents, weight, bias=bias, stride=1, padding=0, dilation=1, groups=1)
-        images = images.clamp(0.0, 1.0)
-
-        return images
-
     @torch.inference_mode()
     def process(
         self,
@@ -325,7 +281,7 @@ class pipeline:
             worker.add_result(
                 gen_data["task_id"],
                 "preview",
-                (-1, f"Processing text encoding ...", "html/generate_video.jpeg")
+                (-1, f"Processing text encoding ...", "html/logo.png")
             )
 
         if self.conditions is None:
@@ -338,32 +294,7 @@ class pipeline:
         self.textencode("+", positive_prompt, clip_skip)
         self.textencode("-", negative_prompt, clip_skip)
 
-        pbar = comfy.utils.ProgressBar(gen_data["steps"])
-
-        def callback_function(step, x0, x, total_steps):
-            y = self.vae_decode_fake(x0)
-            y = (y * 255.0).detach().cpu().numpy().clip(0, 255).astype(np.uint8)
-            y = einops.rearrange(y, 'b c t h w -> (b h) (t w) c')
-            # Skip callback() since we'll just confuse the preview grid and push updates outselves
-            status = "Generating video"
-
-            maxw = 1920
-            maxh = 1080
-            image = Image.fromarray(y)
-            ow, oh = image.size
-            scale = min(maxh / oh, maxw / ow)
-            image = image.resize((int(ow * scale), int(oh * scale)), Image.LANCZOS)
-
-            worker.add_result(
-                gen_data["task_id"],
-                "preview",
-                (
-                    int(100 * (step / total_steps)),
-                    f"{status} - {step}/{total_steps}",
-                    image
-                )
-            )
-            pbar.update_absolute(step + 1, total_steps, None)
+        callback_function = video_callback(self.model_base_patched.unet, gen_data)
 
         # Noise
         noise = RandomNoise().get_noise(noise_seed=seed)[0]
@@ -387,7 +318,7 @@ class pipeline:
             )
         else:
             # latent_image
-            latent_image = EmptyHunyuanLatentVideo().generate(
+            latent_image = EmptyHunyuanLatentVideo().execute(
                 width = gen_data["width"],
                 height = gen_data["height"],
                 length = gen_data["original_image_number"],
@@ -490,7 +421,7 @@ class pipeline:
         )
         os.makedirs(os.path.dirname(file), exist_ok=True)
 
-        fps=12.0
+        fps=float(gen_data.get("video_fps", 12.0))
         compress_level=9 # Min = 0, Max = 9
 
         # Save GIF
@@ -505,11 +436,6 @@ class pipeline:
         )
 
         # Save mp4
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        mp4_file = file.with_suffix(".mp4")
-        out = cv2.VideoWriter(mp4_file, fourcc, fps, (gen_data["width"], gen_data["height"]))
-        for frame in pil_images:
-            out.write(cv2.cvtColor(np.asarray(frame), cv2.COLOR_BGR2RGB))
-        out.release()
+        save_mp4(file.with_suffix(".mp4"), pil_images, fps)
 
         return [file]

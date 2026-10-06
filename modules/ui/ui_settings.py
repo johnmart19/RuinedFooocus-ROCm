@@ -381,6 +381,24 @@ def create_settings():
                 vae_wan_22 = gr.Dropdown(label="WAN 2.2 VAE", interactive=True, choices=[None]+path_manager.get_folder_list("vae"), value=settings.default_settings.get("vae_wan_22", None),)
                 add_setting("vae_wan_22", vae_wan_22)
 
+                with gr.Accordion("Additional VAEs", open=False):
+                    for key, label in {
+                        "vae_mage_flow": "Mage-Flow",
+                        "vae_ltxv": "LTX Video",
+                        "vae_ltxv23_audio": "LTX 2.3 audio",
+                        "vae_ltxv2_audio": "LTX 2 audio",
+                        "vae_ltxv2_video": "LTX 2 video",
+                        "vae_ltxv23_video": "LTX 2.3 video",
+                        "vae_ltxv25_audio": "LTX 2.5 audio",
+                        "vae_ltxv25_video": "LTX 2.5 video",
+                        "vae_minimax_h3_audio": "MiniMax H3 audio",
+                        "vae_minimax_h3_video": "MiniMax H3 video",
+                    }.items():
+                        component = gr.Dropdown(label=label, interactive=True,
+                            choices=[None] + path_manager.get_folder_list("vae"),
+                            value=settings.default_settings.get(key))
+                        add_setting(key, component)
+
         with gr.Row(), gr.Group():
             ui_settings_name = gr.Text(
                 label=t("Name"),
