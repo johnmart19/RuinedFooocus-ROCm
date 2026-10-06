@@ -308,6 +308,9 @@ def _process(gen_data):
                 "comment": settings.default_settings.get("meta_comment", ""),
                 "software": "RuinedFooocus",
             }
+            if "upscale" in pipeline.pipeline_type:
+                prompt.update(width=x.shape[1], height=x.shape[0],
+                              upscaler=modules.controlnet.get_settings(gen_data)["upscaler"])
             metadata = PngInfo()
             # if True:
             #     def handle_whitespace(string: str):

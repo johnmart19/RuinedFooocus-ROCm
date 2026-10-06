@@ -119,7 +119,13 @@ def add_controlnet_tab(main_view, inpaint_view, prompt, image_number, run_event,
         cn_upscaler = gr.Dropdown(
             label=t("Upscaler"),
             show_label=False,
-            choices=["None"] + path_manager.upscaler_filenames,
+            choices=["None"] + sorted(set(path_manager.upscaler_filenames) | {
+                key for key, entry in path_manager.DOWNLOADABLE_FILES.items()
+                if entry["path"] == "path_upscalers"
+            } | {
+                value["upscaler"] for value in cn_options.values()
+                if value["type"] == "upscale"
+            }),
             value="None",
             visible='hidden',
         )
