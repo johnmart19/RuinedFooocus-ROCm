@@ -165,7 +165,8 @@ class pipeline:
             "clip_type": comfy.sd.CLIPType.COSMOS,
             "clip_names": ["clip_qwen3_06b"],
             "vae_name": "vae_qwen_image",
-            "model_sampling": ('AuraFlow', settings.default_settings.get("anima_image_shift", 5.0)),
+            "model_sampling": (('AuraFlow', settings.default_settings["anima_image_shift"])
+                               if "anima_image_shift" in settings.default_settings else None),
         },
         "AuraFlow": {
             "clip_type": comfy.sd.CLIPType.STABLE_DIFFUSION,
