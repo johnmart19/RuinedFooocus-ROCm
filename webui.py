@@ -144,7 +144,7 @@ def launch_app(args):
     theme.text_xxl = '8px'
 
     # Create the image gallery from the new module
-    app_image_browser = ui_image_gallery.create_image_gallery()
+    app_image_browser, browser_refresh_outputs = ui_image_gallery.create_image_gallery()
     image_keys = {"base_model_name", "performance_selection", "custom_steps", "cfg", "sampler_name",
                   "scheduler", "clip_skip", "aspect_ratios_selection", "custom_width", "custom_height",
                   "loras", "style_selection", "negative"}
@@ -169,6 +169,10 @@ def launch_app(args):
                         component.overflow_behavior = "wrap"
                 with gr.Tab(label):
                     interface.render()
+        top_tabs.children[1].select(
+            ui_image_gallery.browser.update_images, outputs=browser_refresh_outputs,
+            concurrency_id="image_browser_refresh",
+            api_visibility='undocumented')
 
     shared.server_app, shared.local_url, shared.share_url = main_tabs.launch(
         inbrowser=inbrowser,
@@ -760,6 +764,7 @@ with shared.gradio_root as block:
                 seed_random = gr.Checkbox(
                     label=t("Random Seed"), value=settings["seed_random"]
                 )
+                add_ctrl("seed_random", seed_random)
                 image_seed = gr.Number(
                     label=t("Seed"),
                     value=settings["seed"],
