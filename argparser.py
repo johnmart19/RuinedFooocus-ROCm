@@ -32,6 +32,7 @@ parser.add_argument("--cuda-nightly", action="store_true", help="Install compati
 parser.add_argument("--iINSTallLEDmYOwNPaCKaGeS", action="store_true", help=argparse.SUPPRESS)
 parser.add_argument("--language", type=str, default='en', help="UI language.")
 parser.add_argument("--clean-cache", action="store_true", help="Purge old cache before starting.")
+parser.add_argument("--preview-method", choices=("auto", "none", "latent2rgb", "taesd"), default="auto", help="Sampling preview decoder (default: auto).")
 
 # ComfyUI compute arguments
 from modules.comfy_args import add_comfy_arguments

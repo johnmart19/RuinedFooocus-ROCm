@@ -36,7 +36,10 @@ def configure_comfy_runtime(launch_args, comfy_args):
     if comfy_args.offline:
         comfy_args.disable_partner_nodes = True
     from modules.comfy_args import COMFY_DESTINATIONS
-    from comfy.cli_args import PerformanceFeature
+    from comfy.cli_args import PerformanceFeature, LatentPreviewMethod
+
+    # The embedded backend defaults to no previews; the app displays them.
+    comfy_args.preview_method = LatentPreviewMethod.from_string(getattr(launch_args, "preview_method", "auto"))
 
     for name in COMFY_DESTINATIONS:
         setattr(comfy_args, name, getattr(launch_args, name))
