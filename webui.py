@@ -759,7 +759,7 @@ with shared.gradio_root as block:
                             rows=[3],
                             object_fit="contain",
                             visible=True,
-                            buttons=None,
+                            buttons=[],
                             min_width=60,
                             value=list(
                                 map(
@@ -838,7 +838,7 @@ with shared.gradio_root as block:
                             columns=[2],
                             rows=[3],
                             object_fit="contain",
-                            buttons=None,
+                            buttons=[],
                             min_width=60,
                             value=list(
                                 map(
@@ -881,7 +881,7 @@ with shared.gradio_root as block:
                             rows=[3],
                             object_fit="contain",
                             visible=True,
-                            buttons=None,
+                            buttons=[],
                             min_width=60,
                             value=default_active,
                         )
