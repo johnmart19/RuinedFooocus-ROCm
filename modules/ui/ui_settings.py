@@ -245,16 +245,52 @@ def create_settings():
                 add_setting("path_wildcards", path_wildcards)
 
                 gr.Markdown(t("# Chatbot settings"))
+                from modules.llama_runtime_info import runtime_choices
+                llm_runtime = gr.Dropdown(label="Chat runtime", choices=runtime_choices(),
+                                          value=settings.default_settings.get("llm_runtime", "llama.cpp"))
+                add_setting("llm_runtime", llm_runtime)
+                runtime_signature = gr.State(str(runtime_choices()))
+
+                def refresh_runtime_label(previous):
+                    choices = runtime_choices()
+                    signature = str(choices)
+                    if signature == previous:
+                        return gr.skip(), gr.skip()
+                    return gr.update(choices=choices), signature
+
+                gr.Timer(2).tick(refresh_runtime_label, inputs=runtime_signature,
+                    outputs=[llm_runtime, runtime_signature], queue=False, api_visibility='undocumented')
+                from modules.llama_installer import backend_choices
+                available_backends = backend_choices()
+                saved_backend = settings.default_settings.get("llama_backend", "Auto")
+                llama_backend = gr.Dropdown(label="llama.cpp backend", choices=available_backends,
+                    value=saved_backend if saved_backend in available_backends else "Auto",
+                    info="Save settings, then load or chat to switch. LLAMA_SERVER overrides this selection.",
+                    visible=llm_runtime.value == "llama.cpp")
+                add_setting("llama_backend", llama_backend)
+                llm_runtime.change(lambda runtime: gr.update(visible=runtime == "llama.cpp"),
+                    inputs=llm_runtime, outputs=llama_backend, api_visibility='undocumented')
+                with gr.Accordion("Installed chat runtimes", open=False):
+                    runtime_details = gr.Markdown("Click Refresh to inspect installed versions and devices.")
+                    runtime_refresh = gr.Button("Refresh", size="sm")
+                    gr.Markdown("Detected devices are separate from PyTorch. CPU mode and GPU-layer settings still apply.")
+                    from modules.llama_runtime_info import runtime_info
+                    runtime_refresh.click(runtime_info, outputs=runtime_details, api_visibility='undocumented')
                 curr_localfile = settings.default_settings.get("llama_localfile", None)
-                llama_localfile = gr.Dropdown(label="Local Llama file", interactive=True, choices=[curr_localfile, None]+path_manager.get_folder_list("llm"), value=curr_localfile,)
+                llama_localfile = gr.Textbox(label="Custom GGUF path", interactive=True,
+                    info="Optional local file. Chat model and quantization selection is in Chat bots.",
+                    value=curr_localfile)
                 add_setting("llama_localfile", llama_localfile)
-                llm_n_predict = gr.Number(label="n_predict", interactive=True, placeholder=-1, value=settings.default_settings.get("llm_n_predict", None), minimum=-1, step=1)
+                llama_server_args = gr.Textbox(label="Extra llama.cpp arguments", placeholder="Optional, e.g. --reasoning off",
+                                               value=settings.default_settings.get("llama_server_args", ""))
+                add_setting("llama_server_args", llama_server_args)
+                llm_n_predict = gr.Number(label="n_predict", info="Maximum output tokens; -1 means no fixed limit.", interactive=True, value=settings.default_settings.get("llm_n_predict") or -1, minimum=-1, step=1)
                 add_setting("llm_n_predict", llm_n_predict)
-                llm_n_ctx = gr.Number(label="n_ctx", interactive=True, placeholder=2048, value=settings.default_settings.get("llm_n_ctx", None), minimum=0, step=1)
+                llm_n_ctx = gr.Number(label="n_ctx", interactive=True, value=settings.default_settings.get("llm_n_ctx", 8192), minimum=0, step=1)
                 add_setting("llm_n_ctx", llm_n_ctx)
-                llm_n_gpu_layers = gr.Number(label="n_gpu_layers", interactive=True, placeholder=0, value=settings.default_settings.get("llm_n_gpu_layers", None), minimum=-1, step=1)
+                llm_n_gpu_layers = gr.Number(label="n_gpu_layers", info="-1: automatic VRAM fitting in llama.cpp, full offload in xllamacpp. 0: CPU weights.", interactive=True, value=settings.default_settings.get("llm_n_gpu_layers", -1), minimum=-1, step=1)
                 add_setting("llm_n_gpu_layers", llm_n_gpu_layers)
-                llm_chat_history = gr.Number(label="chat_history", interactive=True, placeholder=7, value=settings.default_settings.get("llm_chat_history", None), minimum=0, step=1)
+                llm_chat_history = gr.Number(label="chat_history", info="0 keeps only the current message.", interactive=True, placeholder=7, value=settings.default_settings.get("llm_chat_history", None), minimum=0, step=1)
                 add_setting("llm_chat_history", llm_chat_history)
                 enable_llm_tools = gr.Checkbox(label=t("Enable image generation"), value=settings.default_settings.get("enable_llm_tools", False))
                 add_setting("enable_llm_tools", enable_llm_tools)

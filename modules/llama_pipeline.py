@@ -1,11 +1,11 @@
 import re
-try:
-    import xllamacpp as xlc
-    Llama = "xlc"
-except Exception as e:
-    print("ERROR: Could not load Llama.")
-    print(e)
-    Llama = None
+import gc
+from modules.llama_server import Server as NativeServer
+from modules.llama_models import DEFAULT_MODEL, resolve_model
+from modules.llama_vision import (
+    projector_path, review_messages, remember_image, attach_latest_image,
+    model_has_vision, attach_image_feedback, transient_vision_messages, image_tool_history,
+)
 from txtai import Embeddings
 from modules.util import TimeIt
 from pathlib import Path
@@ -27,8 +27,6 @@ def llama_names():
         return names
 
 def run_llama(system_file, prompt):
-        if Llama == None:
-            return "Error: There is no Llama"
         name = None
         sys_pat = r"system:.*\n\n"
         system = re.match(sys_pat, prompt, flags=re.M|re.I)
@@ -54,10 +52,11 @@ def run_llama(system_file, prompt):
             print(f"# {name}: (Thinking...)")
             try:
 
-                ret = llama.llm.handle_completions(
+                ret = llama.llm.handle_chat_completions(
                     {
-                        "max_tokens": settings.default_settings.get("llm_hp_maxtokens", 256),
-                        "prompt": system_prompt + "\n\n" + prompt,
+                        "max_tokens": settings.default_settings.get("llm_hp_max_tokens", 256),
+                        "messages": [{"role": "system", "content": system_prompt},
+                                     {"role": "user", "content": prompt}],
                     }
                 )
                 res = ret['choices'][0]['text']
@@ -67,8 +66,7 @@ def run_llama(system_file, prompt):
 
             print(f"{res.strip()}\n")
 
-        del llama.llm
-        llama.llm = None
+        llama.unload()
 
         return res
 
@@ -78,37 +76,86 @@ class pipeline:
     llm = None
     embeddings = None
     embeddings_hash = ""
+    model_settings = None
+    runtime_name = None
+    runtime_label = None
+    vision_projector = None
+
+    def current_model_settings(self, model=None):
+        keys = ("llm_runtime", "llama_backend", "llama_localfile", "llama_server_args", "llm_n_ctx",
+                "llm_n_predict", "llm_n_gpu_layers", "llama_mmproj")
+        return (model,) + tuple(settings.default_settings.get(key) for key in keys)
 
     def parse_gen_data(self, gen_data):
         return gen_data
 
-    def load_base_model(self):
-        localfile = settings.default_settings.get("llama_localfile", "Qwen2.5-7B-Instruct-abliterated-v2.Q4_K_M.gguf")
-        llm_path = path_manager.get_folder_file_path(
-            "llm",
-            localfile,
-            default = Path(path_manager.model_paths["llm_path"]) / localfile
-        )
+    def unload(self):
+        if isinstance(self.llm, NativeServer):
+            self.llm.close()
+        self.llm = None
+        self.runtime_name = None
+        self.runtime_label = None
+        self.vision_projector = None
+        self.model_settings = None
+        self.embeddings = None
+        self.embeddings_hash = ""
+        gc.collect()
+
+    def load_base_model(self, model=None, progress=None):
+        self.unload()
+        localfile = model or settings.default_settings.get("llama_localfile") or DEFAULT_MODEL
+        llm_path = resolve_model(localfile, progress=progress)
+        projector = projector_path(settings.default_settings, llm_path, progress=progress)
+        self.vision_projector = projector
+        if progress:
+            progress(None, None, None)
         with TimeIt("Load LLM"):
             print(f"Loading {localfile}")
+            from argparser import args
 
-            params = xlc.CommonParams()
-            params.prompt = ""
-            params.model.path = str(llm_path)
-            params.n_predict = int(settings.default_settings.get("llm_n_predict", -1))
-            params.n_ctx = int(settings.default_settings.get("llm_n_ctx", 8192))
-            params.n_gpu_layers = int(settings.default_settings.get("llm_n_gpu_layers", -1))
-            params.ctx_shift = True
-            params.cpuparams.n_threads = 4
-            params.cpuparams_batch.n_threads = 2
-            params.endpoint_metrics = False
-            params.use_jinja = True
+            if settings.default_settings.get("llm_runtime", "llama.cpp") == "llama.cpp":
+                runtime_settings = settings.default_settings.copy()
+                runtime_settings["llama_mmproj"] = str(projector) if projector else "None"
+                if args.directml is not None and runtime_settings.get("llama_backend") != "CPU":
+                    runtime_settings["llama_backend"] = "Vulkan"
+                # llama.cpp probes its own devices; a CPU PyTorch wheel does not
+                # mean Vulkan is unavailable (notably in WSL and DirectML setups).
+                gpu = not args.cpu and runtime_settings.get("llama_backend", "Auto") != "CPU"
+                self.llm = NativeServer(llm_path, runtime_settings, gpu=gpu)
+                self.runtime_label = self.llm.runtime_label
+            else:
+                import xllamacpp as xlc
+                params = xlc.CommonParams()
+                params.prompt = ""
+                params.model.path = str(llm_path)
+                if projector:
+                    params.mmproj.path = str(projector)
+                params.n_predict = int(settings.default_settings.get("llm_n_predict") or -1)
+                params.n_ctx = int(settings.default_settings.get("llm_n_ctx", 8192))
+                params.n_gpu_layers = 0 if args.cpu else int(settings.default_settings.get("llm_n_gpu_layers", -1))
+                if args.cpu:
+                    params.no_kv_offload = True
+                    params.no_op_offload = True
+                    params.mmproj_use_gpu = False
+                params.ctx_shift = True
+                params.cpuparams.n_threads = 4
+                params.cpuparams_batch.n_threads = 2
+                params.endpoint_metrics = False
+                params.use_jinja = True
 
-            try:
                 self.llm = xlc.Server(params)
-            except:
-                print(f"ERROR: xlc.Server({params})")
+                try:
+                    devices = xlc.get_device_info()
+                    self.runtime_label = "/".join(dict.fromkeys(
+                        re.sub(r"\d+$", "", device["name"]) for device in devices
+                        if device["name"] != "CPU")) or "CPU"
+                except Exception:
+                    self.runtime_label = "unknown"
+                if params.n_gpu_layers == 0 and self.runtime_label != "CPU":
+                    self.runtime_label += "; CPU weights"
 
+        self.runtime_name = settings.default_settings.get("llm_runtime", "llama.cpp")
+        self.model_settings = self.current_model_settings(model)
         self.embeddings = None
 
     def index_source(self, source):
@@ -147,8 +194,6 @@ class pipeline:
 
 
     def process(self, gen_data):
-        if Llama == None:
-            return "Error: There is no Llama"
 
         worker.add_result(
             gen_data["task_id"],
