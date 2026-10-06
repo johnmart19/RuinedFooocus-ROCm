@@ -6,6 +6,7 @@ import warnings
 from pathlib import Path
 import ssl
 from tempfile import gettempdir
+from modules.rocm_installer import automatic_rocm_plan, install_rocm
 from modules.runtime_support import inspect_installed_rocm, inspect_installed_cuda, inspect_installed_cpu, installed_cuda_platform, select_torch_platform
 from modules.gpu_installer import (
     preserve_installed_rocm, preserve_installed_cuda, installed_torch_constraints, torch_constraints, torch_install_commands,
@@ -105,17 +106,27 @@ def prepare_environment(offline=False):
         import torchruntime
         import platform
         os_platform = platform.system()
-        installed_rocm = inspect_installed_rocm(os_platform, repair=REINSTALL_ALL or REINSTALL_TORCH or False)
+        installed_rocm = inspect_installed_rocm(os_platform, repair=REINSTALL_ALL or REINSTALL_TORCH or args.rocm10)
         installed_cuda = inspect_installed_cuda(os_platform)
         installed_cpu = inspect_installed_cpu() if args.cpu else None
         keep_cpu = bool(installed_cpu and not (REINSTALL_ALL or REINSTALL_TORCH))
         torch_platform = select_torch_platform(torchruntime, os_platform, installed_rocm, installed_cuda)
-        keep_cuda = preserve_installed_cuda(installed_cuda, torch_platform, REINSTALL_ALL or REINSTALL_TORCH or False or False)
+        keep_cuda = preserve_installed_cuda(installed_cuda, torch_platform, REINSTALL_ALL or REINSTALL_TORCH or args.rocm10 or False)
         keep_rocm = preserve_installed_rocm(
-            installed_rocm, torch_platform, REINSTALL_ALL or REINSTALL_TORCH or False,
+            installed_rocm, torch_platform, REINSTALL_ALL or REINSTALL_TORCH or args.rocm10,
         )
 
         rocm_plan = None
+        if args.rocm10:
+            rocm_plan = automatic_rocm_plan(os_platform, "rocm10.0", force=True)
+            if rocm_plan is None:
+                raise RuntimeError("--rocm10 requires a supported AMD GPU on Windows or Linux/WSL.")
+            torch_platform = rocm_plan.platform
+            os.environ["TORCH_PLATFORM"] = torch_platform
+        elif not keep_rocm and not TORCH_FROZEN:
+            rocm_plan = automatic_rocm_plan(os_platform, torch_platform)
+            if rocm_plan:
+                torch_platform = rocm_plan.platform
 
         # Forward automatic fallback modes to ComfyUI and chat as well as pip.
         if torch_platform == "cpu":
@@ -139,6 +150,13 @@ def prepare_environment(offline=False):
             print(f"Using installed {os_platform} ROCm PyTorch {installed_rocm['versions']['torch']}")
         elif keep_cuda:
             print(f"Using installed {os_platform} CUDA PyTorch {installed_cuda['versions']['torch']}")
+        elif rocm_plan:
+            install_rocm(rocm_plan.args, REINSTALL_ALL or REINSTALL_TORCH or args.rocm10)
+            installed_rocm = inspect_installed_rocm(os_platform)
+            if not installed_rocm:
+                raise RuntimeError("ROCm installation did not provide a valid HIP PyTorch build.")
+            torch_platform = select_torch_platform(torchruntime, os_platform, installed_rocm)
+            keep_rocm = True
         elif not TORCH_FROZEN:
             if os_platform == "Windows" and torch_platform.startswith("rocm"):
                 raise RuntimeError(
@@ -211,6 +229,12 @@ def prepare_environment(offline=False):
             print("WARNING: Failed to install/update llm modules.")
             print(e)
 
+        if args.rocm10:
+            subprocess.run([python, "-c",
+                "from modules.llama_installer import server_path, runtime_environment; "
+                "server_path(True); runtime_environment(True, reinstall=True)"], check=True)
+
+
 def clone_git_repos(offline=False):
     from modules.launch_util import git_clone
 
@@ -273,6 +297,8 @@ if os.environ.get("TORCH_PLATFORM") == "cpu":
 elif os.environ.get("TORCH_PLATFORM") == "directml" and args.directml is None:
     args.directml = -1
 
+if args.rocm10 and (offline or args.cpu or args.directml is not None or os.path.exists("freezetorch")):
+    raise RuntimeError("--rocm10 cannot be combined with offline, CPU, DirectML or freezetorch mode.")
 
 
 if offline:
