@@ -1,3 +1,19 @@
+### 26.10.06
+* Updated application, Gradio, ComfyUI and GGUF dependencies with Python and runtime compatibility fixes.
+* Improved Windows/Linux launchers, setup and GPU detection; added targeted ROCm/CUDA installation, installed-runtime preservation and optional CUDA nightly packages.
+* Preserved the upstream desktop layout while improving narrow-screen controls and image/video browsing.
+* Added native llama.cpp runtime selection, model lifecycle controls, optional local CUDA builds, reasoning and vision/image-review tools.
+* Restored chatbot image generation and added optional browser Python execution for chat code.
+* Added OpenAI-compatible chat and generation APIs, cancellation, startup port recovery and worker error recovery.
+* Added LAN authentication, isolated generation-only guest access and private media controls.
+* Improved video sampling/refinement, model-family presets, resolution controls, previews and cancellation.
+* Added checkpoint inspection/conversion, downloadable upscalers, ControlNet controls and improved image-to-image workflows.
+* Recognize checkpoint families from tensor architecture using the backend registry and shape-only safetensors/GGUF inspection. Recognition does not enable unsupported inference architectures.
+* Simplified Performance to Model Defaults and Own settings, with internal family recipes and preserved video constraints.
+* Added automatic Civitai recommendations and verified Hugging Face model-card/settings lookup, with visible sources, fetched values, cached/offline fallback and refresh controls.
+* Added persistent per-checkpoint saved settings with save/remove controls. Saved settings take priority over recommendations and are labelled only when present; UI and API use the same recipe resolver.
+* Improved One Button prompts, cached model hashes/metadata, retained warning previews, atomic downloads and configuration saves.
+
 ### 26.09.02
 * [LTX 2.5](https://huggingface.co/Lightricks/LTX-2.5) support
 * [MiniMax H3](https://huggingface.co/MiniMaxAI/MiniMax-H3) support
