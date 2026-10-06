@@ -39,7 +39,20 @@ def is_sha256_hash(input_string):
 def _process(gen_data):
     res = []
     metadatastrings = []
-    gen_data = process_metadata(gen_data)
+    # Named sampling defaults apply first; imported image/JSON metadata wins.
+    gen_data = shared.performance_settings.apply(gen_data)
+    if "_api_job" not in gen_data:
+        gen_data = process_metadata(gen_data)
+
+    from modules.video_settings import VIDEO_FPS, constrain_video_settings
+    family = shared.models.get_model_base(shared.models.get_models_by_path(
+        "checkpoints", gen_data.get("base_model_name", "")))
+    if family in VIDEO_FPS and gen_data.get("performance_selection") not in shared.performance_settings.choices_for_model(
+            family, gen_data.get("base_model_name", "")):
+        gen_data["performance_selection"] = shared.performance_settings.selection_for_model(
+            family, gen_data.get("base_model_name", ""), None)
+        gen_data = shared.performance_settings.apply(gen_data)
+    gen_data = constrain_video_settings(gen_data, family)
 
     pipeline = modules.pipelines.update(gen_data)
     if pipeline == None:
@@ -86,18 +99,6 @@ def _process(gen_data):
     if "silent" not in gen_data:
         outputs.append([gen_data["task_id"], "preview", (-1, f"Loading LoRA models ...", None)])
 
-    # FIXME move this into get_perf_options?
-    if (
-        gen_data["performance_selection"] == shared.performance_settings.CUSTOM_PERFORMANCE or
-        gen_data["performance_selection"] == None
-    ):
-        steps = gen_data["custom_steps"]
-    else:
-        perf_options = shared.performance_settings.get_perf_options(
-            gen_data["performance_selection"]
-        ).copy()
-        perf_options.update(gen_data)
-        gen_data = perf_options
     steps = gen_data["custom_steps"]
     gen_data["steps"] = steps
 

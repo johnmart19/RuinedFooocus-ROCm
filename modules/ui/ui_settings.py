@@ -94,11 +94,15 @@ def create_settings():
                 add_setting("negative_prompt", negative_prompt)
                 auto_negative_prompt = gr.Checkbox(label=t("Auto Negative Prompt"), interactive=True, value=settings.default_settings.get("auto_negative_prompt", False))
                 add_setting("auto_negative_prompt", auto_negative_prompt)
+                performance_choices = list(performance_settings.performance_options) + [performance_settings.CUSTOM_PERFORMANCE]
+                saved_performance = settings.default_settings.get("performance", "SDXL")
+                if saved_performance not in performance_choices:
+                    saved_performance = performance_settings.CUSTOM_PERFORMANCE
                 performance = gr.Dropdown(
                     label=t("Performance"),
                     interactive=True,
-                    choices=list(performance_settings.performance_options.keys()),
-                    value=settings.default_settings.get("performance", "Speed"),
+                    choices=performance_choices,
+                    value=saved_performance,
                 )
                 add_setting("performance", performance)
                 resolution = gr.Dropdown(
