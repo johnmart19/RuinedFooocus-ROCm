@@ -416,7 +416,7 @@ class Models:
 
         from modules.video_settings import VIDEO_FPS
         base = self.detect_checkpoint_base(path)
-        if base and (base in VIDEO_FPS or data.get("baseModel") in (None, "", "Unknown")):
+        if base and (base in VIDEO_FPS or data.get("baseModel") in (None, "", "Unknown", "Other", "Lumina2")):
             data = data | {"baseModel": base}
         return data
 

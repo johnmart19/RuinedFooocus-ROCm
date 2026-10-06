@@ -19,6 +19,10 @@ def detect_tensor_architecture(header):
             continue
     if not tensors:
         return None
+    # Match the backend loader's conversion before inspecting Diffusers tensors.
+    if ("adaln_single.emb.timestep_embedder.linear_1.bias" in tensors
+            and "pos_embed.proj.bias" in tensors):
+        tensors = model_detection.convert_diffusers_mmdit(tensors)
     prefixes = dict.fromkeys((model_detection.unet_prefix_from_state_dict(tensors),
                               "", "model.diffusion_model.", "net.", "model."))
     for prefix in prefixes:
@@ -29,6 +33,8 @@ def detect_tensor_architecture(header):
             supported = model_detection.model_config_from_unet_config(config, tensors, prefix)
             if supported is not None:
                 name = type(supported).__name__
+                if name == "Lumina2" and "clip_text_dim" in config:
+                    return "NewBieImage"
                 return {"SD15": "SD 1.5", "SD20": "SD 2.0", "SDXL": "SDXL 1.0",
                         "Flux": "Flux.1 D", "FluxSchnell": "Flux.1 S",
                         "PixArtAlpha": "PixArt", "PixArtSigma": "PixArt",
