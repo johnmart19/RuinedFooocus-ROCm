@@ -65,7 +65,7 @@ git_repos = [
         "name": "molbal/ComfyUI-GGUF",
         "path": "molbal_comfyui_gguf",
         "url": "https://github.com/molbal/ComfyUI-GGUF",
-        "hash": "48de657b3aa830ae6981960e928b31cb51fd16aa",
+        "hash": "5a0a3ffa0e3eae5c6af8b0b981b660a24d5fbc04",
         "add_path": "",
     },
 ]
