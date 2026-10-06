@@ -954,6 +954,12 @@ class pipeline:
         if "inpaint_toggle" in gen_data and gen_data["inpaint_toggle"]:
             # This is a _very_ ugly workaround since we had to shrink the inpaint image
             # to not break the ui.
+            denoise = float(gen_data.get("inpaint_denoise", 1.0))
+            if not 0 < denoise <= 1:
+                raise ValueError("Inpainting denoise must be greater than 0 and at most 1.")
+            mask_grow = int(gen_data.get("inpaint_mask_grow", 20))
+            if not 0 <= mask_grow <= 128:
+                raise ValueError("Mask expansion must be between 0 and 128 pixels.")
             main_image = Image.open(gen_data["main_view"])
             image = np.array(main_image)
             image = torch.from_numpy(image)[None,] / 255.0
@@ -968,8 +974,10 @@ class pipeline:
                 vae=self.xl_base_patched.vae,
                 pixels=image,
                 mask=mask,
-                grow_mask_by=20,
+                grow_mask_by=mask_grow,
             )[0]
+
+        gen_data["sampling_denoise"] = denoise if denoise is not None else 1.0
 
         # KSampler
 

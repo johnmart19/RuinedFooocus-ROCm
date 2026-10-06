@@ -92,11 +92,14 @@ def get_settings(gen_data):
             "upscaler": gen_data["cn_upscale"],
         }
     else:
-        return (
-            controlnet_settings[gen_data["cn_selection"]]
-            if gen_data["cn_selection"] in controlnet_settings
-            else {}
-        )
+        options = dict(controlnet_settings.get(gen_data["cn_selection"], {}))
+        if options.get("type") == "img2img" and "cn_strength" in gen_data:
+            options["denoise"] = gen_data["cn_strength"]
+        elif options.get("type") in ("canny", "depth", "sketch", "recolour"):
+            for key in ("strength", "start", "stop"):
+                if "cn_" + key in gen_data:
+                    options[key] = gen_data["cn_" + key]
+        return options
 
 
 controlnet_settings = load_cnsettings()

@@ -312,7 +312,7 @@ def _process(gen_data):
                 "base_model_hash": gen_data["base_model_hash"],
                 "loras": [[f"{get_lora_hashes(lora['name'])['SHA256']}", f"{lora['weight']} - {lora['name']}"] for lora in used_loras],
                 "start_step": start_step,
-                "denoise": denoise,
+                "denoise": gen_data.get("sampling_denoise", denoise),
                 "clip_skip": gen_data["clip_skip"],
                 "comment": settings.default_settings.get("meta_comment", ""),
                 "software": "RuinedFooocus",

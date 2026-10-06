@@ -92,7 +92,8 @@ def add_controlnet_tab(main_view, inpaint_view, prompt, image_number, run_event,
         add_ctrl("cn_edge_high", cn_edge_high)
 
         cn_start = gr.Slider(
-            label=t("Start"),
+            label=t("Control starts at"),
+            info="Fraction of sampling: 0 starts immediately.",
             minimum=0.0,
             maximum=1.0,
             step=0.01,
@@ -102,7 +103,8 @@ def add_controlnet_tab(main_view, inpaint_view, prompt, image_number, run_event,
         add_ctrl("cn_start", cn_start)
 
         cn_stop = gr.Slider(
-            label=t("Stop"),
+            label=t("Control ends at"),
+            info="Fraction of sampling: 1 keeps control until the end.",
             minimum=0.0,
             maximum=1.0,
             step=0.01,
@@ -157,9 +159,21 @@ def add_controlnet_tab(main_view, inpaint_view, prompt, image_number, run_event,
         )
         def cn_changed(selection, control_type):
             if selection != NEWCN:
-                return [gr.update(visible='hidden')] * len(
-                    cn_outputs + cn_sliders
-                )
+                options = controlnet.cn_options.get(selection, {})
+                kind = options.get("type")
+                updates = [gr.update(visible='hidden')] * len(cn_sliders)
+                if kind == "img2img":
+                    updates[2] = gr.update(visible=True, label=t("Denoise"),
+                        info="Lower values preserve the input; higher values allow larger changes.",
+                        minimum=0.01, maximum=1.0,
+                        value=options.get("denoise", options.get("strength", 0.64)))
+                elif kind in ("canny", "depth", "sketch", "recolour"):
+                    updates[0] = gr.update(visible=True, value=options.get("start", 0.0))
+                    updates[1] = gr.update(visible=True, value=options.get("stop", 1.0))
+                    updates[2] = gr.update(visible=True, label=t("Control strength"),
+                        info="How strongly the input guides the composition.",
+                        minimum=0.0, maximum=2.0, value=options.get("strength", 1.0))
+                return [gr.update(visible='hidden')] * len(cn_outputs) + updates
             else:
                 return ([gr.update(value="", visible=True)]
                         + [gr.update(visible=True)] * (len(cn_outputs) - 1)
@@ -172,7 +186,7 @@ def add_controlnet_tab(main_view, inpaint_view, prompt, image_number, run_event,
         )
         def cn_type_changed(selection, preset):
             if preset != NEWCN:
-                return [gr.update(visible='hidden')] * len(cn_sliders)
+                return cn_changed(preset, selection)[len(cn_outputs):]
             # cn_start,cn_stop,cn_strength,cn_edge_low,cn_edge_high, cn_upscaler
             slider_states = {
                 "canny": [True, True, True, True, True, False],
@@ -282,6 +296,17 @@ def add_controlnet_tab(main_view, inpaint_view, prompt, image_number, run_event,
         inpaint_toggle = gr.Checkbox(label=t("Inpainting"), value=False, visible=not initial_video)
 
         add_ctrl("inpaint_toggle", inpaint_toggle)
+        with gr.Group(visible=False) as inpaint_options:
+            inpaint_denoise = gr.Slider(label=t("Inpainting denoise"), minimum=0.01,
+                maximum=1.0, step=0.01, value=1.0,
+                info="Amount of regeneration inside the mask. 1 fully redraws the masked area.")
+            add_ctrl("inpaint_denoise", inpaint_denoise)
+            inpaint_mask_grow = gr.Slider(label=t("Mask expansion (pixels)"),
+                minimum=0, maximum=128, step=1, value=20,
+                info="Expand the painted mask to blend edits into surrounding pixels.")
+            add_ctrl("inpaint_mask_grow", inpaint_mask_grow)
+        inpaint_toggle.change(lambda enabled: gr.update(visible=enabled),
+            inputs=inpaint_toggle, outputs=inpaint_options, api_visibility="undocumented")
 
         cn_selection.change(
             lambda selection, checkpoint: [gr.update(visible=selection == "Checkpoint tools"),
