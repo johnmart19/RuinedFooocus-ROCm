@@ -11,46 +11,19 @@ torch_platform = select_torch_platform(
 )
 
 from argparser import args
-from modules.comfy_compat import configure_torch_compatibility
+from modules.comfy_compat import configure_comfy_runtime, configure_torch_compatibility, initialize_comfy_memory, configure_torch_allocator
+configure_torch_allocator(torch_platform, os_platform, args)
 configure_torch_compatibility()
 import comfy.cli_args
-comfy.cli_args.args.gpu_only = args.gpu_only
-comfy.cli_args.args.cpu = args.cpu
-comfy.cli_args.args.highvram = args.highvram
-comfy.cli_args.args.normalvram = args.normalvram
-comfy.cli_args.args.lowvram = args.lowvram
-comfy.cli_args.args.novram = args.novram
-comfy.cli_args.args.reserve_vram = args.reserve_vram
-
-comfy.cli_args.args.force_fp32 = args.force_fp32
-comfy.cli_args.args.force_fp16 = args.force_fp16
-
-comfy.cli_args.args.fp32_unet = args.fp32_unet
-comfy.cli_args.args.fp64_unet = args.fp64_unet
-comfy.cli_args.args.bf16_unet = args.bf16_unet
-comfy.cli_args.args.fp16_unet = args.fp16_unet
-comfy.cli_args.args.fp8_e4m3fn_unet = args.fp8_e4m3fn_unet
-comfy.cli_args.args.fp8_e5m2_unet = args.fp8_e5m2_unet
-comfy.cli_args.args.fp8_e8m0fnu_unet = args.fp8_e8m0fnu_unet
-
-comfy.cli_args.args.fp16_vae = args.fp16_vae
-comfy.cli_args.args.fp32_vae = args.fp32_vae
-comfy.cli_args.args.bf16_vae = args.bf16_vae
-
-comfy.cli_args.args.cpu_vae = args.cpu_vae
-
-comfy.cli_args.args.fp8_e4m3fn_text_enc = args.fp8_e4m3fn_text_enc
-comfy.cli_args.args.fp8_e5m2_text_enc = args.fp8_e5m2_text_enc
-comfy.cli_args.args.fp16_text_enc = args.fp16_text_enc
-comfy.cli_args.args.fp32_text_enc = args.fp32_text_enc
-comfy.cli_args.args.bf16_text_enc = args.bf16_text_enc
-
+configure_comfy_runtime(args, comfy.cli_args.args)
 if torch_platform == "cpu":
     comfy.cli_args.args.cpu = True
 if args.directml is not None:
     comfy.cli_args.args.directml = args.directml
 elif torch_platform == "directml":
     comfy.cli_args.args.directml = -1
+
+initialize_comfy_memory()
 
 from pathlib import Path
 import shared

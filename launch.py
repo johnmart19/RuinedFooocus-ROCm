@@ -13,7 +13,7 @@ from modules.gpu_installer import (
     xllamacpp_index, has_vulkan_xllamacpp, has_cuda_xllamacpp,
     xllamacpp_backend_matches, record_xllamacpp_backend,
 )
-from modules.comfy_compat import configure_torch_allocator
+from modules.comfy_compat import configure_device_environment, configure_torch_allocator
 
 os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
 os.environ["DO_NOT_TRACK"] = "1"
@@ -58,7 +58,7 @@ git_repos = [
         "name": "ComfyUI",
         "path": "ComfyUI",
         "url": "https://github.com/comfy-org/ComfyUI",
-        "hash": "fb2315f11db0ebfaafa9099a5df5227dc6bb42bc",
+        "hash": "b0b743566f65daafc423b4fea8a2fbda94b3384a",  # ComfyUI v0.39.0
         "add_path": "ComfyUI",
     },
     {
@@ -137,7 +137,7 @@ def prepare_environment(offline=False):
         elif torch_platform == "directml" and args.directml is None:
             args.directml = -1
         os.environ["TORCH_PLATFORM"] = torch_platform
-        configure_torch_allocator(torch_platform, os_platform)
+        configure_torch_allocator(torch_platform, os_platform, args)
 
         print(f"Torch platform: {os_platform}: {torch_platform}")
 
@@ -301,9 +301,7 @@ if os.path.exists("reinstalltorch"):
     REINSTALL_TORCH = True
 TORCH_FROZEN = os.path.exists("freezetorch") and not (REINSTALL_ALL or REINSTALL_TORCH)
 
-if args.gpu_device_id is not None:
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu_device_id)
-    print("Set device to:", args.gpu_device_id)
+configure_device_environment(args)
 
 offline = os.environ.get("RF_OFFLINE") == "1" or "--offline" in sys.argv or "--iINSTallLEDmYOwNPaCKaGeS" in sys.argv
 if args.cpu and args.directml is not None:

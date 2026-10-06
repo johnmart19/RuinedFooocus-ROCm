@@ -99,7 +99,6 @@ from molbal_comfyui_gguf.ops import GGMLOps
 class pipeline:
     pipeline_type = ["sdxl", "ssd", "sd3", "flux", "flux2", "lumina2"]
 
-    comfy.model_management.DISABLE_SMART_MEMORY = False
 
     class StableDiffusionModel:
         def __init__(self, unet, vae, clip, clip_vision):
