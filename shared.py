@@ -42,6 +42,7 @@ settings = SettingsManager()
 path_manager = PathManager()
 performance_settings = PerformanceSettings()
 resolution_settings = ResolutionSettings()
+shared_cache = {}
 from modules.model_handler import Models
 models = Models()
 shared_cache = {}
