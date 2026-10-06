@@ -13,6 +13,8 @@ os_platform = platform.system()
 torch_platform, os_platform = broken_torch_platforms(torch_platform, os_platform)
 
 from argparser import args
+from modules.comfy_compat import configure_torch_compatibility
+configure_torch_compatibility()
 import comfy.cli_args
 comfy.cli_args.args.cpu = args.cpu
 comfy.cli_args.args.highvram = args.highvram
