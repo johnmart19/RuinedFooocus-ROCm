@@ -78,15 +78,35 @@ class Models:
                     cache_file = Path(self.cache_paths[model_type] / path.name)
                     model_data = self.get_models_by_path(model_type, path, fetch=True)
 
-                    suffixes = [".jpeg", ".jpg", ".png", ".gif"]
+                    from modules.model_previews import SUFFIXES, VERSION, is_warning, valid_preview
+                    suffixes = list(SUFFIXES)
                     has_preview = False
                     for suffix in suffixes:
                         thumbcheck = cache_file.with_suffix(suffix)
-                        if thumbcheck.is_file():
-                            # Keep cached warning previews as well as artwork.
-                            # A missing online preview must not erase the fallback.
+                        if thumbcheck.is_file() and valid_preview(thumbcheck) and not is_warning(thumbcheck):
+                            # Retain valid artwork if its online refresh fails.
                             has_preview = True
                             break
+
+                    # Rebuild legacy low-resolution/animated network thumbnails
+                    # once, preserving the old valid file if fetching fails.
+                    marker = cache_file.with_suffix(".preview.json")
+                    try:
+                        preview_state = json.loads(marker.read_text())
+                        preview_state = preview_state if isinstance(preview_state, dict) else {}
+                    except (OSError, ValueError):
+                        preview_state = {}
+                    real_artwork = any(isinstance(item, dict) and item.get("url") and
+                                       "cdn-thumbnails.huggingface.co/social-thumbnails/" not in item["url"]
+                                       for item in (model_data.get("images") or []))
+                    replace_generated = preview_state.get("generated") and real_artwork
+                    if has_preview and not self.offline and (preview_state.get("version") != VERSION or replace_generated) and model_data.get("images"):
+                        from PIL import Image
+                        with Image.open(thumbcheck) as image:
+                            legacy = replace_generated or max(image.size) <= 166 or getattr(image, "n_frames", 1) > 1
+                        local_artwork = any(path.with_suffix(suffix).is_file() or path.with_suffix(".preview" + suffix).is_file() for suffix in suffixes)
+                        if legacy and not local_artwork:
+                            self.get_image(model_data, cache_file)
 
                     if not has_preview:
                         for suffix in suffixes:
@@ -103,7 +123,7 @@ class Models:
 
                     if not has_preview and not self.offline:
                         self.get_image(model_data, thumbcheck)
-                        if not any(cache_file.with_suffix(suffix).is_file() for suffix in suffixes):
+                        if not any(valid_preview(cache_file.with_suffix(suffix)) and not is_warning(cache_file.with_suffix(suffix)) for suffix in suffixes):
                             from modules.model_sources import huggingface_preview
                             from modules.model_identity import checkpoint_hashes
                             hash = checkpoint_hashes(model_data).get("SHA256") or self.model_sha256(path)
@@ -116,7 +136,7 @@ class Models:
                                 save_json(cache_file.with_suffix(".json"), model_data)
                                 self.get_image(model_data, thumbcheck)
                             else:
-                                print(f"No matching downloadable artwork found for {path.name}.")
+                                print(f"No published artwork found for {path.name}; add a local .preview image to supply artwork.")
                         updated += 1
                         time.sleep(1)
 
@@ -545,109 +565,28 @@ class Models:
 
     def get_image(self, model, path):
         from shared import settings
+        from modules.model_previews import write_preview
 
-        if "baseModel" in model and model["baseModel"] == "Merge":
-            return
-
-        import imageio.v3 as iio
-        opts = settings.default_settings.get("model_preview", "").split(",")
-        caption = "caption" in opts
-        nogifzoom = "nogifzoom" in opts
-        zoom = "zoom" in opts
-
-        def make_thumbnail(image, text, zoom=False, caption=False):
-            max = 166  # Max width or height
-
-            if image is None:
-                return None
-
-            if zoom:
-                oh = image.shape[0]
-                ow = image.shape[1]
-                scale = max / oh if oh > ow else max / ow
-                image = cv2.resize(
-                    image,
-                    dsize=(int(ow * scale), int(oh * scale)),
-                    interpolation=cv2.INTER_LANCZOS4,
-                )
-
-            if caption:
-                font = cv2.FONT_HERSHEY_SIMPLEX
-                fontScale = 0.35
-                thickness = 1
-
-                org = (3, 10)
-                color = (25, 15, 11) # BGR
-                image = cv2.putText(
-                    image,
-                    text,
-                    org,
-                    font,
-                    fontScale,
-                    color,
-                    thickness*2,
-                    cv2.LINE_AA
-                )
-                org = (3, 10)
-                color = (255, 215, 185) # BGR
-                image = cv2.putText(
-                    image,
-                    text,
-                    org,
-                    font,
-                    fontScale,
-                    color,
-                    thickness,
-                    cv2.LINE_AA
-                )
-
-            return image
-
-        path = path.with_suffix(".jpeg")
-        caption_text = f"{path.with_suffix('').name}"
-
-        image_url = None
-        for preview in model.get("images", [{}]):
-            url = preview.get("url")
-            format = preview.get("type")
-            if url:
-                print(t("Updating preview for {text}.", mapping={'text': caption_text}))
-                image_url = url
-                try:
-                    response = self.session.get(image_url, timeout=(5, 20))
-                except requests.exceptions.RequestException as error:
-                    print(f"Preview download failed for {caption_text}: {error}")
-                    continue
-                if response.status_code != 200:
-                    print(f"WARNING: get_image() for {caption_text} - {response.status_code} : {response.reason}")
-                    continue
-                image = np.asarray(bytearray(response.content), dtype="uint8") 
-                out = make_thumbnail(cv2.imdecode(image, cv2.IMREAD_COLOR), caption_text, caption=caption, zoom=zoom)
-                if out is not None:
-                    out = cv2.imencode('.jpg', out)[1] 
-                else:
-                    out = response.content
-                with open(path, "wb") as file:
-                    file.write(out)
-
-                try:
-                    fps = iio.immeta(path).get("fps", False)
-                except Exception as e:
-                    print(f"WARNING: Could not decode preview for {caption_text}: {e}")
-                    path.unlink(missing_ok=True)
-                    continue
-                if format == "video" and fps:
-                    tmp_path = f"{path}.tmp"
-                    shutil.move(path, tmp_path)
-                    video = iio.imiter(tmp_path)
-                    video_out = []
-                    for i in video:
-                        out = make_thumbnail(i, caption_text, caption=caption, zoom=not nogifzoom)
-                        if out is None:
-                            out = i
-                        video_out.append(out)
-                    iio.imwrite(
-                        str(path.with_suffix(".gif")), video_out, fps=fps, loop=0
-                    )
-                    os.remove(tmp_path)
-                break
+        if model.get("baseModel") == "Merge":
+            return False
+        caption = Path(path).stem if "caption" in settings.default_settings.get("model_preview", "").split(",") else ""
+        previews = model.get("images") or []
+        if not isinstance(previews, list):
+            return False
+        for preview in previews[:5]:
+            if not isinstance(preview, dict) or not preview.get("url") or "cdn-thumbnails.huggingface.co/social-thumbnails/" in preview["url"]:
+                continue
+            try:
+                with self.session.get(preview["url"], timeout=(5, 20), stream=True) as response:
+                    response.raise_for_status()
+                    data = bytearray()
+                    started = time.monotonic()
+                    for chunk in response.iter_content(65536):
+                        if len(data) + len(chunk) > 64 * 1024 * 1024 or time.monotonic() - started > 60:
+                            raise ValueError("Preview exceeds the download size or time limit")
+                        data.extend(chunk)
+                write_preview(bytes(data), path, caption, video=preview.get("type") == "video")
+                return True
+            except Exception as error:
+                print(f"Could not update preview for {Path(path).stem}: {error}")
+        return False

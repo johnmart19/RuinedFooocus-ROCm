@@ -139,13 +139,10 @@ def huggingface_preview(path, sha256, source=""):
                 continue
             revision = quote(data.get("sha") or "main", safe="")
             images = [item["rfilename"] for item in files
-                      if Path(item["rfilename"]).suffix.lower() in (".png", ".jpg", ".jpeg", ".webp")]
+                      if Path(item["rfilename"]).suffix.lower() in (".png", ".jpg", ".jpeg", ".webp", ".gif", ".mp4", ".webm")]
             images.sort(key=lambda name: (Path(name).stem != path.stem, name))
             previews = [{"url": f"https://huggingface.co/{repository}/resolve/{revision}/{quote(name, safe='/')}",
-                         "type": "image"} for name in images[:5]]
-            # Some repositories publish no image files or gate their assets.
-            previews.append({"url": f"https://cdn-thumbnails.huggingface.co/social-thumbnails/models/{repository}.png",
-                             "type": "image"})
+                         "type": "video" if Path(name).suffix.lower() in (".mp4", ".webm") else "image"} for name in images[:5]]
             return {"hf_repo_id": repository, "images": previews}
         except (requests.RequestException, ValueError, TypeError, KeyError) as error:
             print(f"Hugging Face artwork lookup failed for {repository}: {error}")

@@ -104,7 +104,7 @@ def _get_model_thumbnail(cache_path, not_found="html/warning.png"):
     if cached is not None and Path(cached).is_file():
         return cached
     shared_cache.pop(cache_path, None)
-    suffixes = [".jpeg", ".jpg", ".png", ".gif"]
+    suffixes = [".gif", ".jpeg", ".jpg", ".png", ".webp"]
     for suffix in suffixes:
         filename = cache_path.with_suffix(suffix)
         if Path(filename).is_file():
