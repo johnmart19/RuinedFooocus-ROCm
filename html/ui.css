@@ -20,7 +20,21 @@
 #prompt-actions button { min-height: 44px; }
 #main_view, #inpaint_view { min-width: 0; }
 #main_view img { object-fit: contain; }
-#hint-container { max-height: 150px; overflow: auto; }
+#changelog-panel {
+  gap: 0;
+  border: var(--block-border-width, 1px) solid var(--block-border-color);
+  border-radius: var(--block-radius);
+  background: var(--block-background-fill);
+  overflow: hidden;
+}
+#changelog-heading {
+  text-align: right;
+  font-weight: 600;
+  border-bottom: 1px solid var(--block-border-color);
+  padding: 6px 12px;
+}
+#changelog-heading p { margin: 0; }
+#hint-container { max-height: 150px; overflow: auto; padding: 8px 12px; }
 #settings-layout { gap: 12px; align-items: start; }
 #settings-layout > .column { min-width: min(100%, 320px) !important; }
 #checkpoint-tools { gap: 8px; padding: 6px; }

@@ -1328,11 +1328,13 @@ with shared.gradio_root as block:
                     hints = update_log.read()
             except:
                 hints = ''
-            hint_text = gr.Markdown(
-                value=hints,
-                elem_id="hint-container",
-                elem_classes="hint-container",
-            )
+            with gr.Group(elem_id="changelog-panel"):
+                gr.Markdown(t("Changelog"), elem_id="changelog-heading")
+                hint_text = gr.Markdown(
+                    value=hints,
+                    elem_id="hint-container",
+                    elem_classes="hint-container",
+                )
 
             def performance_control_updates(selection, family, checkpoint, editing=False):
                 custom = selection == performance_settings.CUSTOM_PERFORMANCE or editing
