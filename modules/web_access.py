@@ -15,11 +15,11 @@ def validate_web_access(args):
         local = ip_address(host.strip("[]")).is_loopback
     except ValueError:
         local = host.lower() == "localhost"
-    if (not local or getattr(args, "guest", False)) and not args.auth:
+    if (not local or args.guest) and not args.auth:
         raise SystemExit("LAN/guest access requires a UI login. Set RF_UI_AUTH=username/password before launching.")
     if args.share:
         raise SystemExit("Public Gradio tunnels are disabled. Use authenticated --listen access on your trusted LAN or VPN.")
-    if getattr(args, "guest", False) and (args.api or args.mcp):
+    if args.guest and (args.api or args.mcp):
         raise SystemExit("Guest mode does not expose the owner API or MCP. Start without --api and --mcp.")
 
 

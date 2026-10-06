@@ -69,6 +69,11 @@ import re
 import traceback
 
 import version
+if args.guest:
+    from modules.ui.ui_guest import launch_guest
+    launch_guest(args)
+    raise SystemExit(0)
+
 import modules.async_worker as worker
 import modules.html
 import modules.hints

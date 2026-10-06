@@ -7,6 +7,7 @@ parser.add_argument(
     "--share", action="store_true", help="Unsupported: public tunnels are disabled; use authenticated --listen instead."
 )
 parser.add_argument("--auth", type=str, help="UI credentials username/password (or RF_UI_AUTH). Required for LAN access.")
+parser.add_argument("--guest", action="store_true", help="Restricted generation-only server; no existing gallery, settings, chat or owner API.")
 parser.add_argument(
     "--listen",
     type=str,
