@@ -20,7 +20,7 @@ def save_clicked(*args):
             "path_loras",
             "path_wildcards",
         ]:
-            settings.default_settings[key] = settings.default_settings[key].splitlines()
+            settings.default_settings[key] = (val or "").splitlines() if isinstance(val, str) or val is None else val
 
         # Remove empty keys
         if settings.default_settings[key] == None or settings.default_settings[key] == "":

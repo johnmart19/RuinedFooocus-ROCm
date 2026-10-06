@@ -1,6 +1,7 @@
 from pathlib import Path
 import json
 import os
+from modules.config_io import save_json
 try:
     # This can fail during the first run
     import requests
@@ -71,7 +72,7 @@ class PathManager:
         else:
             path = Path(f"settings/{self.subfolder}/paths.json")
         if not path.parent.exists():
-            path.parent.mkdir()
+            path.parent.mkdir(parents=True, exist_ok=True)
         self.settings_path = path
 
     def load_paths(self):
@@ -87,8 +88,7 @@ class PathManager:
             if key in paths and not isinstance(paths[key], list): # Some folders should be lists
                 paths[key] = [paths[key]]
 
-        with self.settings_path.open("w") as f:
-            json.dump(paths, f, indent=2)
+        save_json(self.settings_path, paths)
         return paths
 
     def save_paths(self):
@@ -97,8 +97,7 @@ class PathManager:
 #        for key in newpaths:
 #            if key not in paths:
 #                paths[key] = newpaths[key]
-        with self.settings_path.open("w") as f:
-            json.dump(paths, f, indent=2)
+        save_json(self.settings_path, paths)
         return paths
 
     def get_model_paths(self):
