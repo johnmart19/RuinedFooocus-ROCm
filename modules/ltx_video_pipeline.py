@@ -75,8 +75,12 @@ class pipeline:
 
     def load_base_model(self, name, unet_only=True, hash=None): # LTXV never has the clip and vae models?
         # Check if model is already loaded
-        if self.model_hash == name:
+        components = {key: value for key, value in settings.default_settings.items()
+                      if key.startswith(("clip_", "vae_"))}
+        if (self.model_hash == name and self.model_base is not None
+                and components == getattr(self, "component_settings", None)):
             return
+        self.component_settings = components
 
         self.model_base = None
         self.model_hash = ""
@@ -84,16 +88,10 @@ class pipeline:
         self.model_hash_patched = ""
         self.conditions = None
 
-        default = None
-
-        filename = str(
-            shared.models.get_model_path(
-                "checkpoints",
-                name,
-                hash=hash,
-                default=default,
-            )
-        )
+        filename = shared.models.get_model_path("checkpoints", name, hash=hash)
+        if filename is None:
+            raise FileNotFoundError(f"Could not find video checkpoint: {name}")
+        filename = str(filename)
 
         print(f"Loading LTX video {'unet' if unet_only else 'model'}: {name}")
 
@@ -133,7 +131,7 @@ class pipeline:
                     if all(name.endswith(".safetensors") for name in clip_paths):
                         model_options = {}
                         device = comfy.model_management.get_torch_device()
-                        if device == "cpu":
+                        if device.type == "cpu":
                             model_options["load_device"] = model_options["offload_device"] = torch.device("cpu")
                         clip = comfy.sd.load_clip(ckpt_paths=clip_paths, clip_type=clip_type, model_options=model_options)
                     else:
@@ -157,11 +155,11 @@ class pipeline:
                     else:
                         sd, metadata = comfy.utils.load_torch_file(str(vae_path), return_metadata=True)
                     vae = comfy.sd.VAE(sd=sd, metadata=metadata)
+                    vae.throw_exception_if_invalid()
 
                     clip_vision = None
                 except Exception as e:
-                    unet = None
-                    traceback.print_exc() 
+                    raise RuntimeError(f"Could not load video model {name}: {e}") from e
 
         else:
             try:
@@ -231,7 +229,7 @@ class pipeline:
             )
 
             if filename is None:
-                continue
+                raise FileNotFoundError(f"Could not find video LoRA: {name}")
 
             print(f"Loading LoRAs: {name}")
             try:
@@ -246,9 +244,11 @@ class pipeline:
                     clip_vision=model.clip_vision,
                 )
                 loaded_loras += [(name, weight)]
-            except:
-                pass
+            except Exception as error:
+                raise RuntimeError(f"Could not load video LoRA {name}: {error}") from error
         self.model_base_patched = model
+        if self.model_hash_patched != str(loras):
+            self.conditions = None
         self.model_hash_patched = str(loras)
 
         print(f"LoRAs loaded: {loaded_loras}")
@@ -280,6 +280,8 @@ class pipeline:
         gen_data=None,
         callback=None,
     ):
+        if self.model_base_patched is None:
+            raise RuntimeError("Video model is not loaded. Check its required components.")
         seed = gen_data["seed"] if isinstance(gen_data["seed"], int) else random.randint(1, 2**32)
 
         fps = float(gen_data.get("video_fps", settings.default_settings.get("fps", 30)))

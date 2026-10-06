@@ -34,6 +34,8 @@ def set_timestep_range(conditioning, start, end):
 
 
 def get_previewer(device, latent_format):
+    if latent_format.latent_rgb_factors is None:
+        return None
     previewer = Latent2RGBPreviewer(
         latent_rgb_factors=latent_format.latent_rgb_factors,
         latent_rgb_factors_bias=latent_format.latent_rgb_factors_bias,

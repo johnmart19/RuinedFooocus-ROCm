@@ -4,6 +4,7 @@ from pathlib import Path
 import numpy as np
 import torch
 import folder_paths
+import comfy.utils
 from comfy import model_management
 from comfy_extras.nodes_hunyuan import LatentUpscaleModelLoader
 from comfy_extras.nodes_lt_upsampler import LTXVLatentUpsampler
@@ -44,6 +45,6 @@ def refine(latent, guider, vae, upscaler_path, gen_data, seed):
         torch.tensor([0.909375, 0.725, 0.421875, 0.0]),
         denoise_mask=latent.get("noise_mask"),
         callback=video_callback(guider.model_patcher, gen_data, "Refining video (stage 2/2)"),
-        disable_pbar=False, seed=noise.seed,
+        disable_pbar=not comfy.utils.PROGRESS_BAR_ENABLED, seed=noise.seed,
     )
     return {**latent, "samples": samples.to(model_management.intermediate_device())}

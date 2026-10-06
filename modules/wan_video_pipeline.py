@@ -76,8 +76,12 @@ class pipeline:
 
     def load_base_model(self, name, unet_only=True, hash=None): # Wan_Video never has the clip and vae models?
         # Check if model is already loaded
-        if self.model_hash == name:
+        components = {key: value for key, value in settings.default_settings.items()
+                      if key.startswith(("clip_", "vae_"))}
+        if (self.model_hash == name and self.model_base is not None
+                and components == getattr(self, "component_settings", None)):
             return
+        self.component_settings = components
 
         self.model_base = None
         self.model_hash = ""
@@ -85,16 +89,10 @@ class pipeline:
         self.model_hash_patched = ""
         self.conditions = None
 
-        default = None
-
-        filename = str(
-            shared.models.get_model_path(
-                "checkpoints",
-                name,
-                hash=hash,
-                default=default,
-            )
-        )
+        filename = shared.models.get_model_path("checkpoints", name, hash=hash)
+        if filename is None:
+            raise FileNotFoundError(f"Could not find video checkpoint: {name}")
+        filename = str(filename)
 
         print(f"Loading WAN video {'unet' if unet_only else 'model'}: {name}")
 
@@ -152,6 +150,7 @@ class pipeline:
                     else:
                         sd, metadata = comfy.utils.load_torch_file(str(vae_path), return_metadata=True)
                     vae = comfy.sd.VAE(sd=sd, metadata=metadata)
+                    vae.throw_exception_if_invalid()
 
 
                     clip_vision = None
@@ -172,8 +171,7 @@ class pipeline:
                         else:
                             clip_vision = comfy.clip_vision.load_clipvision_from_sd(sd=sd)
                 except Exception as e:
-                    unet = None
-                    traceback.print_exc() 
+                    raise RuntimeError(f"Could not load video model {name}: {e}") from e
 
         else:
             try:
@@ -238,7 +236,7 @@ class pipeline:
             )
 
             if filename is None:
-                continue
+                raise FileNotFoundError(f"Could not find video LoRA: {name}")
 
             print(f"Loading LoRAs: {name}")
             try:
@@ -253,9 +251,11 @@ class pipeline:
                     clip_vision=model.clip_vision,
                 )
                 loaded_loras += [(name, weight)]
-            except:
-                pass
+            except Exception as error:
+                raise RuntimeError(f"Could not load video LoRA {name}: {error}") from error
         self.model_base_patched = model
+        if self.model_hash_patched != str(loras):
+            self.conditions = None
         self.model_hash_patched = str(loras)
 
         print(f"LoRAs loaded: {loaded_loras}")
@@ -289,6 +289,8 @@ class pipeline:
     ):
         shared.state["preview_total"] = 1
 
+        if self.model_base_patched is None:
+            raise RuntimeError("Video model is not loaded. Check its required components.")
         seed = gen_data["seed"] if isinstance(gen_data["seed"], int) else random.randint(1, 2**32)
 
         if callback is not None:
@@ -367,7 +369,12 @@ class pipeline:
             (-1, f"Generating ...", "html/logo.png")
         )
 
-        noise = comfy.sample.prepare_noise(latent_image["samples"], seed)
+        latent_image = latent_image.copy()
+        latent_image["samples"] = comfy.sample.fix_empty_latent_channels(
+            model_sampling, latent_image["samples"],
+            latent_image.get("downscale_ratio_spacial"), latent_image.get("downscale_ratio_temporal"),
+        )
+        noise = comfy.sample.prepare_noise(latent_image["samples"], seed, latent_image.get("batch_index"))
 
         try:
             sampled = comfy.sample.sample(
@@ -385,6 +392,7 @@ class pipeline:
                 noise_mask = latent_image.get("noise_mask"),
                 seed = seed,
                 callback = callback_function,
+                disable_pbar=not comfy.utils.PROGRESS_BAR_ENABLED,
             )
 
             worker.check_interrupt(gen_data)
@@ -404,6 +412,8 @@ class pipeline:
                 )
 
             latent_image["samples"] = sampled
+            latent_image.pop("downscale_ratio_spacial", None)
+            latent_image.pop("downscale_ratio_temporal", None)
 
             decoded_latent = VAEDecodeTiled().decode(
                 samples=latent_image,

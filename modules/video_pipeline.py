@@ -275,7 +275,7 @@ class pipeline:
                     if all(name.endswith(".safetensors") for name in clip_paths):
                         model_options = {}
                         device = comfy.model_management.get_torch_device()
-                        if device == "cpu":
+                        if device.type == "cpu":
                             model_options["load_device"] = model_options["offload_device"] = torch.device("cpu")
                         clip = comfy.sd.load_clip(ckpt_paths=clip_paths, clip_type=model_info['clip_type'], model_options=model_options)
                     else:
@@ -306,6 +306,7 @@ class pipeline:
                         else:
                             sd, metadata = comfy.utils.load_torch_file(str(vae_path), return_metadata=True)
                     vae = comfy.sd.VAE(sd=sd, metadata=metadata)
+                    vae.throw_exception_if_invalid()
 
 
                     if model_info['audio_vae_name'] in ["pixel_space", None]:
@@ -323,30 +324,13 @@ class pipeline:
                         else:
                             sd, metadata = comfy.utils.load_torch_file(str(audio_vae_path), return_metadata=True)
 
-                        # https://github.com/kijai/ComfyUI-KJNodes/blob/main/nodes/nodes.py#L2453C1-L2476C22
-                        modeltype = model_info.get("unet_type", "")
-                        match modeltype:
-                            case "MiniMaxH3":
-                                try:
-                                    meta = metadata.get("minimax_h3_audio_vae", {})
-                                    if isinstance(meta, str):
-                                        meta = json.loads(meta)
-                                    kwargs = {"minimax_h3_audio_vae": meta.get("kwargs", {})}
-                                except:
-                                    print(f"WARNING: unable to parse metadata: {metadata}")
-                                    kwargs = {}
-                                #audio_vae = VAE(sd=sd, metadata=kwargs)
-                                metadata = {}
-                                audio_vae = VAE(sd=sd, metadata=metadata)
-                            case "LTXVA":
-                                from comfy.ldm.lightricks.vae.audio_vae import AudioVAE
-                                audio_vae = AudioVAE(sd, metadata)
-                            case _:
-                                sd_audio = comfy.utils.state_dict_prefix_replace(
-                                    dict(sd), {"audio_vae.": "autoencoder.", "vocoder.": "vocoder."}, filter_keys=True
-                                )
-                                audio_vae = VAE(sd=sd_audio, metadata=metadata)
-                                audio_vae.throw_exception_if_invalid()
+                        # Match the upstream audio VAE loader; retain file metadata.
+                        if model_info["unet_type"] != "MiniMaxH3":
+                            sd = comfy.utils.state_dict_prefix_replace(
+                                sd, {"audio_vae.": "autoencoder.", "vocoder.": "vocoder."}, filter_keys=True
+                            )
+                        audio_vae = VAE(sd=sd, metadata=metadata)
+                        audio_vae.throw_exception_if_invalid()
 
                     clip_vision = None
                 except Exception as e:
@@ -685,7 +669,10 @@ class pipeline:
 
             latent_image = latent["samples"]
             latent = latent.copy()
-            latent_image = fix_empty_latent_channels(guider.model_patcher, latent_image, latent.get("downscale_ratio_spacial", None))
+            latent_image = fix_empty_latent_channels(
+                guider.model_patcher, latent_image,
+                latent.get("downscale_ratio_spacial"), latent.get("downscale_ratio_temporal"),
+            )
             latent["samples"] = latent_image
 
             noise_mask = None
@@ -703,7 +690,7 @@ class pipeline:
                 sigmas,
                 denoise_mask=noise_mask,
                 callback=callback_function,
-                disable_pbar=False,
+                disable_pbar=not comfy.utils.PROGRESS_BAR_ENABLED,
                 seed=noise.seed,
             )
             samples = samples.to(comfy.model_management.intermediate_device())
@@ -723,6 +710,7 @@ class pipeline:
         # Preserve latent metadata when preparing the sampler output for decoding.
         out = latent.copy()
         out.pop("downscale_ratio_spacial", None)
+        out.pop("downscale_ratio_temporal", None)
         out["samples"] = samples
         denoised_output = out
 
@@ -770,9 +758,7 @@ class pipeline:
                     vae = self.model_base_patched.audio_vae,
                 )[0]
             except Exception as e:
-                print(f"ERROR: {e}")
-                traceback.print_exc()
-                audio = None
+                raise RuntimeError(f"Audio VAE decoding failed: {e}") from e
         else:
             audio = None
 

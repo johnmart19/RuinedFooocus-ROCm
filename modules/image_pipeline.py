@@ -56,10 +56,6 @@ from nodes import (
     VAEEncodeForInpaint,
     DualCLIPLoader,
 )
-from comfy.sampler_helpers import (
-    get_additional_models,
-    prepare_mask,
-)
 
 from comfy_extras.nodes_sd3 import EmptySD3LatentImage
 from comfy_extras.nodes_flux import FluxKontextImageScale, EmptyFlux2LatentImage
@@ -71,7 +67,6 @@ from comfy_extras.nodes_qwen import TextEncodeQwenImageEdit
 from comfy_extras.nodes_mage import TextEncodeMageFlowEdit
 from node_helpers import conditioning_set_values
 
-from comfy.samplers import KSampler
 from comfy.sample import fix_empty_latent_channels
 from comfy_extras.nodes_model_advanced import ModelNoiseScale
 from comfy_extras.nodes_post_processing import ImageScaleToTotalPixels
@@ -339,8 +334,6 @@ class pipeline:
     xl_controlnet_hash = None
 
     model_info = None
-    models = []
-    inference_memory = None
 
     ggml_ops = GGMLOps()
 
@@ -483,7 +476,7 @@ class pipeline:
                     if all(name.endswith(".safetensors") for name in clip_paths):
                         model_options = {}
                         device = comfy.model_management.get_torch_device()
-                        if device == "cpu":
+                        if device.type == "cpu":
                             model_options["load_device"] = model_options["offload_device"] = torch.device("cpu")
                         clip = comfy.sd.load_clip(ckpt_paths=clip_paths, clip_type=model_info['clip_type'], model_options=model_options)
                     else:
@@ -511,6 +504,7 @@ class pipeline:
                         else:
                             sd, metadata = comfy.utils.load_torch_file(str(vae_path), return_metadata=True)
                     vae = comfy.sd.VAE(sd=sd, metadata=metadata)
+                    vae.throw_exception_if_invalid()
 
                     clip_vision = None
                 except Exception as e:
@@ -637,7 +631,7 @@ class pipeline:
             )
 
             if filename is None:
-                continue
+                raise FileNotFoundError(f"Could not find image LoRA: {name}")
             print(f"Loading LoRA: {name}")
             try:
                 lora = comfy.utils.load_torch_file(str(filename), safe_load=True)
@@ -652,10 +646,10 @@ class pipeline:
                 )
                 loaded_loras += [(name, weight)]
             except Exception as e:
-                print(f"Error loading LoRA: {filename} {e}")
-                pass
+                raise RuntimeError(f"Could not load image LoRA {name}: {e}") from e
         self.xl_base_patched = model
         self.xl_base_patched_hash = str(loras)
+        self.conditions = None
 
         print(f"LoRAs loaded: {loaded_loras}")
         return
@@ -720,28 +714,11 @@ class pipeline:
         gen_data=None,
         callback=None,
     ):
-        try:
-            if self.xl_base_patched == None or self.xl_base_patched.unet.model.__class__.__name__ not in self.known_models:
-                print(f"ERROR: Can only use {list(self.known_models)} models")
-                worker.interrupt_ruined_processing = True
-                if callback is not None:
-                    worker.add_result(
-                        gen_data["task_id"],
-                        "preview",
-                        (-1, f"Unknown model ...", "html/error.png")
-                    )
-                return []
-        except Exception as e:
-            # Something went very wrong
-            print(f"ERROR: {e}")
-            worker.interrupt_ruined_processing = True
-            if callback is not None:
-                worker.add_result(
-                    gen_data["task_id"],
-                    "preview",
-                    (-1, f"Error when trying to use model ...", "html/error.png")
-                )
-            return []
+        if self.xl_base_patched is None:
+            raise RuntimeError("Image model is not loaded. Check its required components.")
+        architecture = self.xl_base_patched.unet.model.__class__.__name__
+        if architecture not in self.known_models:
+            raise ValueError(f"Unsupported image architecture: {architecture}")
 
         cfg = gen_data["cfg"]
         sampler_name = gen_data["sampler_name"]
@@ -771,7 +748,6 @@ class pipeline:
         device = comfy.model_management.get_torch_device()
         switched_prompt = []
         img2img_mode = False
-        updated_conditions = False
 
         # Pre-process input-image
         input_images = 0
@@ -824,7 +800,6 @@ class pipeline:
                     print(f"ERROR: Trying to encode with unknown model {self.xl_base_patched.unet.__class__.__name__}. (This should never happen.")
                     raise
 
-            updated_conditions = True
             img2img_mode = True
             input_images -= 1
         else:
@@ -836,10 +811,8 @@ class pipeline:
                 )
             if self.conditions is None:
                 self.conditions = clean_prompt_cond_caches()
-            if self.textencode("+", positive_prompt, clip_skip):
-                updated_conditions = True
-            if self.textencode("-", negative_prompt, clip_skip):
-                updated_conditions = True
+            self.textencode("+", positive_prompt, clip_skip)
+            self.textencode("-", negative_prompt, clip_skip)
 
             if "[" in positive_prompt and "]" in positive_prompt and not positive_prompt.strip().startswith("{"):
                 if controlnet is not None and input_image is not None:
@@ -849,8 +822,7 @@ class pipeline:
                 prompt_per_step = pp.prompt_switch_per_step(positive_prompt, gen_data["steps"])
                 perc_per_step = round(100 / gen_data["steps"], 2)
                 for i in range(len(prompt_per_step)):
-                    if self.textencode("switch", prompt_per_step[i], clip_skip):
-                        updated_conditions = True
+                    self.textencode("switch", prompt_per_step[i], clip_skip)
                     positive_switch = self.conditions["switch"]["cache"]
                     start_perc = round((perc_per_step * i) / 100, 2)
                     end_perc = round((perc_per_step * (i + 1)) / 100, 2)
@@ -861,6 +833,10 @@ class pipeline:
                     )
                     switched_prompt += positive_switch
 
+
+        # Keep cached text conditioning independent of each request's image/mask.
+        positive_conditioning = self.conditions["+"]["cache"]
+        negative_conditioning = self.conditions["-"]["cache"]
 
         # Controlnet / img2img
         if controlnet is None or not "type" in controlnet:
@@ -901,13 +877,10 @@ class pipeline:
                         low_threshold=low,
                         high_threshold=high,
                     )[0]
-                    updated_conditions = True
-                case "depth":
-                    updated_conditions = True
             if self.xl_controlnet:
                 (
-                    self.conditions["+"]["cache"],
-                    self.conditions["-"]["cache"],
+                    positive_conditioning,
+                    negative_conditioning,
                 ) = ControlNetApplyAdvanced().apply_controlnet(
                     positive=self.conditions["+"]["cache"],
                     negative=self.conditions["-"]["cache"],
@@ -918,8 +891,6 @@ class pipeline:
                     end_percent=float(controlnet["stop"]),
                     vae=self.xl_base_patched.vae,
                 )
-                self.conditions["+"]["text"] = None
-                self.conditions["-"]["text"] = None
 
             # NOTE: If we are doing img2img, reuse the previous image ("Loopback").
             #       It is not obvious that this is a good idea.
@@ -978,13 +949,13 @@ class pipeline:
             # This is a _very_ ugly workaround since we had to shrink the inpaint image
             # to not break the ui.
             main_image = Image.open(gen_data["main_view"])
-            image = np.asarray(main_image)
+            image = np.array(main_image)
             image = torch.from_numpy(image)[None,] / 255.0
 
             inpaint_view = Image.fromarray(gen_data["inpaint_view"]["layers"][0])
             red, green, blue, mask = inpaint_view.split()
             mask = mask.resize((main_image.width, main_image.height), Image.Resampling.LANCZOS)
-            mask = np.asarray(mask)
+            mask = np.array(mask)
             mask = torch.from_numpy(mask)[None,] / 255.0
 
             latent = VAEEncodeForInpaint().encode(
@@ -994,20 +965,10 @@ class pipeline:
                 grow_mask_by=20,
             )[0]
 
-        if updated_conditions:
-            conds = {
-                0: self.conditions["+"]["cache"],
-                1: self.conditions["-"]["cache"],
-            }
-            self.models, self.inference_memory = get_additional_models(
-                conds,
-                self.xl_base_patched.unet.model_dtype(),
-            )
-
         # KSampler
 
         # Flux embeds guidance in the conditioning instead of sampler CFG.
-        positive_cond = switched_prompt if switched_prompt else self.conditions["+"]["cache"]
+        positive_cond = switched_prompt if switched_prompt else positive_conditioning
         if isinstance(self.xl_base.unet.model, Flux):
             if controlnet.get("type", "") == "kontext":
                 positive_cond = ReferenceLatent().execute(positive_cond, latent=latent)[0]
@@ -1015,7 +976,10 @@ class pipeline:
             cfg = 1.0
 
         latent_image = latent["samples"]
-        latent_image = fix_empty_latent_channels(self.xl_base_patched.unet, latent_image)
+        latent_image = fix_empty_latent_channels(
+            self.xl_base_patched.unet, latent_image,
+            latent.get("downscale_ratio_spacial"), latent.get("downscale_ratio_temporal"),
+        )
 
         batch_inds = latent["batch_index"] if "batch_index" in latent else None
         noise = comfy.sample.prepare_noise(latent_image, seed, batch_inds)
@@ -1039,42 +1003,12 @@ class pipeline:
                 callback(step, x0, x, total_steps, y)
             pbar.update_absolute(step + 1, total_steps, None)
 
-        if noise_mask is not None:
-            noise_mask = prepare_mask(noise_mask, noise.shape, device)
-
         if callback is not None:
             worker.add_result(
                 gen_data["task_id"],
                 "preview",
                 (-1, f"Prepare models ...", None)
             )
-
-        comfy.model_management.load_models_gpu(self.models)
-
-        noise = noise.to(device)
-        latent_image = latent_image.to(device)
-
-        kwargs = {
-            "cfg": cfg,
-            "latent_image": latent_image,
-            "start_step": 0,
-            "last_step": gen_data["steps"],
-            "force_full_denoise": force_full_denoise,
-            "denoise_mask": noise_mask,
-            "sigmas": None,
-            "disable_pbar": False,
-            "seed": seed,
-            "callback": callback_function,
-        }
-        sampler = KSampler(
-            self.xl_base_patched.unet,
-            steps=gen_data["steps"],
-            device=device,
-            sampler=sampler_name,
-            scheduler=scheduler,
-            denoise=denoise,
-            model_options=self.xl_base_patched.unet.model_options,
-        )
 
         if callback is not None:
             worker.add_result(
@@ -1083,15 +1017,22 @@ class pipeline:
                 (-1, f"Start sampling ...", None)
             )
 
-        samples = sampler.sample(
-            noise,
-            positive_cond,
-            self.conditions["-"]["cache"],
-            **kwargs,
+        samples = comfy.sample.sample(
+            model=self.xl_base_patched.unet, noise=noise,
+            steps=gen_data["steps"], cfg=cfg,
+            sampler_name=sampler_name, scheduler=scheduler,
+            positive=positive_cond, negative=negative_conditioning,
+            latent_image=latent_image, denoise=denoise,
+            start_step=0, last_step=gen_data["steps"],
+            force_full_denoise=force_full_denoise, noise_mask=noise_mask,
+            callback=callback_function,
+            disable_pbar=not comfy.utils.PROGRESS_BAR_ENABLED, seed=seed,
         )
 
         # VAE
         sampled_latent = latent.copy()
+        sampled_latent.pop("downscale_ratio_spacial", None)
+        sampled_latent.pop("downscale_ratio_temporal", None)
         sampled_latent["samples"] = samples
 
         if callback is not None:
