@@ -23,6 +23,8 @@ class NoPipeLine:
 
 def update(gen_data):
     prompt = gen_data["prompt"] if "prompt" in gen_data else ""
+    if "_api_job" in gen_data:
+        prompt = ""  # API image prompts are text, not local search/hashbang commands.
     cn_settings = controlnet.get_settings(gen_data)
     cn_type = cn_settings["type"] if "type" in cn_settings else ""
 

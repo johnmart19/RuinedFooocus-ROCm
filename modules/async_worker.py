@@ -25,6 +25,8 @@ from shared import settings
 buffer = []
 outputs = []
 current_task = 0
+task_lock = threading.Lock()
+api_jobs = {}
 
 interrupt_ruined_processing = False
 
@@ -460,6 +462,11 @@ def worker():
 
     def handler(gen_data):
         match gen_data["task_type"]:
+            case "external_api":
+                try:
+                    gen_data["_api_job"].run(gen_data["task_id"])
+                finally:
+                    api_jobs.pop(gen_data["task_id"], None)
             case "process":
                 process(gen_data)
             case "api_process":
@@ -505,16 +512,19 @@ def worker():
 def add_task(gen_data):
     global current_task, buffer
 
-    current_task += 1
-    task_id = current_task 
-    gen_data["task_id"] = task_id
-    buffer.append(gen_data.copy())
+    with task_lock:
+        current_task += 1
+        task_id = current_task
+        gen_data["task_id"] = task_id
+        if "_api_job" in gen_data:
+            api_jobs[task_id] = gen_data["_api_job"]
+        buffer.append(gen_data.copy())
     return task_id
 
 # Pipelines use this to add results
 def add_result(task_id, flag, product):
     global outputs
-    if task_id is None:
+    if task_id is None or task_id in api_jobs:
         return
     outputs.append([task_id, flag, product])
 

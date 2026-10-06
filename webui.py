@@ -146,6 +146,16 @@ def launch_app(args):
                   "loras", "style_selection", "negative"}
     image_controls = {name: control for name, control in zip(state["ctrls_name"], state["ctrls_obj"])
                       if name in image_keys}
+    if args.api:
+        from modules import api_runtime
+        import copy
+        def api_image_defaults(*values):
+            api_runtime.image_defaults = copy.deepcopy(dict(zip(image_controls, values)))
+        api_image_defaults(*(control.value for control in image_controls.values()))
+        with shared.gradio_root:
+            gr.on(triggers=[control.change for control in image_controls.values()],
+                  fn=api_image_defaults, inputs=list(image_controls.values()), outputs=[],
+                  api_visibility='undocumented', queue=False)
     app_llama_chat = ui_llama_chat.create_chat(image_controls)
     app_settings = ui_settings.create_settings()
 
@@ -1594,8 +1604,14 @@ if isinstance(args.auth, str) and not "/" in args.auth:
             f"\nWARNING! Will not enable --share without proper --auth=username/password\n"
         )
         args.share = False
+if args.api:
+    from modules.openai_api import install, validate_options
+    api_key = validate_options(args)
 launch_app(args)
 add_fastapi()
+if args.api:
+    install(shared.server_app, api_key)
+    print(f"API enabled: {shared.local_url}v1/docs | Image tool: {shared.local_url}tools/openapi.json")
 
 # Wait...
 while True:

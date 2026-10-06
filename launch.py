@@ -237,6 +237,18 @@ def prepare_environment(offline=False):
                 "from modules.llama_installer import server_path, runtime_environment; "
                 "server_path(True); runtime_environment(True, reinstall=True)"], check=True)
 
+    if args.api:
+        print("Check API dependencies")
+        api_requirements = "requirements_api_versions.txt"
+        if REINSTALL_ALL or not requirements_met(api_requirements):
+            if offline:
+                if not requirements_met(api_requirements):
+                    raise RuntimeError("API dependencies are missing. Launch once without --offline to install them.")
+            else:
+                with torch_constraints(installed_torch) as constraints:
+                    run_pip(f'install -r "{api_requirements}"{constraints}', "API dependencies")
+                    if REINSTALL_ALL:
+                        reinstall_requirements(api_requirements, constraints)
 
 def clone_git_repos(offline=False):
     from modules.launch_util import git_clone
