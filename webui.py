@@ -265,10 +265,18 @@ def append_work(gen_data):
 def generate_clicked(*args):
     global status
 
-    yield update_clicked()
     gen_data = {}
     for key, val in zip(state["ctrls_name"], args):
         gen_data[key] = val
+    input_upscale = (gen_data.get("automatic_upscale") != "Off"
+                     and gen_data.get("automatic_upscale_target") == "Input image only")
+    if input_upscale:
+        gen_data["input_image"] = gen_data.get("upscale_upload")
+    def display(updates):
+        if input_upscale:
+            updates.pop(main_view, None)  # Preserve the generated image while using the upload view.
+        return updates
+    yield display(update_clicked())
 
     gen_data["generate_forever"] = int(gen_data["image_number"]) == 0
 
@@ -312,17 +320,17 @@ def generate_clicked(*args):
         except Exception as error:
             from modules.task_errors import describe_error
             gr.Warning(describe_error(error))
-            yield update_results([])
+            yield display(update_results([]))
             break
 
         if flag == "preview":
-            yield update_preview(product)
+            yield display(update_preview(product))
 
         elif flag == "error":
             gr.Warning(f"Generation failed: {product}")
 
         elif flag == "results":
-            yield update_results(product)
+            yield display(update_results(product))
             finished = True
         time.sleep(0.1)
 
@@ -359,6 +367,10 @@ with shared.gradio_root as block:
                 buttons=['download', 'fullscreen'],
             )
             add_ctrl("main_view", main_view)
+            upscale_upload = gr.Image(label=t("Drop Image Here or Click to Upload"), type="pil",
+                height="var(--rf-preview-height)", visible=False, elem_id="upscale-upload",
+                buttons=['download', 'fullscreen'])
+            add_ctrl("upscale_upload", upscale_upload)
             inpaint_view = gr.ImageEditor(
                 height="var(--rf-preview-height)",
                 elem_id="inpaint_view",
@@ -697,20 +709,28 @@ with shared.gradio_root as block:
                         value=default_resolution[1],
                     )
                     add_ctrl("custom_height", custom_height)
-                    from modules.automatic_upscale import choices as upscale_choices, describe_size
+                    from modules.automatic_upscale import choices as upscale_choices, describe_size, PRESETS
                     with gr.Group(visible=initial_model_base not in VIDEO_FPS) as automatic_upscale_controls:
                         automatic_upscale = gr.Dropdown(
-                            label=t("Automatic Upscale"), choices=upscale_choices(), value="Off",
+                            label=t("Automatic Upscale"), choices=list(PRESETS), value="Off",
                             info=t("Choose anime, general or another upscale model. Downloaded on first use."),
                         )
                         add_ctrl("automatic_upscale", automatic_upscale)
-                        automatic_upscale_target = gr.Dropdown(label=t("Upscale source"),
+                        with gr.Group(visible=False) as upscale_options:
+                            advanced_upscalers = gr.Checkbox(label=t("Show advanced upscale models"), value=False,
+                                info=t("Adds specialist models by filename. Start with Anime or General for everyday images."))
+                            automatic_upscale_target = gr.Dropdown(label=t("Upscale source"),
                             choices=["Generated image", "Input image only"], value="Generated image",
-                            info=t("Input image only enlarges the image from PowerUp without generation."))
-                        add_ctrl("automatic_upscale_target", automatic_upscale_target)
-                        upscale_size = gr.Textbox(label=t("Output size"), interactive=False, lines=2, value=describe_size(
+                            info=t("Input image only switches the main preview to an upload area and skips generation."))
+                            add_ctrl("automatic_upscale_target", automatic_upscale_target)
+                            upscale_size = gr.Textbox(label=t("Output size"), interactive=False, lines=2, value=describe_size(
                             "Off", initial_resolution, default_resolution[0], default_resolution[1],
                             resolution_settings.aspect_ratios), elem_id="upscale-output-size")
+                        advanced_upscalers.change(
+                            lambda enabled, current: gr.update(choices=upscale_choices() if enabled else list(PRESETS),
+                                value=current if enabled or current in PRESETS else "Off"),
+                            inputs=[advanced_upscalers, automatic_upscale], outputs=automatic_upscale,
+                            api_visibility='undocumented')
                     ratio_save = gr.Button(
                         value=t("Save"),
                         visible=custom_resolution,
@@ -1265,11 +1285,11 @@ with shared.gradio_root as block:
             inpaint_toggle = ui_controlnet.add_controlnet_tab(
                 main_view, inpaint_view, prompt, image_number, run_event, base_model
             )
-            upscale_input = shared.get_ctrl("input_image")
+            upscale_input = upscale_upload
             def update_upscale_size(scale, target, resolution, width, height, image):
                 if target == "Input image only":
                     if image is None:
-                        return "Choose an input image in PowerUp to see its output size."
+                        return "Drop an image in the main upload area to see its output size."
                     width, height = image.size
                     resolution = "Input image"
                 return describe_size(scale, resolution, width, height, resolution_settings.aspect_ratios)
@@ -1278,6 +1298,18 @@ with shared.gradio_root as block:
             for size_control in upscale_size_inputs:
                 size_control.change(update_upscale_size, inputs=upscale_size_inputs,
                     outputs=[upscale_size], api_visibility='undocumented')
+            def switch_upscale_view(scale, target):
+                enabled = scale != "Off"
+                upload = enabled and target == "Input image only"
+                return [gr.update(visible=enabled),
+                        gr.update(visible=not upload), gr.update(visible=upload),
+                        gr.update(value=t("Upscale") if upload else t("Generate"))]
+            for view_control in (automatic_upscale, automatic_upscale_target):
+                view_control.change(switch_upscale_view, inputs=[automatic_upscale, automatic_upscale_target],
+                    outputs=[upscale_options, main_view, upscale_upload, run_button],
+                    api_visibility='undocumented')
+            automatic_upscale.change(lambda scale: gr.update(value="Generated image") if scale == "Off" else gr.update(),
+                inputs=[automatic_upscale], outputs=[automatic_upscale_target], api_visibility='undocumented')
 
             with gr.Tab(label=t("Info")):
                 with gr.Row():

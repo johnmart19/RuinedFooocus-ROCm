@@ -45,9 +45,13 @@ automatic residency does not force GPU-only loading or CPU VAE decoding.
 Under the image resolution controls, **Automatic Upscale** offers Off (default),
 explicit RealESRGAN general/anime choices, UltraSharp and catalogued/local
 upscalers with a named 2×/3×/4×/8× scale. Output size uses a wrapping field in
-the same control group. Select **Generated image** to upscale after generation,
-or **Input image only** to enlarge the PowerUp image without diffusion sampling;
-the latter estimates dimensions from the uploaded image. Upscale shortcuts have
+the same control group. Additional controls hide when Off. The default list
+contains everyday anime/general models; **Show advanced upscale models** adds
+specialist filenames. Select **Generated image** to upscale after generation,
+or **Input image only** to switch the main preview to an upload area without
+diffusion sampling. The latter estimates dimensions from the uploaded image;
+switching back restores the session's generated preview (or the startup image).
+Input-only progress/results do not overwrite that generated preview. Upscale shortcuts have
 moved out of Cheat Code, while saved legacy presets remain supported. It runs
 ComfyUI's tiled `ImageUpscaleWithModel` after VAE decoding and before saving;
 it does not change the diffusion resolution or run another sampling pass.
