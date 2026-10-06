@@ -1,3 +1,4 @@
+from modules.resource_defaults import resource_name
 from modules.video_preview import video_callback
 from modules.video_output import save_mp4
 import numpy as np
@@ -112,7 +113,7 @@ class pipeline:
                     clip_names = []
 
                     if isinstance(unet.model, HunyuanVideo):
-                        clip_name = settings.default_settings.get("clip_l", "clip_l.safetensors")
+                        clip_name = resource_name("clip_l", settings.default_settings)
                         clip_names.append(str(clip_name))
                         clip_path = path_manager.get_folder_file_path(
                             "clip",
@@ -121,7 +122,7 @@ class pipeline:
                         )
                         clip_paths.append(str(clip_path))
                         # https://huggingface.co/calcuis/hunyuan-gguf/tree/main
-                        clip_name = settings.default_settings.get("clip_llava", "llava_llama3_fp8_scaled.safetensors")
+                        clip_name = resource_name("clip_llava", settings.default_settings)
                         clip_names.append(str(clip_name))
                         clip_path = path_manager.get_folder_file_path(
                             "clip",
@@ -131,7 +132,7 @@ class pipeline:
                         clip_paths.append(str(clip_path))
                         clip_type = comfy.sd.CLIPType.HUNYUAN_VIDEO
                         # https://huggingface.co/calcuis/hunyuan-gguf/tree/main
-                        vae_name = settings.default_settings.get("vae_hunyuan_video", "hunyuan_video_vae_bf16.safetensors")
+                        vae_name = resource_name("vae_hunyuan_video", settings.default_settings)
 
                     else:
                         print(f"ERROR: Not a Hunyuan Video model?")

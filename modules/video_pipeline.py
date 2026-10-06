@@ -100,31 +100,14 @@ class pipeline:
     @staticmethod
     def get_clip_name(shortname):
         # List of short names and default names for different text encoders
-        defaults = {
-            "clip_t5": "t5-v1_1-xxl-encoder-Q3_K_S.gguf",
-            "clip_gemma3_12b": "gemma-3-12b-it-Q4_0.gguf",
-            "clip_gemma4_12b": "gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
-            "clip_ltx23_text_proj": "ltx-2.3_text_projection_bf16.safetensors",
-            "clip_ltx2_dev": "ltx-2-19b-embeddings_connector_dev_bf16.safetensors",
-            "clip_ltx2_distilled": "ltx-2-19b-embeddings_connector_distill_bf16.safetensors",
-            "clip_qwen3vl_32b": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
-        }
-        return settings.default_settings.get(shortname, defaults[shortname] if shortname in defaults else None)
+        from modules.resource_defaults import resource_name
+        return resource_name(shortname, settings.default_settings)
 
     @staticmethod
     def get_vae_name(shortname):
         # List of short names and default names for different VAE's
-        defaults = {
-            "vae_ltxv23_audio": "LTX23_audio_vae_bf16.safetensors",
-            "vae_ltxv2_audio": "LTX2_audio_vae_bf16.safetensors",
-            "vae_ltxv2_video": "LTX2_video_vae_bf16.safetensors",
-            "vae_ltxv23_video": "LTX23_video_vae_bf16.safetensors",
-            "vae_ltxv25_audio": "ltx-2.5-audio-vae-bf16.safetensors",
-            "vae_ltxv25_video": "ltx-2.5-video-vae-bf16.safetensors",
-            "vae_minimax_h3_audio": "minimax_h3_audio_vae_fp32.safetensors",
-            "vae_minimax_h3_video": "minimax_h3_video_vae_fp16.safetensors",
-        }
-        return settings.default_settings.get(shortname, defaults[shortname] if shortname in defaults else None)
+        from modules.resource_defaults import resource_name
+        return resource_name(shortname, settings.default_settings)
 
     known_model_info = {
         "LTXAV": {

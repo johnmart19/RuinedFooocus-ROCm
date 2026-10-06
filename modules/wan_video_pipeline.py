@@ -1,3 +1,4 @@
+from modules.resource_defaults import resource_name
 from modules.video_preview import video_callback
 from modules.video_output import save_mp4
 import numpy as np
@@ -111,15 +112,15 @@ class pipeline:
 
                     if self.wan_version == 'WAN21':
                         # https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged
-                        vae_name = settings.default_settings.get("vae_wan", "wan_2.1_vae.safetensors")
+                        vae_name = resource_name("vae_wan", settings.default_settings)
                     elif self.wan_version == 'WAN22':
-                        vae_name = settings.default_settings.get("vae_wan_22", "wan2.2_vae.safetensors")
+                        vae_name = resource_name("vae_wan_22", settings.default_settings)
                     else:
                         print(f"ERROR: Not a Wan Video model?")
                         unet = None
                         return
 
-                    clip_name = settings.default_settings.get("clip_umt5", "umt5_xxl_fp8_e4m3fn_scaled.safetensors")
+                    clip_name = resource_name("clip_umt5", settings.default_settings)
                     clip_names.append(str(clip_name))
                     clip_path = path_manager.get_folder_file_path(
                         "clip",
@@ -155,7 +156,7 @@ class pipeline:
 
                     clip_vision = None
                     if unet.model.diffusion_model.img_emb is not None:
-                        clip_vision_name = settings.default_settings.get("clip_vision", "clip_vision_h_fp8_e4m3fn.safetensors")
+                        clip_vision_name = resource_name("clip_vision", settings.default_settings)
                         clip_vision_path = path_manager.get_folder_file_path(
                             "clip_vision",
                             clip_vision_name,

@@ -1,3 +1,4 @@
+from modules.resource_defaults import resource_name
 from .util import remove_empty_str
 from comfy.model_patcher import ModelPatcher
 from transformers import AutoTokenizer, AutoModelForCausalLM, set_seed
@@ -133,7 +134,7 @@ class Erniehancer:
         self.clip_paths = []
         self.clip_type = CLIPType.FLUX2
 
-        clip_name = settings.default_settings.get("clip_ernie_enhancer", "ernie-image-prompt-enhancer.safetensors")
+        clip_name = resource_name("clip_ernie_enhancer", settings.default_settings)
         self.clip_names.append(str(clip_name))
         clip_path = path_manager.get_folder_file_path(
             "clip",

@@ -113,48 +113,14 @@ class pipeline:
     @staticmethod
     def get_clip_name(shortname):
         # List of short names and default names for different text encoders
-        defaults = {
-            "clip_aura": "clip_aura.safetensors",
-            "clip_g": "clip_g.safetensors",
-            "clip_gemma": "gemma_2_2b_fp16.safetensors",
-            "clip_gemma2_it": "gemma_2_2b_it_bf16.safetensors",
-            "clip_gemma2_it_elm": "gemma_2_2b_it_elm_fp8_scaled.safetensors",
-            "clip_gemma3": "gemma_3_4b_it_bf16.safetensors",
-            "clip_jina": "jina_clip_v2_bf16.safetensors",
-            "clip_l": "clip_l.safetensors",
-            "clip_llama": "llama_q2.gguf",
-            "clip_ministral3": "ministral-3-3b.safetensors",
-            "clip_mistral3": "mistral_3_small_flux2_fp8.safetensors",
-            "clip_qwen25": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
-            "clip_qwen3_4b": "Qwen3-4B-Q4_K_M.gguf",
-            "clip_qwen3vl_4b": "qwen3vl_4b_bf16.safetensors",
-            "clip_qwen3vl_4b_scaled": "qwen3vl_4b_fp8_scaled.safetensors",
-            "clip_qwen3_8b": "Qwen3-8B-Q8_0.gguf",
-            "clip_qwen3_06b": "qwen_3_06b_base.safetensors",
-            "clip_qwen3vl_8b": "qwen3vl_8b_fp8_scaled.safetensors",
-            "clip_qwen3vl_8b_scaled": "qwen3vl_8b_fp8_scaled.safetensors",
-            "clip_oldt5": "t5xxl_old_fp32-q4_0.gguf",
-            "clip_t5": "t5-v1_1-xxl-encoder-Q3_K_S.gguf",
-        }
-        return settings.default_settings.get(shortname, defaults[shortname] if shortname in defaults else None)
+        from modules.resource_defaults import resource_name
+        return resource_name(shortname, settings.default_settings)
 
     @staticmethod
     def get_vae_name(shortname):
         # List of short names and default names for different VAE's
-        defaults = {
-            "vae_auraflow": "auraflow_vae_fp32.safetensors",
-            "vae_flux": "ae.safetensors",
-            "vae_flux2": "flux2-vae.safetensors",
-            "vae_lumina2": "lumina2_vae_fp32.safetensors",
-            "vae_mage_flow": "mage_flow_vae_bf16.safetensors",
-            "vae_pixart": "pixart_vae_fp16.safetensors",
-            "vae_qwen_image": "qwen_image_vae.safetensors",
-            "vae_sd": "sd15_vae.safetensors",
-            "vae_sd3": "sd3_vae.safetensors",
-            "vae_wan": "wan_2.1_vae.safetensors",
-            "vae_sdxl": "sdxl_vae.safetensors",
-        }
-        return settings.default_settings.get(shortname, defaults[shortname] if shortname in defaults else None)
+        from modules.resource_defaults import resource_name
+        return resource_name(shortname, settings.default_settings)
 
     # Add new model setups here.
     # Simple workflows with "Load models"->"Sample"->"VAE" might work right away.

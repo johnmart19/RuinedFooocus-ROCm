@@ -1,3 +1,4 @@
+from modules.resource_defaults import resource_name
 from modules.video_preview import video_callback
 from modules.video_output import save_mp4
 import numpy as np
@@ -109,7 +110,7 @@ class pipeline:
                     clip_names = []
 
                     if isinstance(unet.model, LTXV):
-                        clip_name = settings.default_settings.get("clip_t5", "t5-v1_1-xxl-encoder-Q3_K_S.gguf")
+                        clip_name = resource_name("clip_t5", settings.default_settings)
                         clip_names.append(str(clip_name))
                         clip_path = path_manager.get_folder_file_path(
                             "clip",
@@ -119,7 +120,7 @@ class pipeline:
                         clip_paths.append(str(clip_path))
                         clip_type = comfy.sd.CLIPType.HUNYUAN_VIDEO
 
-                        vae_name = settings.default_settings.get("vae_ltxv", "LTX-Video-0.9.6-VAE-BF16.safetensors")
+                        vae_name = resource_name("vae_ltxv", settings.default_settings)
 
                     else:
                         print(f"ERROR: Not a LTX Video model?")
