@@ -12,6 +12,15 @@ progress_html = """
 """
 scripts = """
 function generate_shortcut(){
+  // Bare Alt activates the browser menu on Windows and blurs open dropdowns.
+  // Prevent that default action only while a dropdown is open; screenshot
+  // chords and other Alt shortcuts keep propagating normally.
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Alt' && !e.ctrlKey && !e.metaKey &&
+        document.querySelector('[role="combobox"][aria-expanded="true"]')) {
+      e.preventDefault();
+    }
+  }, {capture: true});
   document.addEventListener('keydown', (e) => {
     let handle = 'none';
     if (e.key !== undefined) {
