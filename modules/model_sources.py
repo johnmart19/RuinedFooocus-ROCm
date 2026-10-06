@@ -6,7 +6,6 @@ from urllib.parse import quote, urlparse
 
 import requests
 
-
 _civitai_not_found = {}
 
 
@@ -21,7 +20,7 @@ def huggingface_recommendations(repository, sha256):
             or not isinstance(sha256, str) or not re.fullmatch(r"[a-fA-F0-9]{64}", sha256)):
         return None
 
-    def read(url, limit, as_json=False, params=None):
+    def read(url, limit, as_json=False, params=None, with_url=False):
         with requests.get(url, params=params, timeout=(5, 15), stream=True) as response:
             response.raise_for_status()
             chunks = []
@@ -34,14 +33,20 @@ def huggingface_recommendations(repository, sha256):
             body = b"".join(chunks).decode("utf-8")
             if as_json:
                 import json
-                return json.loads(body)
+                value = json.loads(body)
+                return (value, getattr(response, "url", url)) if with_url else value
             return body
 
     try:
-        info = read(f"https://huggingface.co/api/models/{repository}", 2*1024*1024,
-                    as_json=True, params={"blobs": "true"})
-        if not isinstance(info, dict) or info.get("id") != repository:
+        info, resolved_url = read(f"https://huggingface.co/api/models/{repository}", 2*1024*1024,
+                                 as_json=True, params={"blobs": "true"}, with_url=True)
+        resolved = urlparse(resolved_url)
+        if (not isinstance(info, dict) or not isinstance(info.get("id"), str)
+                or resolved.scheme != "https" or resolved.hostname != "huggingface.co"
+                or resolved.path.lower() != f"/api/models/{info['id']}".lower()
+                or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*", info["id"])):
             return None
+        repository = info["id"]
         siblings = info.get("siblings", [])
         if not isinstance(siblings, list) or not any(
                 isinstance(item, dict) and isinstance(item.get("lfs"), dict)
@@ -55,6 +60,10 @@ def huggingface_recommendations(repository, sha256):
         result = {"description": "", "generationConfig": {},
                   "source": f"Hugging Face {repository} @ {revision[:12]} (repository-wide settings)",
                   "source_url": f"https://huggingface.co/{repository}/blob/{revision}/README.md"}
+        card_data = info.get("cardData")
+        parents = card_data.get("base_model", []) if isinstance(card_data, dict) else []
+        parents = [parents] if isinstance(parents, str) else parents
+        result["source_repositories"] = [name for name in parents if isinstance(name, str)][:3] if isinstance(parents, list) else []
         base = f"https://huggingface.co/{repository}/resolve/{revision}/"
         if "README.md" in names:
             result["description"] = read(base+"README.md", 200000)

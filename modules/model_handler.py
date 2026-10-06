@@ -105,8 +105,8 @@ class Models:
                         self.get_image(model_data, thumbcheck)
                         if not any(cache_file.with_suffix(suffix).is_file() for suffix in suffixes):
                             from modules.model_sources import huggingface_preview
-                            files = model_data.get("files") or [{}]
-                            hash = files[0].get("hashes", {}).get("SHA256") or self.model_sha256(path)
+                            from modules.model_identity import checkpoint_hashes
+                            hash = checkpoint_hashes(model_data).get("SHA256") or self.model_sha256(path)
                             metadata = self.read_safetensors_header(path).get("__metadata__", {})
                             source = (f"https://huggingface.co/{model_data['hf_repo_id']}"
                                       if model_data.get("hf_repo_id") else metadata.get("modelspec.source", ""))
@@ -171,7 +171,8 @@ class Models:
                     else:
                         # If this isn't the inbox, store some info about the "live" model
                         try:
-                            self.model_hash[model_type][model_data["files"][0]["hashes"]["SHA256"]] = str(path)
+                            from modules.model_identity import checkpoint_hashes
+                            self.model_hash[model_type][checkpoint_hashes(model_data)["SHA256"]] = str(path)
                         except:
                             # Some models seem to not have sha256 hashes, just ignore those.
                             pass
@@ -351,11 +352,19 @@ class Models:
             except (OSError, ValueError):
                 pass
 
+        # Record the actual local file hash separately from all release artifacts.
+        # model_sha256 reuses the file-signature cache; never hash on UI selection.
+        if fetch and not self.offline and not data.get("_rf_local_sha256"):
+            local_hash = self.model_sha256(path)
+            if local_hash:
+                data["_rf_local_sha256"] = local_hash
+                save_json(json_path, data)
+
         # Retry incomplete metadata during background refresh, never on UI selection.
         needs_metadata = not (data.get("id") or data.get("hf_repo_id")) or not data.get("images")
         if fetch and not self.offline and needs_metadata and (not local_metadata or data.get("id")):
-            files = data.get("files") or [{}]
-            hash = files[0].get("hashes", {}).get("SHA256")
+            from modules.model_identity import checkpoint_hashes
+            hash = checkpoint_hashes(data).get("SHA256")
             if not hash and not data.get("id"):
                 hash = self.model_sha256(path)
             if hash or data.get("id"):
@@ -376,11 +385,7 @@ class Models:
                     # An existing files entry may lack hashes. setdefault on the
                     # outer key alone loses the computed hash and rehashes on
                     # every background refresh when lookup returns no metadata.
-                    files = data.get("files")
-                    if not isinstance(files, list) or not files or not isinstance(files[0], dict):
-                        files = [{}]
-                        data["files"] = files
-                    files[0].setdefault("hashes", {})["SHA256"] = hash
+                    data["_rf_local_sha256"] = hash
                 data["_rf_file_signature"] = signature
                 save_json(json_path, data)
 

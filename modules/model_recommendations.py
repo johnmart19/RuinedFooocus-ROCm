@@ -13,8 +13,8 @@ from pathlib import Path
 
 from modules.config_io import save_json
 
-
 FIELDS = ("custom_steps", "cfg", "sampler_name", "scheduler", "clip_skip")
+RECOMMENDATION_SCHEMA = 2
 FAMILY_PRESETS = {
     "Anima": "Anima", "SDXL 1.0": "SDXL", "Illustrious": "Illustrious XL",
     "NoobAI": "NoobAI XL", "Pony": "Pony XL",
@@ -58,6 +58,13 @@ def extract(metadata, samplers, schedulers):
         if len(set(matches)) == 1 and key not in values:
             number = float(matches[0])
             values[key] = number
+    # Public cards often publish these settings as literal pipeline arguments.
+    # Read numbers only; never evaluate code or guess between conflicting examples.
+    for key, argument in (("custom_steps", "num_inference_steps"), ("cfg", "guidance_scale")):
+        matches = re.findall(r"(?m)^\s*" + argument + r"\s*=\s*([+-]?\d+(?:\.\d+)?)\s*(?:,|$)", text)
+        numbers = {float(value) for value in matches}
+        if len(numbers) == 1 and key not in values:
+            values[key] = numbers.pop()
     # Only inspect sampling-labelled lines, never a random mention in prose.
     lines = re.findall(r"(?im)^\s*(?:Sampler(?:\s*/\s*Scheduler)?|Scheduler)\s*[:：]\s*([^\n]+)", text)
     candidates = {"sampler_name": set(), "scheduler": set()}
@@ -107,12 +114,10 @@ class ModelRecommendations:
 
     @staticmethod
     def cached_hash(metadata):
-        files = metadata.get("files")
-        if isinstance(files, list) and files and isinstance(files[0], dict):
-            hashes = files[0].get("hashes")
-            value = hashes.get("SHA256") if isinstance(hashes, dict) else None
-            if isinstance(value, str) and re.fullmatch(r"[a-fA-F0-9]{64}", value):
-                return value.lower()
+        from modules.model_identity import checkpoint_hashes
+        value = checkpoint_hashes(metadata).get("SHA256")
+        if isinstance(value, str) and re.fullmatch(r"[a-fA-F0-9]{64}", value):
+            return value.lower()
         return None
 
     def refresh(self, checkpoint, samplers, schedulers, force=False):
@@ -132,7 +137,7 @@ class ModelRecommendations:
         checked = entry.get("checked", 0)
         if not isinstance(checked, (float, int)) or isinstance(checked, bool) or not 0 <= checked <= time.time() + 86400:
             checked = 0
-        if not force and time.time() - checked < ttl:
+        if not force and entry.get("schema") == RECOMMENDATION_SCHEMA and time.time() - checked < ttl:
             return entry.get("status", "Cached recommendation")
         from modules.model_sources import civitai_metadata
         remote = civitai_metadata(f"model-versions/{version}") if has_version else None
@@ -155,10 +160,32 @@ class ModelRecommendations:
                     if general:
                         recommended = general
                         source = "Civitai creator model card (shared across versions)"
+        if sha256 and not repository and not recommended:
+            from modules.model_sources import huggingface_preview
+            discovery = huggingface_preview(checkpoint, sha256)
+            if isinstance(discovery, dict):
+                repository = discovery.get("hf_repo_id")
         if repository and sha256 and not recommended:
             from modules.model_sources import huggingface_recommendations
             hf = huggingface_recommendations(repository, sha256)
             if isinstance(hf, dict):
+                # Repackaged weights may link to the original creator's card.
+                # Follow a bounded set of HF repositories only when each contains
+                # exactly the same weights; never trust a link as model identity.
+                if not extract(hf, samplers, schedulers):
+                    linked = re.findall(r"https://huggingface\.co/([A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*)",
+                                        str(hf.get("description") or "")[:200000])
+                    parents = hf.get("source_repositories", [])
+                    if isinstance(parents, list):
+                        linked = [name for name in parents if isinstance(name, str)] + linked
+                    candidates = [name.rstrip(".") for name in dict.fromkeys(linked)
+                                  if name != repository and name.split("/")[0] not in
+                                  ("docs", "spaces", "datasets", "blog", "collections")][:3]
+                    for candidate in candidates:
+                        creator = huggingface_recommendations(candidate, sha256)
+                        if isinstance(creator, dict) and extract(creator, samplers, schedulers):
+                            hf = creator
+                            break
                 remote = hf
                 recommended = extract(hf, samplers, schedulers)
                 source, source_url = hf.get("source"), hf.get("source_url")
@@ -167,7 +194,7 @@ class ModelRecommendations:
         with self.lock:
             data = self.load()
             entry = data.setdefault(key, data.pop(f"{checkpoint}:local", {}))
-            entry.update(checked=time.time(), status=status)
+            entry.update(checked=time.time(), status=status, schema=RECOMMENDATION_SCHEMA)
             if matched:
                 entry.update(recommended=recommended, source=source, source_url=source_url)
             save_json(self.path, data)

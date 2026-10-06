@@ -80,7 +80,8 @@ def _get_model_hashes(cache_path, not_found=None):
             data = {}
         if "files" not in data:
             data = {"files": [{"hashes": {}}]}
-        hashes.update(data['files'][0]['hashes'])
+        from modules.model_identity import checkpoint_hashes
+        hashes.update(checkpoint_hashes(data))
         return hashes
     else:
         if not_found:
