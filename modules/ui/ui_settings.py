@@ -374,6 +374,12 @@ def create_settings():
                     theme = gr.Textbox(label=t("Theme"), interactive=True, info="Leave blank for the built-in theme; otherwise enter a Gradio theme ID. Restart required.", value=settings.default_settings.get("theme", None))
                     add_setting("theme", theme)
 
+                    with gr.Accordion(t("Reinstall"), open=False):
+                        gr.Markdown("Reinstallation runs on the next online restart.")
+                        with gr.Row():
+                            reinstall_all_btn = gr.Button(t("Reinstall Python packages"), size="sm")
+                            reinstall_torch_btn = gr.Button(t("Reinstall Torch"), size="sm")
+
             with gr.Column():
                 gr.Markdown("### Model components")
                 gr.Markdown("Automatic uses the filename shown and downloads missing catalog files when needed. "
@@ -451,10 +457,6 @@ def create_settings():
         def trigger_reinstall_torch():
             Path('reinstalltorch').touch()
             gr.Info("Torch will be reinstalled for the selected GPU runtime on the next online restart. Overrides freezetorch.")
-
-        with gr.Group(), gr.Row():
-            reinstall_all_btn = gr.Button(t("Trigger reinstall of all python modules"))
-            reinstall_torch_btn = gr.Button(t("Trigger reinstall of torch"))
 
         reinstall_all_btn.click(
             fn=trigger_reinstall_all,
