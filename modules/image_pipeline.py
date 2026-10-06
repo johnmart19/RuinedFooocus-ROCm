@@ -131,7 +131,7 @@ class pipeline:
             "clip_qwen3vl_4b_scaled": "qwen3vl_4b_fp8_scaled.safetensors",
             "clip_qwen3_8b": "Qwen3-8B-Q8_0.gguf",
             "clip_qwen3_06b": "qwen_3_06b_base.safetensors",
-            "clip_qwen3vl_8b": "Qwen3-VL-8B-Instruct-Q5_K_M.gguf",
+            "clip_qwen3vl_8b": "qwen3vl_8b_fp8_scaled.safetensors",
             "clip_qwen3vl_8b_scaled": "qwen3vl_8b_fp8_scaled.safetensors",
             "clip_oldt5": "t5xxl_old_fp32-q4_0.gguf",
             "clip_t5": "t5-v1_1-xxl-encoder-Q3_K_S.gguf",
