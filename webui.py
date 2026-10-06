@@ -144,7 +144,12 @@ def launch_app(args):
 
     # Create the image gallery from the new module
     app_image_browser = ui_image_gallery.create_image_gallery()
-    app_llama_chat = ui_llama_chat.create_chat()
+    image_keys = {"base_model_name", "performance_selection", "custom_steps", "cfg", "sampler_name",
+                  "scheduler", "clip_skip", "aspect_ratios_selection", "custom_width", "custom_height",
+                  "loras", "style_selection", "negative"}
+    image_controls = {name: control for name, control in zip(state["ctrls_name"], state["ctrls_obj"])
+                      if name in image_keys}
+    app_llama_chat = ui_llama_chat.create_chat(image_controls)
     app_settings = ui_settings.create_settings()
 
     main_tabs = gr.TabbedInterface(

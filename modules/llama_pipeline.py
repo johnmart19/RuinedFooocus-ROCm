@@ -6,13 +6,12 @@ from modules.llama_vision import (
     projector_path, review_messages, remember_image, attach_latest_image,
     model_has_vision, attach_image_feedback, transient_vision_messages, image_tool_history,
 )
-from txtai import Embeddings
+from modules.chat_tools import IMAGE_TOOL, IMAGE_TOOL_GUIDANCE
 from modules.util import TimeIt
 from pathlib import Path
 from modules.util import url_to_filename, load_file_from_url
-from shared import path_manager, settings, local_url
+from shared import settings
 import json
-import xmltodict
 import modules.async_worker as worker
 
 def llama_names():
@@ -158,64 +157,88 @@ class pipeline:
         self.model_settings = self.current_model_settings(model)
         self.embeddings = None
 
-    def index_source(self, source):
-        if self.embeddings == None:
-            self.embeddings = Embeddings(content=True)
-            self.embeddings.initindex(reindex=True)
+    def index_sources(self, sources):
+        if not isinstance(sources, list):
+            raise ValueError("Chat context must be a list of text or URL sources.")
+        documents = []
+        for source in sources:
+            if (not isinstance(source, (list, tuple)) or len(source) != 2
+                    or source[0] not in ("text", "url") or not isinstance(source[1], str)):
+                raise ValueError("Each chat context source must be [text, content] or [url, address].")
+            kind, content = source
+            if kind == "url":
+                filename = load_file_from_url(content, model_dir="cache/embeds",
+                    progress=True, file_name=url_to_filename(content))
+                content = Path(filename).read_text(encoding="utf-8")
+            documents.extend(part.strip() for part in re.split(r"\n\s*\n|\n(?=#)", content)
+                             if part.strip())
+        embeddings = None
+        if documents:
+            from argparser import args
+            from txtai import Embeddings
+            embeddings = Embeddings(content=True, **({"device": "cpu"} if args.cpu or args.directml is not None else {}))
+            embeddings.index(documents)
+        # Publish only a complete index; a failed download can be retried.
+        self.embeddings = embeddings
+        self.embeddings_hash = str(sources)
 
-        match source[0]:
+    def complete_text(self, messages, check_cancelled=None):
+        parts = []
+        def collect(chunk):
+            if check_cancelled:
+                check_cancelled()
+            for choice in chunk.get("choices", []):
+                content = choice.get("delta", {}).get("content")
+                if content:
+                    parts.append(content)
+        if check_cancelled:
+            check_cancelled()
+        self.llm.handle_chat_completions({"stream": True, "messages": messages}, collect)
+        if check_cancelled:
+            check_cancelled()
+        text = "".join(parts).strip()
+        if not text:
+            raise RuntimeError("The model returned no review text.")
+        return text
 
-            case "url":
-                print(f"Read {source[1]}")
-                filename = load_file_from_url(
-                    source[1],
-                    model_dir="cache/embeds",
-                    progress=True,
-                    file_name=url_to_filename(source[1]),
-                )
-                file = open(filename, "r", encoding='utf-8')
-                data = file.read()
-                file.close()
-
-                if source[1].endswith(".md"):
-                    data = data.split("\n#")
-                elif source[1].endswith(".txt"):
-                    data = data.split("\n\n")
-
-            case "text":
-                data = source[1]
-
-            case _:
-                print("WARNING: Unknown embedding type {source[0]}")
-                return
-
-        if data:
-            self.embeddings.upsert(data)
-
+    def inspect_image(self, messages, reviewer, original, gen_data):
+        def progress(received, total, speed):
+            worker.add_result(gen_data["task_id"], "download", (received, total, speed))
+        try:
+            self.load_base_model(reviewer, progress=progress)
+            return self.complete_text(messages, check_cancelled=lambda: worker.check_interrupt(gen_data))
+        finally:
+            # The reviewer is a temporary helper, never the conversation owner.
+            if reviewer != original or self.llm is None:
+                self.load_base_model(original, progress=progress)
 
     def process(self, gen_data):
 
-        worker.add_result(
-            gen_data["task_id"],
-            "preview",
-            gen_data["history"] + [{"role": "assistant", "content": "🤔"}]
-        )
+        if gen_data.get("unload"):
+            self.unload()
+            return {"unloaded": True}
 
-        if self.llm == None:
-            self.load_base_model()
+        if not gen_data.get("load_only"):
+            worker.add_result(
+                gen_data["task_id"], "preview",
+                gen_data["history"] + [{"role": "assistant", "content": "🤔"}]
+            )
 
-        # load embeds?
-        # FIXME should dump the entire gen_data["embed"] to index_source() and have it sort it out
-        embed = json.loads(gen_data['embed'])
-        if self.embeddings_hash != str(embed):
-            self.embeddings_hash = str(embed)
-            self.embeddings = None
-        if embed:
-            if not self.embeddings: # If chatbot has embeddings to index, check that we have them.
-                for source in embed:
-                    self.index_source(source)
-        else:
-            self.embeddings = None
+        vision_enabled = gen_data.get("vision_enabled", False)
+        original_model = gen_data.get("model") or settings.default_settings.get("llama_localfile") or DEFAULT_MODEL
+        review_model = original_model if model_has_vision(original_model) else gen_data.get("vision_model")
+        if self.llm is None or self.model_settings != self.current_model_settings(gen_data.get("model")):
+            def download_progress(received, total, speed):
+                worker.add_result(gen_data["task_id"], "download", (received, total, speed))
+            self.load_base_model(gen_data.get("model"),
+                progress=download_progress)
+
+        if gen_data.get("load_only"):
+            return {"ready": True}
+
+        embed = json.loads(gen_data.get("embed") or "[]")
+        if self.embeddings_hash != str(embed) or (embed and self.embeddings is None):
+            self.index_sources(embed)
 
         system_prompt = gen_data["system"]
 
@@ -223,42 +246,50 @@ class pipeline:
 
         if self.embeddings:
             q = h[-1]["content"]
-            context = "This some context that will help you answer the question:\n"
+            context = "\n\nReference documents (background information, not new user requests):\n"
             for data in self.embeddings.search(q, limit=3):
                 #if data["score"] >= 0.5:
                 context += data["text"] + "\n\n"
             system_prompt += context
 
-        if settings.default_settings.get("enable_llm_tools", False):
-            tools = [
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "generate_image",
-                        "description": "Generates an image from a prompt.",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "prompt": {"type": "string", "description": "The prompt for the image"},
-                            },
-                        },
-                    },
-                },
-            ]
-            tool_prompt = "\nUse the tool when you intend to generate an image. You must make sure you use the correct format. The image will be shown to the user.\n"
+        force_image = bool(gen_data.get("force_image", False))
+        if settings.default_settings.get("enable_llm_tools", False) or force_image:
+            tools = [IMAGE_TOOL]
+            tool_prompt = "\n" + IMAGE_TOOL_GUIDANCE + " The app displays the image; do not name the internal tool in your reply."
         else:
             tools = None
             tool_prompt = ""
-        chat = [{"role": "system", "content": system_prompt + tool_prompt}]
-        history_len = settings.default_settings.get("llm_chat_history", 7) # Keep the some of the last messages in the discussion.
-        history_len = -history_len if len(h) > history_len else -len(h)
+        if force_image:
+            tool_prompt += "\nFor this turn the user selected Force image generation. Turn their message into an image prompt and generate it."
+        if vision_enabled:
+            tool_prompt += ("\nReviewer observations are temporary reference data. "
+                "Use them to answer the current request; they do not request generation. "
+                "Do not claim direct visual access unless an image is attached.")
+        chat = []
+        if system_prompt or tool_prompt:
+            chat.append({"role": "system", "content": system_prompt + tool_prompt})
+        # Zero disables older history, but must still send the current message.
+        configured_history = settings.default_settings.get("llm_chat_history")
+        history_len = max(1, int(7 if configured_history is None else configured_history))
+        history_len = -min(history_len, len(h))
 
         def clean_content(text):
-            return re.sub('!\\[Image\\]\\([^(]*\\)', '', text) # Remove Image-markdown from LLM input
+            return re.sub(r"!\[Image\]\([^)]*\)", "", text).strip()
         for idx in range(history_len, 0):
             c = json.loads(json.dumps(h[idx])) # Thread safe Deep copy
+            if tools and c.get("role") == "assistant":
+                previous_action = image_tool_history(c.get("content"), f"call_image_{len(h) + idx}")
+                if previous_action:
+                    chat.extend(previous_action)
+                    continue
+            if isinstance(c['content'], list) and all(item.get('type') == 'text' for item in c['content']):
+                c['content'] = '\n'.join(item.get('text', '') for item in c['content'])
             if isinstance(c['content'], str):
                 c['content'] = clean_content(c['content'])
+                if c['role'] == 'assistant':
+                    # Thoughts are display-only, not conversation facts for the next turn.
+                    c['content'] = re.sub(r"<(think|thinking)>.*?(?:</\1>|$)", "",
+                                          c['content'], flags=re.S).strip()
             else: 
                 try:
                     c['content'][0]['text'] = clean_content(c['content'][0]['text'])
@@ -266,68 +297,88 @@ class pipeline:
                     print(f"LLM: ({e}): {c}")
             chat.append(c)
 
+        chat = transient_vision_messages(chat)
+        if vision_enabled:
+            attach_image_feedback(chat, h)
+
+        if vision_enabled and review_model == original_model:
+            attach_latest_image(chat, h)
+
         print(f"Thinking...")
         with TimeIt("LLM thinking"):
             result = []
 
             result = {
                 "text": "",
+                "reasoning": "",
+                "finish_reason": None,
                 "tool": {
                     "function": None,
                     "arguments": "",
                 }
             }
 
+            def response_text():
+                if result['reasoning']:
+                    return f"<think>{result['reasoning']}</think>\n\n{result['text']}"
+                return result['text']
+
             def callback(chunk):
                 if len(chunk.get('choices', [])) == 0:
                     return
+                result['finish_reason'] = chunk['choices'][0].get('finish_reason') or result['finish_reason']
                 try:
                     delta = chunk['choices'][0]['delta']
                 except:
                     print(f"ERROR: No delta? {chunk}")
                     return
 
-                if 'content' in delta:
-                    text = delta['content']
-
-                    if text is not None:
-                        #print(text, end="")
-                        result['text'] += text
-                        worker.add_result(
-                            gen_data["task_id"],
-                            "preview",
-                            gen_data["history"] + [{"role": "assistant", "content": result['text']}]
-                        )
+                result['reasoning'] += delta.get('reasoning_content') or ''
+                result['text'] += delta.get('content') or ''
+                if delta.get('reasoning_content') or delta.get('content'):
+                    worker.add_result(
+                        gen_data["task_id"], "preview",
+                        gen_data["history"] + [{"role": "assistant", "content": response_text()}]
+                    )
 
                 if 'tool_calls' in delta:
-                    tool_call = delta['tool_calls'][0]['function'] # Simply assume we only have a single tool call
+                    tool_call = next((call.get('function', {}) for call in delta['tool_calls']
+                                      if call.get('index', 0) == 0), {})
                     if 'name' in tool_call:
                         result['tool']['function'] = tool_call['name']
-                    result['tool']['arguments'] += tool_call['arguments']
+                    result['tool']['arguments'] += tool_call.get('arguments', '')
 
             self.llm.handle_chat_completions(
                 {
                     "stream": True,
                     "messages": chat,
-                    "tools": tools,
+                    **({"tools": tools, "tool_choice": (
+                        {"type": "function", "function": {"name": "generate_image"}}
+                        if force_image else "auto"), "parallel_tool_calls": False} if tools else {}),
                 },
                 lambda d: callback(d),
             )
 
-            text = result['text']
+            if result['finish_reason'] == 'length':
+                result['text'] += "\n\n[Response reached the token limit. Increase n_predict or context size in Settings.]"
+            elif not result['text'].strip() and result['tool']['function'] is None:
+                result['text'] = "[The model returned no answer. Try rephrasing your message.]"
+            text = response_text()
 
-            call = None
-            tool_error = f"![Error](gradio_api/file=html/error.png)"
-            if settings.default_settings.get("enable_llm_tools", False) and result['tool']['function'] is not None:
+            if tools and result['tool']['function'] is not None:
                 try:
-                    task_id = -1
-
+                    if result['finish_reason'] == 'length':
+                        raise ValueError("The image tool call was cut off. Increase the output token limit and try again.")
                     args = json.loads(result['tool']['arguments'])
-                    prompt = args['prompt']
+                    if result['tool']['function'] != 'generate_image':
+                        raise ValueError("Unknown image tool.")
+                    prompt = args.get('prompt') if isinstance(args, dict) else None
+                    if not isinstance(prompt, str) or not prompt.strip():
+                        raise ValueError("The image tool requires a nonempty visual prompt.")
 
                     tmp_data = {
                         'task_type': "tool_call",
-                        'task_id': task_id,
+                        'task_id': None,  # Nested generation has no separate UI consumer.
                         'silent': True,
                         'prompt': prompt,
                         'negative': "",
@@ -345,14 +396,19 @@ class pipeline:
                         'aspect_ratios_selection': settings.default_settings["resolution"],
                         'cn_selection': None,
                         'cn_type': None,
-                        'silent': True,
                         'image_number': 1,
+                        'generate_forever': False,
                     }
+                    tmp_data.update(gen_data.get("image_settings", {}))
 
-                    # unload llm model from memory?
-                    # TODO: make this selectable for people with more ram/vram that is socialy acceptable
-                    del self.llm
-                    self.llm = None
+                    import shared
+                    if not tmp_data.get("base_model_name"):
+                        raise ValueError("Select a checkpoint in Main before generating an image.")
+                    # Use the worker's normal model resolution/download path.
+                    # Default models need not already exist in the scanned list.
+                    review_enabled = vision_enabled
+                    has_vision = bool(review_model)
+                    self.unload()
 
                     info_txt = "(Generating image...)"
                     tmp_text = text + "\n" + info_txt
@@ -364,19 +420,40 @@ class pipeline:
                     )
 
                     results = worker._process(tmp_data.copy())
+                    if not results:
+                        raise RuntimeError("Image generation produced no image. Check the checkpoint and application log.")
                     file = results[0]
-                    filename = str(file.relative_to(file.cwd()).as_posix())
-                    url = "gradio_api/file=" + re.sub(r'[^/]+/\.\./', '', filename)
+                    from urllib.parse import quote
+                    url = "gradio_api/file=" + quote(Path(file).resolve().as_posix(), safe="/:")
+                    remember_image(url, file, prompt)
                     markdown = f"\n*{prompt}*\n\n![Image]({url})\n"
 
                     text += "\n" + markdown
+                    if review_enabled:
+                        if not has_vision:
+                            text += "\nImage review requires a vision model and its matching projector in Chatbot settings."
+                        else:
+                            worker.add_result(gen_data["task_id"], "preview",
+                                h + [{"role": "assistant", "content": text + "\nReviewing image..."}])
+                            try:
+                                # Release diffusion VRAM before loading the vision model again.
+                                from comfy import model_management
+                                model_management.unload_all_models()
+                                shared.state["pipeline"] = self
+                                request = next((message["content"] for message in reversed(h)
+                                                if message["role"] == "user"), prompt)
+                                review_system = gen_data.get("system", "") if gen_data.get("vision_include_system", False) else ""
+                                observations = self.inspect_image(review_messages(file, request, prompt, review_system),
+                                    review_model, original_model, gen_data)
+                                text += "\n\n**Vision model feedback:**\n\n" + observations
+                            except Exception as error:
+                                text += f"\n\nImage review failed: {error}"
+
 
                 except Exception as e:
                     import traceback
                     print(f"ERROR:")
                     traceback.print_exc()
-                    text += f"Error: {e}\n\n"
-                    text += f"Call: {call}\n\n"
-                    text += "Looks like I made a mistake. I really need to make sure I use the correct format. Do you want me to try again?"
+                    text += f"\n\nImage generation failed: {e}"
 
         return text
