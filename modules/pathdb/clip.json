@@ -1,4 +1,24 @@
 {
+    "clip/minimax_recovered_8b/minimax_h3_recovered_8b_manifest.json": {
+        "url": "https://huggingface.co/SearchingMan/MiniMax-H3-Text-Encoders/resolve/cf43b8ca36dc3a98f88f50ceafa40913f1e87c1e/text_encoders/recovered_8b/minimax_h3_recovered_8b_manifest.json",
+        "path": "path_clip",
+        "filename": "minimax_recovered_8b/minimax_h3_recovered_8b_manifest.json"
+    },
+    "clip/minimax_recovered_8b/ara.safetensors": {
+        "url": "https://huggingface.co/SearchingMan/MiniMax-H3-Text-Encoders/resolve/cf43b8ca36dc3a98f88f50ceafa40913f1e87c1e/text_encoders/recovered_8b/ara.safetensors",
+        "path": "path_clip",
+        "filename": "minimax_recovered_8b/ara.safetensors"
+    },
+    "clip/minimax_recovered_8b/conditioning_adapter.safetensors": {
+        "url": "https://huggingface.co/SearchingMan/MiniMax-H3-Text-Encoders/resolve/cf43b8ca36dc3a98f88f50ceafa40913f1e87c1e/text_encoders/recovered_8b/conditioning_adapter.safetensors",
+        "path": "path_clip",
+        "filename": "minimax_recovered_8b/conditioning_adapter.safetensors"
+    },
+    "clip/minimax_recovered_8b/qwen3vl_8b_minimax_h3_recovered_int8_convrot.safetensors": {
+        "url": "https://huggingface.co/SearchingMan/MiniMax-H3-Text-Encoders/resolve/cf43b8ca36dc3a98f88f50ceafa40913f1e87c1e/text_encoders/recovered_8b/qwen3vl_8b_minimax_h3_recovered_int8_convrot.safetensors",
+        "path": "path_clip",
+        "filename": "minimax_recovered_8b/qwen3vl_8b_minimax_h3_recovered_int8_convrot.safetensors"
+    },
     "clip/clip_aura.safetensors": {
         "url": "https://huggingface.co/fal/AuraFlow-v0.3/resolve/main/text_encoder/model.fp16.safetensors",
         "path": "path_clip",

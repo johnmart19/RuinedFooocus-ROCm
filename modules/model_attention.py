@@ -3,6 +3,31 @@
 import platform
 
 
+def configure_minimax_workspace(patcher, quantized=False):
+    """Keep workspace for H3's long sequences on 24GB Windows ROCm GPUs."""
+    # The measured margin addressed the large safetensors model. Applying it
+    # to smaller GGUFs would force unnecessary offloading before measurement.
+    if quantized:
+        return False
+    import torch
+    from comfy import model_management
+    from comfy.cli_args import args
+    model = patcher.model
+    if model.__class__.__name__ != "MiniMaxH3" or getattr(model, "_rf_workspace_reserved", False):
+        return False
+    if platform.system() != "Windows" or not torch.version.hip or args.cpu:
+        return False
+    device = model_management.get_torch_device()
+    capacity = model_management.get_total_memory(device)
+    if not 20 * 1024**3 <= capacity <= 26 * 1024**3:
+        return False
+    native_memory = model.memory_required
+    model.memory_required = lambda *a, **kw: native_memory(*a, **kw) + 6 * 1024**3
+    model._rf_workspace_reserved = True
+    print("MiniMax H3: reserving 6 GiB of additional GPU workspace.")
+    return True
+
+
 def configure_qwen_attention(patcher):
     import torch
     from comfy import model_management

@@ -1,4 +1,19 @@
 {
+    "checkpoints/MiniMaxH3/minimax_h3_fl2va_pruned_fp8_scaled.safetensors": {
+        "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/diffusion_models/minimax_h3_fl2va_pruned_fp8_scaled.safetensors",
+        "path": "path_checkpoints",
+        "filename": "MiniMaxH3/minimax_h3_fl2va_pruned_fp8_scaled.safetensors"
+    },
+    "checkpoints/MiniMaxH3/minimax_h3_fl2va_pruned_int8_convrot.safetensors": {
+        "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+        "path": "path_checkpoints",
+        "filename": "MiniMaxH3/minimax_h3_fl2va_pruned_int8_convrot.safetensors"
+    },
+    "checkpoints/MiniMaxH3/minimax_h3_fl2va_pruned_fp8_U16G.gguf": {
+        "url": "https://huggingface.co/molbal/MiniMax-H3-GGUF/resolve/b45874371c61c49bf04096602f5527aac71b360b/minimax_h3_fl2va_pruned_fp8_U16G.gguf",
+        "path": "path_checkpoints",
+        "filename": "MiniMaxH3/minimax_h3_fl2va_pruned_fp8_U16G.gguf"
+    },
     "checkpoints/sd_xl_base_1.0_0.9vae.safetensors": {
         "url": "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/sd_xl_base_1.0_0.9vae.safetensors",
 	"path": "path_checkpoints",

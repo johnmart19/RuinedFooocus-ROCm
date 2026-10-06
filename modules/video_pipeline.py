@@ -107,7 +107,7 @@ class pipeline:
             "clip_ltx23_text_proj": "ltx-2.3_text_projection_bf16.safetensors",
             "clip_ltx2_dev": "ltx-2-19b-embeddings_connector_dev_bf16.safetensors",
             "clip_ltx2_distilled": "ltx-2-19b-embeddings_connector_distill_bf16.safetensors",
-            "clip_qwen3vl_32b": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+            "clip_qwen3vl_32b": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
         }
         return settings.default_settings.get(shortname, defaults[shortname] if shortname in defaults else None)
 
@@ -228,6 +228,11 @@ class pipeline:
         unet = None
 
         filename = str(filename)
+        # H3 uses separate encoders/VAEs. Detect its tensor architecture before
+        # a checkpoint-loader trial can retain an unnecessary second model.
+        if not unet_only and input_unet is None and Path(filename).suffix.lower() == ".safetensors":
+            if shared.models.detect_checkpoint_base(Path(filename)) == "MiniMaxH3":
+                unet_only = True
         if Path(filename).suffix.lower() == ".gguf" or unet_only:
             with torch.torch.inference_mode():
                 try:
@@ -235,8 +240,7 @@ class pipeline:
                         unet = load_gguf_model(filename)
                     elif input_unet is not None:
                         if isinstance(input_unet, ModelPatcher):
-                            unet = GGUFModelPatcher.clone(input_unet)
-                            unet.patch_on_device = True
+                            unet = input_unet
                         else:
                             unet = comfy.sd.load_diffusion_model_state_dict(
                                 input_unet, model_options={"custom_operations": self.ggml_ops}
@@ -260,7 +264,10 @@ class pipeline:
 
                     # Load everything...
                     clip_paths = []
-                    for clip_name in model_info['clip_names']:
+                    from modules.minimax_encoder import use_recovered_encoder, load_recovered_encoder
+                    recovered_encoder = (model_info['unet_type'] == "MiniMaxH3" and
+                                         use_recovered_encoder(settings.default_settings))
+                    for clip_name in ([] if recovered_encoder else model_info['clip_names']):
                         clip_paths.append(
                             str(
                                 path_manager.get_folder_file_path(
@@ -272,7 +279,10 @@ class pipeline:
                         )
 
                     print(f"Loading CLIP: {model_info['clip_names']}")
-                    if all(name.endswith(".safetensors") for name in clip_paths):
+                    if recovered_encoder:
+                        print("MiniMax H3: loading recovered 8B INT8 encoder with ARA and conditioning adapter.")
+                        clip = load_recovered_encoder(path_manager)
+                    elif all(name.endswith(".safetensors") for name in clip_paths):
                         model_options = {}
                         device = comfy.model_management.get_torch_device()
                         if device.type == "cpu":
@@ -344,7 +354,7 @@ class pipeline:
                     unet, clip, vae, clip_vision = load_checkpoint_guess_config(filename)
 
                 if clip is None or vae is None:
-                    return self.load_base_model(filename, unet_only=True)
+                    return self.load_base_model(filename, unet_only=True, input_unet=unet, hash=hash)
             except:
                 print(f"Trying to load as unet.")
                 self.load_base_model(
@@ -365,6 +375,8 @@ class pipeline:
             self.model_base_patched = None
             self.model_patched_hash = None
         else:
+            from modules.model_attention import configure_minimax_workspace
+            configure_minimax_workspace(unet, quantized=Path(filename).suffix.lower() == ".gguf")
             self.model_base = self.StableDiffusionModel(
                 unet=unet, clip=clip, vae=vae, audio_vae=audio_vae
             )
@@ -578,6 +590,18 @@ class pipeline:
                     frame_rate = gen_data["frame_rate"],
                 )
             case "MiniMaxH3":
+                from modules.minimax_encoder import use_recovered_encoder, load_recovered_encoder
+                recovered = use_recovered_encoder(settings.default_settings, gen_data["input_image"] is not None)
+                current = self.model_base_patched.clip
+                if recovered != getattr(current, "_rf_minimax_recovered", False):
+                    comfy.model_management.unload_model_and_clones(current.patcher)
+                    if recovered:
+                        self.model_base_patched.clip = load_recovered_encoder(path_manager)
+                    else:
+                        official = self.get_clip_name("clip_qwen3vl_32b")
+                        official_path = path_manager.get_folder_file_path("clip", official)
+                        self.model_base_patched.clip = comfy.sd.load_clip(
+                            ckpt_paths=[str(official_path)], clip_type=comfy.sd.CLIPType.MINIMAX)
                 positive, latent = MiniMaxH3ImageToVideo().execute(
                     clip = self.model_base_patched.clip,
                     vae = self.model_base_patched.vae,
@@ -588,6 +612,10 @@ class pipeline:
                     first_frame=(torch.from_numpy(np.asarray(gen_data["input_image"], dtype=np.float32) / 255.0)[None]
                                  if gen_data["input_image"] is not None else None),
                 )
+                # Conditioning now owns the embeddings; the encoder is not
+                # needed during denoising. Keep host weights for prompt reuse,
+                # but release its GPU residency through the native backend API.
+                comfy.model_management.unload_model_and_clones(self.model_base_patched.clip.patcher)
                 # outputs=[io.Conditioning.Output(display_name="positive"), io.Latent.Output()],
 
                 negative = None
