@@ -410,13 +410,13 @@ def create_settings():
                         ("newbieimage_shift", "NewBieImage", 6.0),
                         ("anima_image_shift", "Anima", None),
                     ):
-                        component = gr.Number(label=label, minimum=0.01,
-                            value=settings.default_settings.get(key),
+                        component = gr.Textbox(label=label, placeholder="Automatic",
+                            value=str(settings.default_settings[key]) if settings.default_settings.get(key) is not None else "",
                             info=f"Automatic: {default}" if default is not None else "Automatic: native model sampling")
                         add_setting(key, component)
                         shift_controls.append(component)
                 reset_components.click(lambda: [gr.update(value="")] * len(resource_controls)
-                    + [gr.update(value=None)] * len(shift_controls),
+                    + [gr.update(value="")] * len(shift_controls),
                     outputs=resource_controls + shift_controls, api_visibility="undocumented")
                 gr.Markdown("Use automatic model components resets overrides in this form. Click Save to keep the change.")
 
