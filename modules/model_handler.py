@@ -422,8 +422,12 @@ class Models:
                         if any(t.name.endswith("transformer_blocks.0.attn1.to_gate_logits.weight") for t in reader.tensors):
                             return "LTXV 2.3"
                         return "LTXV2" if any(t.name.startswith("audio_") for t in reader.tensors) else "LTXV"
-                    return {"wan": "Wan Video", "hyvid": "Hunyuan Video",
-                            "minimax_h3": "MiniMaxH3"}.get(architecture)
+                    family = {"wan": "Wan Video", "hyvid": "Hunyuan Video",
+                              "minimax_h3": "MiniMaxH3"}.get(architecture)
+                    if family:
+                        return family
+                    from modules.model_architecture import detect_tensor_architecture
+                    return detect_tensor_architecture(tensors)
                 finally:
                     reader.data._mmap.close()
             except (OSError, ValueError, IndexError):
@@ -437,11 +441,19 @@ class Models:
                 and "model.diffusion_model.input_blocks.0.0.weight" in tensors):
             return "SDXL 1.0"
         prefix = "model.diffusion_model."
+        for anima_prefix in (prefix, "net.", ""):
+            if (anima_prefix + "blocks.0.mlp.layer1.weight" in tensors
+                    and anima_prefix + "llm_adapter.blocks.0.cross_attn.q_proj.weight" in tensors):
+                return "Anima"
         if (prefix + "double_blocks.0.img_attn.qkv.weight" in tensors
                 and prefix + "single_blocks.0.linear1.weight" in tensors
                 and tensors.get(prefix + "img_in.weight", {}).get("shape") == [3072, 64]):
             return "Flux.1 D" if prefix + "guidance_in.in_layer.weight" in tensors else "Flux.1 S"
-        return None
+        try:
+            from modules.model_architecture import detect_tensor_architecture
+            return detect_tensor_architecture(tensors)
+        except ImportError:
+            return None  # Backend is not installed during first-run setup.
 
     @staticmethod
     def copy_embedded_preview(model_path, cache_path):
