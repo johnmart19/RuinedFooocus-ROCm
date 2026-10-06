@@ -35,6 +35,9 @@ def detect_tensor_architecture(header):
                 name = type(supported).__name__
                 if name == "Lumina2" and "clip_text_dim" in config:
                     return "NewBieImage"
+                if name == "Flux2":
+                    return {20: "Flux2Klein4B", 24: "Flux2Klein9B"}.get(
+                        config.get("depth_single_blocks"), "Flux2")
                 return {"SD15": "SD 1.5", "SD20": "SD 2.0", "SDXL": "SDXL 1.0",
                         "Flux": "Flux.1 D", "FluxSchnell": "Flux.1 S",
                         "PixArtAlpha": "PixArt", "PixArtSigma": "PixArt",
