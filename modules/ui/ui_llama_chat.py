@@ -6,6 +6,8 @@ import json
 from PIL import Image
 import base64
 import re
+from functools import wraps
+from modules.task_errors import describe_error
 from modules.llama_models import (DEFAULT_MODEL, model_catalogue, model_label, preferred_quant,
                                  import_model, local_models, remove_local_model)
 from modules.llama_file_picker import select_gguf
@@ -334,6 +336,22 @@ def create_chat(image_controls=None):
             inputs=[enable_python, llama_history], outputs=[python_panel, code_runner],
             api_visibility='undocumented')
 
+        def error_controls(message):
+            gr.Warning(message)
+            return {llama_model_status: message, llama_download: gr.update(visible=False),
+                    llama_active_model: None, llama_msg: gr.update(interactive=False),
+                    llama_use: gr.update(value="Load", interactive=True)}
+
+        def recover_controls(fn):
+            @wraps(fn)
+            def guarded(*args, **kwargs):
+                try:
+                    yield from fn(*args, **kwargs)
+                except Exception as error:
+                    yield error_controls(describe_error(error))
+            return guarded
+
+        @recover_controls
         def llama_respond(message, system, embed, chat_history, model, show_thinking, vision_enabled, review_model, include_system, force, *image_values):
             chat_history = list(chat_history)
             chat_history.append({"role": "user", "content": message})
@@ -366,6 +384,10 @@ def create_chat(image_controls=None):
                 elif flag == "results":
                     finished = True
 
+            if isinstance(product, dict) and product.get("error"):
+                yield {**error_controls(product["error"]),
+                       llama_chat: display_history(chat_history, show_thinking), llama_history: chat_history}
+                return
             chat_history.append({"role": "assistant", "content": product})
             yield {llama_chat: display_history(chat_history, show_thinking), llama_history: chat_history,
                    llama_model_status: "", llama_download: gr.update(visible=False)}
@@ -415,6 +437,7 @@ def create_chat(image_controls=None):
             return {llama_source: "Local models", **select_source("Local models", model),
                     **select_model(model, "Local models", quant)}
 
+        @recover_controls
         def use_model(model, selection, source, action):
             if action == "Unload":
                 yield {llama_model_status: "Unloading model…", llama_msg: gr.update(interactive=False),
@@ -428,7 +451,8 @@ def create_chat(image_controls=None):
                     yield {llama_active_model: None, llama_model_status: "Model unloaded.",
                            llama_use: gr.update(value="Load", interactive=bool(model))}
                 else:
-                    yield {llama_model_status: str(result), llama_use: gr.update(interactive=True)}
+                    message = result.get("error", str(result)) if isinstance(result, dict) else str(result)
+                    yield error_controls(message)
                 return
             if not model:
                 yield {llama_model_status: "Choose a model and quantization first."}
@@ -455,7 +479,8 @@ def create_chat(image_controls=None):
                        llama_model_status: f"Ready: {Path(model).name}", llama_msg: gr.update(interactive=True),
                        llama_use: gr.update(value="Unload", interactive=True)}
             else:
-                yield {llama_model_status: str(result), llama_use: gr.update(value="Load", interactive=True)}
+                message = result.get("error", str(result)) if isinstance(result, dict) else str(result)
+                yield error_controls(message)
 
         model_outputs = [llama_model, local_picker, llama_quant, llama_model_status, llama_msg, llama_use]
 
@@ -522,7 +547,8 @@ def create_chat(image_controls=None):
             api_visibility='undocumented',
             inputs=[llama_sent, llama_system, llama_embed, llama_history, llama_active_model, show_reasoning, enable_vision, vision_model, vision_include_system, force_image_sent,
                     *image_controls.values()],
-            outputs=[llama_chat, llama_history, llama_model_status, llama_download],
+            outputs=[llama_chat, llama_history, llama_model_status, llama_download,
+                     llama_active_model, llama_msg, llama_use],
             show_progress="hidden"
         )
 

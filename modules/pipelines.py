@@ -152,8 +152,6 @@ def update(gen_data):
             state["pipeline"] = image_pipeline.pipeline()
 
         return state["pipeline"]
-    except:
-        # If things fail. Use the template pipeline that only returns a logo
-        print(f"Something went wrong. Falling back to template pipeline.")
-        state["pipeline"] = template_pipeline.pipeline()
-        return state["pipeline"]
+    except Exception as error:
+        # Let the worker report the failure and restore controls for retry.
+        raise RuntimeError(f"Could not select generation pipeline: {error}") from error

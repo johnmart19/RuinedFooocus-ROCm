@@ -48,6 +48,7 @@ if args.guest:
     raise SystemExit(0)
 
 import modules.async_worker as worker
+worker.start_worker()
 import modules.html
 import modules.hints
 import modules.ui.ui_onebutton as ui_onebutton
@@ -306,7 +307,13 @@ def generate_clicked(*args):
     finished = False
 
     while not finished:
-        flag, product = worker.task_result(task_id)
+        try:
+            flag, product = worker.task_result(task_id)
+        except Exception as error:
+            from modules.task_errors import describe_error
+            gr.Warning(describe_error(error))
+            yield update_results([])
+            break
 
         if flag == "preview":
             yield update_preview(product)

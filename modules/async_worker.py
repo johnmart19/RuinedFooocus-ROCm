@@ -6,6 +6,7 @@ import time
 import pathlib
 from pathlib import Path
 import traceback
+from modules.task_errors import describe_error
 
 import json
 import os
@@ -283,6 +284,10 @@ def _process(gen_data):
                 imgs = []
                 traceback.print_exc()
                 print(f"ERROR: {iex}")
+                if "_api_job" in gen_data:
+                    gen_data["_api_job"].events.put(("error", describe_error(iex)))
+                else:
+                    add_result(gen_data["task_id"], "error", describe_error(iex))
 
         for x in imgs:
             folder=shared.path_manager.model_paths["temp_outputs_path"]
@@ -371,11 +376,17 @@ def worker():
     global interrupt_ruined_processing
     global buffer, outputs
 
-    pipeline = modules.pipelines.update(
-        {"base_model_name": settings.default_settings.get("base_model")}
-    )
-    if not pipeline == None:
-        pipeline.load_base_model(settings.default_settings.get("base_model"))
+    pipeline = None
+    try:
+        pipeline = modules.pipelines.update(
+            {"base_model_name": settings.default_settings.get("base_model")}
+        )
+        if pipeline is not None:
+            pipeline.load_base_model(settings.default_settings.get("base_model"))
+    except Exception as error:
+        # A missing/broken startup model must not prevent later requests.
+        print(f"Startup model: {describe_error(error)}")
+        traceback.print_exc()
     # shared.state owns the active pipeline. This thread lives for the entire
     # session; retaining its startup reference pins the old checkpoint in RAM
     # even after image/chat switching replaces it in shared.state.
@@ -457,7 +468,7 @@ def worker():
             results = pipeline.process(gen_data)
         except Exception as error:
             traceback.print_exc()
-            results = f"Chat error: {error}"
+            results = {"error": describe_error(error)}
 
         outputs.append([gen_data["task_id"], "results", results])
 
@@ -477,7 +488,7 @@ def worker():
             case "llama":
                 txt2txt_process(gen_data)
             case _:
-                print(f"WARN: Unknown task_type: {gen_data['task_type']}")
+                raise ValueError(f"Unknown task type: {gen_data['task_type']}")
 
     while True:
         time.sleep(0.01)
@@ -489,6 +500,8 @@ def worker():
                 shared.state["interrupted"] = True
                 if "_api_job" in task:
                     task["_api_job"].events.put(("error", "Generation stopped."))
+                elif task.get("task_type") == "llama":
+                    add_result(task["task_id"], "results", {"error": "The operation was stopped. You can retry."})
                 else:
                     add_result(task["task_id"], "results", [])
             except Exception as error:
@@ -498,22 +511,27 @@ def worker():
                 if "_api_job" in task:
                     task["_api_job"].events.put(("error", str(error)))
                 elif task.get("task_type") == "llama":
-                    add_result(task["task_id"], "results", f"Chat error: {error}")
+                    add_result(task["task_id"], "results", {"error": describe_error(error)})
                 else:
-                    add_result(task["task_id"], "error", str(error))
+                    add_result(task["task_id"], "error", describe_error(error))
                     add_result(task["task_id"], "results", [])
             finally:
                 interrupt_ruined_processing = False
-                model_management.interrupt_current_processing(False)
-            gc.collect()
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-                torch.cuda.ipc_collect()
+                try:
+                    model_management.interrupt_current_processing(False)
+                    gc.collect()
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                        torch.cuda.ipc_collect()
+                except Exception:
+                    # Cleanup must not kill the worker after a recoverable failure.
+                    traceback.print_exc()
 
 # Use this to add a task, then use task_result() to get data from the pipeline
 def add_task(gen_data):
     global current_task, buffer
 
+    start_worker()
     with task_lock:
         current_task += 1
         task_id = current_task
@@ -535,6 +553,8 @@ def task_result(task_id):
     global outputs
 
     while True:
+        if (worker_thread is None or not worker_thread.is_alive()) and not any(res[0] == task_id for res in outputs):
+            raise RuntimeError("The task worker stopped unexpectedly. Retry to restart it; see the terminal for details.")
         if not outputs:
             # Throttle check/updates
             time.sleep(settings.default_settings.get("update_interval", 0.1))
@@ -556,4 +576,13 @@ def task_result(task_id):
     return (flag, product)
 
 
-threading.Thread(target=worker, daemon=True).start()
+worker_thread = None
+
+
+def start_worker():
+    """Start after pipeline imports complete; a later request can restart a dead worker."""
+    global worker_thread
+    with task_lock:
+        if worker_thread is None or not worker_thread.is_alive():
+            worker_thread = threading.Thread(target=worker, daemon=True)
+            worker_thread.start()
