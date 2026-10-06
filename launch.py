@@ -82,25 +82,33 @@ def prepare_environment(offline=False):
     if offline:
         print("Skip pip check.")
     else:
-        run(
-            f'"{python}" -m pip install --upgrade pip',
-            "Check pip",
-            "Couldn't check pip",
-            live=False,
-        )
-        if not getattr(sys, "_rf_bootstrap_reinstalled", False):
+        from modules.dependency_cache import needed, record
+        maintenance_needed = needed(script_path, "maintenance", force=REINSTALL_ALL)
+        if maintenance_needed:
             run(
-                f'"{python}" -m pip install {"--force-reinstall " if REINSTALL_ALL else ""}-r "{requirements_file}"',
+                f'"{python}" -m pip install --quiet --upgrade pip',
+                "Check pip",
+                "Couldn't check pip",
+                live=False,
+            )
+        if not getattr(sys, "_rf_bootstrap_checked", False) and needed(script_path, "bootstrap", force=REINSTALL_ALL):
+            run(
+                f'"{python}" -m pip install --quiet {"--force-reinstall " if REINSTALL_ALL else ""}-r "{requirements_file}"',
                 "Check pre-requirements",
                 "Couldn't check pre-reqs",
                 live=False,
             )
-        run(
-            f'"{python}" -m pip uninstall -y llama-cpp-python',
-            "Check for old modules",
-            "Couldn't check old modules",
-            live=False,
-        )
+        if maintenance_needed:
+            run(
+                f'"{python}" -m pip uninstall --quiet -y llama-cpp-python',
+                "Check for old modules",
+                "Couldn't check old modules",
+                live=False,
+            )
+        if maintenance_needed:
+            record(script_path, "maintenance")
+        if not getattr(sys, "_rf_bootstrap_checked", False):
+            record(script_path, "bootstrap")
 
 
         import torchruntime
@@ -249,6 +257,12 @@ def prepare_environment(offline=False):
                     run_pip(f'install -r "{api_requirements}"{constraints}', "API dependencies")
                     if REINSTALL_ALL:
                         reinstall_requirements(api_requirements, constraints)
+
+    if not offline:
+        # Package installation above can change the environment fingerprint.
+        record(script_path, "bootstrap")
+        record(script_path, "maintenance")
+
 
 def clone_git_repos(offline=False):
     from modules.launch_util import git_clone

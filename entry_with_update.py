@@ -10,13 +10,17 @@ os.chdir(root)
 offline = os.environ.get("RF_OFFLINE") == "1" or "--offline" in sys.argv
 
 if not offline:
+    from modules.dependency_cache import needed, record
     # Bootstrap before importing application helpers, which require packaging.
-    print("Check pre-requirements", flush=True)
     reinstall_bootstrap = ["--force-reinstall"] if (root / "reinstall").exists() else []
-    subprocess.run(
-        [sys.executable, "-m", "pip", "install", *reinstall_bootstrap, "-r", "requirements_versions.txt"],
-        check=True,
-    )
+    if needed(root, 'bootstrap', force=bool(reinstall_bootstrap)):
+        print("Check pre-requirements", flush=True)
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "--quiet", *reinstall_bootstrap, "-r", "requirements_versions.txt"],
+            check=True,
+        )
+        record(root, 'bootstrap')
+    sys._rf_bootstrap_checked = True
     # launch.py must not replace pygit2/cffi after the updater loads their DLLs.
     sys._rf_bootstrap_reinstalled = bool(reinstall_bootstrap)
 
@@ -60,6 +64,9 @@ if not offline:
         print(str(e))
     if bupdated:
         print("Update succeeded!!")
+        # Check the new dependency files in a fresh process, before updater
+        # imports can hold native package DLLs open on Windows.
+        os.execv(sys.executable, [sys.executable, *sys.argv])
 else:
     print("Offline mode. No update.")
 from launch import *
