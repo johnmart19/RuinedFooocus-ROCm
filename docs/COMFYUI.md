@@ -43,15 +43,19 @@ are released after use. Explicit VRAM modes and `--cpu-vae` retain their meaning
 automatic residency does not force GPU-only loading or CPU VAE decoding.
 
 Under the image resolution controls, **Automatic Upscale** offers Off (default),
-2× and 4×, with the final pixel dimensions shown before generation. It runs
+explicit RealESRGAN general/anime choices, UltraSharp and catalogued/local
+upscalers with a named 2×/3×/4×/8× scale. Output size uses a wrapping field in
+the same control group. Select **Generated image** to upscale after generation,
+or **Input image only** to enlarge the PowerUp image without diffusion sampling;
+the latter estimates dimensions from the uploaded image. Upscale shortcuts have
+moved out of Cheat Code, while saved legacy presets remain supported. It runs
 ComfyUI's tiled `ImageUpscaleWithModel` after VAE decoding and before saving;
 it does not change the diffusion resolution or run another sampling pass.
-2× uses RealESRGAN x2plus; 4× uses the anime 6B model for Anima/anime families
-and x4plus otherwise. Weights download through the existing upscaler catalog
+Model choice is explicit and independent of checkpoint family. Weights download through the existing upscaler catalog
 on first use and are cached between prompts. Stop is checked between tiles;
 download/backend failures follow the normal worker error recovery. PNG metadata
-records the final size, original generation size, scale and upscaler. Video and
-the separate PowerUp upscale workflow are unaffected.
+records the final size, original generation size, scale and upscaler. Video
+generation is unaffected; the legacy standalone backend remains available.
 The pinned DynamicVRAM controller is initialized
 without launching the ComfyUI server.
 

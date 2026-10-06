@@ -71,6 +71,12 @@ def get_model(type):
 
 
 def get_settings(gen_data):
+    if gen_data.get("automatic_upscale_target") == "Input image only":
+        from modules.automatic_upscale import model_for
+        model = model_for(gen_data.get("automatic_upscale"))
+        if model is None:
+            raise ValueError("Choose an upscale model before upscaling the input image.")
+        return {"type": "upscale", "upscaler": model}
     if gen_data.get("controlnet") is not None:
         return dict(gen_data["controlnet"])
     if "cn_selection" not in gen_data:

@@ -697,22 +697,20 @@ with shared.gradio_root as block:
                         value=default_resolution[1],
                     )
                     add_ctrl("custom_height", custom_height)
-                    from modules.automatic_upscale import CHOICES, describe_size
+                    from modules.automatic_upscale import choices as upscale_choices, describe_size
                     with gr.Group(visible=initial_model_base not in VIDEO_FPS) as automatic_upscale_controls:
                         automatic_upscale = gr.Dropdown(
-                            label=t("Automatic Upscale"), choices=CHOICES, value="Off",
-                            info=t("Enlarge the finished image with a GPU upscale model. Downloaded on first use."),
+                            label=t("Automatic Upscale"), choices=upscale_choices(), value="Off",
+                            info=t("Choose anime, general or another upscale model. Downloaded on first use."),
                         )
                         add_ctrl("automatic_upscale", automatic_upscale)
-                        upscale_size = gr.Markdown(describe_size(
+                        automatic_upscale_target = gr.Dropdown(label=t("Upscale source"),
+                            choices=["Generated image", "Input image only"], value="Generated image",
+                            info=t("Input image only enlarges the image from PowerUp without generation."))
+                        add_ctrl("automatic_upscale_target", automatic_upscale_target)
+                        upscale_size = gr.Textbox(label=t("Output size"), interactive=False, lines=2, value=describe_size(
                             "Off", initial_resolution, default_resolution[0], default_resolution[1],
-                            resolution_settings.aspect_ratios))
-                    def update_upscale_size(scale, resolution, width, height):
-                        return describe_size(scale, resolution, width, height, resolution_settings.aspect_ratios)
-                    for size_control in (automatic_upscale, aspect_ratios_selection, custom_width, custom_height):
-                        size_control.change(update_upscale_size,
-                            inputs=[automatic_upscale, aspect_ratios_selection, custom_width, custom_height],
-                            outputs=[upscale_size], api_visibility='undocumented')
+                            resolution_settings.aspect_ratios), elem_id="upscale-output-size")
                     ratio_save = gr.Button(
                         value=t("Save"),
                         visible=custom_resolution,
@@ -1267,6 +1265,19 @@ with shared.gradio_root as block:
             inpaint_toggle = ui_controlnet.add_controlnet_tab(
                 main_view, inpaint_view, prompt, image_number, run_event, base_model
             )
+            upscale_input = shared.get_ctrl("input_image")
+            def update_upscale_size(scale, target, resolution, width, height, image):
+                if target == "Input image only":
+                    if image is None:
+                        return "Choose an input image in PowerUp to see its output size."
+                    width, height = image.size
+                    resolution = "Input image"
+                return describe_size(scale, resolution, width, height, resolution_settings.aspect_ratios)
+            upscale_size_inputs = [automatic_upscale, automatic_upscale_target,
+                aspect_ratios_selection, custom_width, custom_height, upscale_input]
+            for size_control in upscale_size_inputs:
+                size_control.change(update_upscale_size, inputs=upscale_size_inputs,
+                    outputs=[upscale_size], api_visibility='undocumented')
 
             with gr.Tab(label=t("Info")):
                 with gr.Row():

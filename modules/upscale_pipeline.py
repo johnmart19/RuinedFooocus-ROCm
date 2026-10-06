@@ -41,6 +41,8 @@ class pipeline:
         return gen_data
 
     def load_upscaler_model(self, model_name):
+        if getattr(self, "upscaler_name", None) == model_name:
+            return self.upscaler_model
         model_path = path_manager.get_file_path(
             model_name,
             default=os.path.join(path_manager.model_paths["upscaler_path"], model_name),
@@ -58,6 +60,8 @@ class pipeline:
             out.model, load_device=model_management.get_torch_device(),
             offload_device=model_management.unet_offload_device(),
         )
+        self.upscaler_model = out
+        self.upscaler_name = model_name
         return out
 
     def load_base_model(self, name, hash=None):

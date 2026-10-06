@@ -29,6 +29,8 @@ def powerup_choices(video):
         choices.append(("Image to video", "Image to video"))
     for name, options in sorted(controlnet.cn_options.items(),
                                 key=lambda item: (order.get(item[1]["type"], 8), item[0].casefold())):
+        if options["type"] == "upscale" and name.startswith("Upscale"):
+            continue  # Image upscaling is selected with the resolution controls.
         if video and options["type"] not in ("upscale", "rembg"):
             continue
         choices.append(("Image to image" if name == "Img2Img" else name, name))
