@@ -725,6 +725,7 @@ with shared.gradio_root as block:
                             choices=["Generated image", "Input image only"], value="Generated image",
                             info=t("Input image only switches the main preview to an upload area and skips generation."))
                             add_ctrl("automatic_upscale_target", automatic_upscale_target)
+                            add_ctrl("advanced_upscalers", advanced_upscalers)
                             upscale_size = gr.Textbox(label=t("Output size"), interactive=False, lines=2, value=describe_size(
                             "Off", initial_resolution, default_resolution[0], default_resolution[1],
                             resolution_settings.aspect_ratios), elem_id="upscale-output-size")

@@ -54,6 +54,14 @@ def format_metadata(metadata: Dict) -> Dict:
                     settings[key.capitalize()] = params[key]
             formatted["Settings"].update(settings)
 
+            if params.get("generation_width") and params.get("generation_height"):
+                formatted["Generation size"] = f"{params['generation_width']} x {params['generation_height']}"
+            if params.get("width") and params.get("height"):
+                formatted["Output size"] = f"{params['width']} x {params['height']}"
+            if params.get("upscaler"):
+                formatted["Upscale"] = {"Model": params["upscaler"],
+                                        "Option": params.get("automatic_upscale", "Input image upscale")}
+
             # Comment info
             if "meta_comment" in params:
                 formatted["Meta_Comment"] = params["meta_comment"]
@@ -106,6 +114,12 @@ def format_metadata_string(metadata: Dict) -> str:
             for key, value in formatted["Settings"].items():
                 output.append(f"  {key}: {value}")
             output.append("")
+
+        for key in ("Generation size", "Output size"):
+            if key in formatted:
+                output.append(f"{key}: {formatted[key]}")
+        if "Upscale" in formatted:
+            output.append(f"Upscale: {formatted['Upscale']['Option']} ({formatted['Upscale']['Model']})")
 
         # Comment
         if "Meta_Comment" in formatted:

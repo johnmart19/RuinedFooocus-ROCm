@@ -25,6 +25,13 @@ def process_metadata(gen_data):
     if "prompt" in meta:
         gen_data.update(meta)
         gen_data["style_selection"] = []
+        gen_data["performance_selection"] = "Own settings"
+        if meta.get("width") and meta.get("height"):
+            gen_data["custom_width"] = meta.get("generation_width", meta["width"])
+            gen_data["custom_height"] = meta.get("generation_height", meta["height"])
+            gen_data["aspect_ratios_selection"] = "Custom..."
+        gen_data["automatic_upscale"] = meta.get("automatic_upscale", "Off")
+        gen_data["automatic_upscale_target"] = "Generated image"
 
     if "steps" in meta:
         gen_data["custom_steps"] = int(meta["steps"])

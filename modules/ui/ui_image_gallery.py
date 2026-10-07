@@ -22,9 +22,12 @@ def apply_metadata(metadata):
     data = {key.lower(): value for key, value in metadata.items()}
     if "prompt" not in data:
         raise gr.Error("This file has no saved prompt.")
+    # Saved width/height describe the final file; sampling must use the native size.
+    data["width"] = data.get("generation_width", data.get("width"))
+    data["height"] = data.get("generation_height", data.get("height"))
     updates = {get_ctrl(target): gr.update(value=data[key])
                for key, target in METADATA_CONTROLS.items() if data.get(key) is not None}
-    updates[get_ctrl("performance_selection")] = gr.update(value="Custom...")
+    updates[get_ctrl("performance_selection")] = gr.update(value="Own settings")
     updates[get_ctrl("style_selection")] = gr.update(value=[])
     updates[get_ctrl("obp_assume_direct_control")] = gr.update(value=False)
     updates[get_ctrl("obp_image_prompt")] = gr.update(value=False)
@@ -32,6 +35,13 @@ def apply_metadata(metadata):
         updates[get_ctrl("aspect_ratios_selection")] = gr.update(value="Custom...")
     if data.get("seed") is not None:
         updates[get_ctrl("seed_random")] = gr.update(value=False)
+    from modules.automatic_upscale import choices, PRESETS
+    upscale = data.get("automatic_upscale", "Off")
+    if upscale not in choices():
+        upscale = "Off"
+    updates[get_ctrl("automatic_upscale")] = gr.update(choices=choices(), value=upscale)
+    updates[get_ctrl("advanced_upscalers")] = gr.update(value=upscale not in PRESETS)
+    updates[get_ctrl("automatic_upscale_target")] = gr.update(value="Generated image")
     gr.Info("Prompt and sampling settings applied in Main. Checkpoint, LoRAs and input image stay selected.")
     return updates
 
@@ -98,7 +108,8 @@ def create_image_gallery():
             inputs=[metadata_json],
             outputs=[get_ctrl(name) for name in list(METADATA_CONTROLS.values()) + [
                 "performance_selection", "style_selection", "obp_assume_direct_control",
-                "obp_image_prompt", "aspect_ratios_selection", "seed_random"]],
+                "obp_image_prompt", "aspect_ratios_selection", "seed_random",
+                "automatic_upscale", "advanced_upscalers", "automatic_upscale_target"]],
         )
         gallery.select(
             fn=browser.get_image_metadata,
