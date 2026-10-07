@@ -41,7 +41,7 @@ def detect_rocm_targets(os_platform):
     try:
         import rocm_bootstrap
     except ModuleNotFoundError:
-        subprocess.run([sys.executable, "-m", "pip", "install", "rocm-bootstrap==0.2.0"], check=True)
+        subprocess.run([sys.executable, "-m", "pip", "install", "rocm-bootstrap==0.3.0"], check=True)
     from rocm_bootstrap import detect_gfx_targets
 
     targets = sorted({target.name for target in detect_gfx_targets()})
