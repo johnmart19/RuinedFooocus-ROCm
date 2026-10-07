@@ -19,7 +19,7 @@ SUPPORTED_TARGETS = {
     "Windows": _RADEON | {"gfx1200", "gfx1201"},
     "Linux": _RADEON | {"gfx942", "gfx1200", "gfx1201"},
 }
-ROCM_PLATFORM = "rocm10.0"
+ROCM_PLATFORM = "rocm10.1"
 
 
 @dataclass(frozen=True)
@@ -106,9 +106,9 @@ def automatic_rocm_plan(os_platform, selected_platform, force=False):
     extras = ",".join(f"device-{target}" for target in targets)
     print(f"AMD GPU targets: {', '.join(targets)}")
     return RocmInstallPlan(target_platform, [
-        f"torch[{extras}]==2.13.0+rocm10.0.0",
-        f"torchvision[{extras}]==0.28.0+rocm10.0.0",
-        "torchaudio==2.11.0.2+rocm10.0.0",
+        f"torch[{extras}]==2.13.0+rocm10.1.0",
+        f"torchvision[{extras}]==0.28.0+rocm10.1.0",
+        "torchaudio==2.11.0.2+rocm10.1.0",
         "--index-url", ROCM_INDEX,
         "--only-binary=torch,torchvision,torchaudio",
     ])

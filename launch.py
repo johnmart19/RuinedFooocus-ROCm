@@ -6,7 +6,7 @@ import warnings
 from pathlib import Path
 import ssl
 from tempfile import gettempdir
-from modules.rocm_installer import automatic_rocm_plan, install_rocm
+from modules.rocm_installer import ROCM_PLATFORM, automatic_rocm_plan, install_rocm
 from modules.runtime_support import inspect_installed_rocm, inspect_installed_cuda, inspect_installed_cpu, installed_cuda_platform, select_torch_platform
 from modules.gpu_installer import (
     preserve_installed_rocm, preserve_installed_cuda, installed_torch_constraints, torch_constraints, torch_install_commands,
@@ -129,7 +129,7 @@ def prepare_environment(offline=False):
 
         rocm_plan = None
         if args.rocm10:
-            rocm_plan = automatic_rocm_plan(os_platform, "rocm10.0", force=True)
+            rocm_plan = automatic_rocm_plan(os_platform, ROCM_PLATFORM, force=True)
             if rocm_plan is None:
                 raise RuntimeError("--rocm10 requires a supported AMD GPU on Windows or Linux/WSL.")
             torch_platform = rocm_plan.platform

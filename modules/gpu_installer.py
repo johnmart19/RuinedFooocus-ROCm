@@ -107,7 +107,7 @@ def xllamacpp_index(torch_platform, os_platform, version=None):
             "cu124": "vulkan", "cu126": "vulkan", "cu128": "cu128",
             "cu130": "vulkan", "cu132": "cu132", "cu134": "vulkan",
             "rocm6.4": "rocm-6.4.1", "rocm7.2": "rocm-7.2.4",
-            "rocm10.0": "vulkan",  # ROCm 7.x LLM libraries conflict with ROCm 10.
+            "rocm10.0": "vulkan", "rocm10.1": "vulkan",  # Keep incompatible ROCm 7.x LLM libraries out.
             "vulkan": "vulkan", "directml": "vulkan",
         }.get(torch_platform)
     root = "https://xorbitsai.github.io/xllamacpp/whl"
