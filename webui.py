@@ -684,6 +684,8 @@ with shared.gradio_root as block:
                         value=initial_resolution,
                     )
                     add_ctrl("aspect_ratios_selection", aspect_ratios_selection, True)
+                    resolution_recommendation = gr.Markdown(resolution_settings.recommendation_text(initial_model_base))
+                    ratio_delete = gr.Button(t("Remove saved custom size"), visible=resolution_settings.is_custom(initial_resolution), size="sm")
                     ratio_name = gr.Textbox(
                         show_label=False,
                         placeholder=t("Name"),
@@ -742,10 +744,14 @@ with shared.gradio_root as block:
                         outputs=[aspect_ratios_selection],
                     )
                     def ratio_save_click(ratio_name, custom_width, custom_height, family):
+                        ratio_name = ratio_name.strip()
+                        if ratio_name in resolution_settings.builtin_names:
+                            raise gr.Error("Choose a different name: built-in sizes cannot be overwritten.")
                         if ratio_name != "":
                             ratio_options = resolution_settings.load_resolutions()
                             ratio_options[ratio_name] = (custom_width, custom_height)
                             resolution_settings.video_models[ratio_name] = [family] if family in VIDEO_FPS else []
+                            resolution_settings.image_models[ratio_name] = [] if family in VIDEO_FPS else [family]
                             resolution_settings.save_resolutions(ratio_options)
                             choices = resolution_settings.choices_for_model(family)
                             new_ratio_name = (
@@ -754,6 +760,12 @@ with shared.gradio_root as block:
                             return gr.update(choices=choices, value=new_ratio_name)
                         else:
                             return gr.update()
+
+                    @ratio_delete.click(inputs=[aspect_ratios_selection, model_family], outputs=aspect_ratios_selection, api_visibility='undocumented')
+                    def ratio_delete_click(selection, family):
+                        resolution_settings.remove_custom(selection)
+                        return gr.update(choices=resolution_settings.choices_for_model(family),
+                                         value=resolution_settings.selection_for_model(family, None))
 
                     style_button = gr.Button(value="⬅️ " + t("Send Style to prompt"), size="sm")
                     style_selection = gr.Dropdown(
@@ -945,6 +957,9 @@ with shared.gradio_root as block:
                             value=resolution_settings.selection_for_model(family, current)),
                         inputs=[model_family, aspect_ratios_selection], outputs=aspect_ratios_selection,
                         api_visibility='undocumented')
+
+                    model_controls_event.then(resolution_settings.recommendation_text,
+                        inputs=model_family, outputs=resolution_recommendation, api_visibility='undocumented')
 
                 with gr.Tab(label="LoRAs"):
                     with gr.Group(visible=False) as lora_add:
@@ -1454,12 +1469,12 @@ with shared.gradio_root as block:
             @aspect_ratios_selection.change(
                 api_visibility='undocumented',
                 inputs=[aspect_ratios_selection],
-                outputs=[ratio_name, custom_width, custom_height, ratio_save],
+                outputs=[ratio_name, custom_width, custom_height, ratio_save, ratio_delete],
             )
             def aspect_ratios_changed(selection):
                 # Show resolution controls when selecting Custom
                 if selection == resolution_settings.CUSTOM_RESOLUTION:
-                    return [gr.update(visible=True)] * 4
+                    return [gr.update(visible=True)] * 4 + [gr.update(visible=False)]
 
                 # Hide resolution controls and update with selected resolution
                 selected_width, selected_height = resolution_settings.get_aspect_ratios(
@@ -1470,6 +1485,7 @@ with shared.gradio_root as block:
                     custom_width: gr.update(visible='hidden', value=selected_width),
                     custom_height: gr.update(visible='hidden', value=selected_height),
                     ratio_save: gr.update(visible='hidden'),
+                    ratio_delete: gr.update(visible=resolution_settings.is_custom(selection)),
                 }
 
         run_event.change(
@@ -1522,7 +1538,8 @@ with shared.gradio_root as block:
             outputs=[main_view, inpaint_view, progress_html, gallery],
         )
 
-        def update_cfg(family, checkpoint):
+        def update_cfg(family, checkpoint, current_resolution):
+            family = shared.models.get_model_base(shared.models.get_models_by_path("checkpoints", checkpoint))
             # Update ui components
             # Only refresh things like minimum, maximum and choices. Assume the user already
             # have options selected and don't overwrite them. (They should restart if they want that)
@@ -1532,12 +1549,13 @@ with shared.gradio_root as block:
                     choices=performance_settings.choices_for_model(family, checkpoint)
                 ),
                 aspect_ratios_selection: gr.update(
-                    choices=resolution_settings.choices_for_model(family)
+                    choices=resolution_settings.choices_for_model(family),
+                    value=resolution_settings.selection_for_model(family, current_resolution)
                 ),
                 cfg_timestamp: gr.update(value=shared.state["last_config"]),
             }
         # If cfg_timestamp has a new value, trigger an update
-        cfg_timestamp.change(fn=update_cfg, inputs=[model_family, base_model], api_visibility='undocumented', outputs=[cfg_timestamp] + state["cfg_items_obj"])
+        cfg_timestamp.change(fn=update_cfg, inputs=[model_family, base_model, aspect_ratios_selection], api_visibility='undocumented', outputs=[cfg_timestamp] + state["cfg_items_obj"])
 
         # Preset functions
         def preset_select(preset_gallery, evt: gr.SelectData):
