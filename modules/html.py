@@ -12,15 +12,18 @@ progress_html = """
 """
 scripts = """
 function generate_shortcut(){
-  // Bare Alt activates the browser menu on Windows and blurs open dropdowns.
-  // Prevent that default action only while a dropdown is open; screenshot
-  // chords and other Alt shortcuts keep propagating normally.
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Alt' && !e.ctrlKey && !e.metaKey &&
-        document.querySelector('[role="combobox"][aria-expanded="true"]')) {
-      e.preventDefault();
+  // Gradio treats non-navigation keys as search edits, even modifiers and
+  // PrintScreen, filtering the list to its selected label. Keep these keys
+  // out of dropdown handlers without cancelling the OS screenshot chord.
+  const preserveDropdown = (e) => {
+    if (['Alt', 'Control', 'Shift', 'Meta', 'PrintScreen'].includes(e.key) &&
+        e.target?.closest?.('[role="combobox"][aria-expanded="true"]')) {
+      e.stopImmediatePropagation();
+      if (e.key === 'Alt') e.preventDefault();
     }
-  }, {capture: true});
+  };
+  document.addEventListener('keydown', preserveDropdown, {capture: true});
+  document.addEventListener('keyup', preserveDropdown, {capture: true});
   document.addEventListener('keydown', (e) => {
     let handle = 'none';
     if (e.key !== undefined) {
