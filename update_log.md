@@ -1,3 +1,6 @@
+### development
+* [Flux3](https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy) support
+
 ### 26.09.02
 * [LTX 2.5](https://huggingface.co/Lightricks/LTX-2.5) support
 * [MiniMax H3](https://huggingface.co/MiniMaxAI/MiniMax-H3) support

@@ -225,6 +225,12 @@ class pipeline:
             "clip_names": [get_clip_name("clip_qwen3_8b")],
             "vae_name": get_vae_name("vae_flux2")
         },
+        "Flux3": {
+            "latent": "FLUX2",
+            "clip_type": comfy.sd.CLIPType.FLUX3,
+            "clip_names": [get_clip_name("clip_qwen3vl_4b")],
+            "vae_name": get_vae_name("vae_flux2")
+        },
         "HiDream": {
             "latent": "SD3",
             "clip_type": comfy.sd.CLIPType.HIDREAM,
