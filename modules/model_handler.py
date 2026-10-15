@@ -134,17 +134,20 @@ class Models:
                         move = False
                         rename = False
                         if cache_file.with_suffix(".json").exists():
-                            with open(cache_file.with_suffix(".json")) as old_json:
-                                old_data = json.load(old_json)
-                            if hash_sha256 == old_data["files"][0]["hashes"]["SHA256"]:
-                                if Path(dest / name).exists():
-                                    print(f"WARNING: {name} in Inbox already exists. Ignoring.")
+                            try:
+                                with open(cache_file.with_suffix(".json")) as old_json:
+                                    old_data = json.load(old_json)
+                                if hash_sha256 == old_data["files"][0]["hashes"]["SHA256"]:
+                                    if Path(dest / name).exists():
+                                        print(f"WARNING: {name} in Inbox already exists. Ignoring.")
+                                    else:
+                                        move = True
                                 else:
+                                    print(f"WARNING: Renaming to {name}-{sha256} to avoid overwriting old model.")
+                                    rename = True
                                     move = True
-                            else:
-                                print(f"WARNING: Renaming to {name}-{sha256} to avoid overwriting old model.")
-                                rename = True
-                                move = True
+                            except Exception as e:
+                                print(f"ERROR: {e}")
 
                         if move:
                             if rename:
