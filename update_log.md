@@ -1,5 +1,6 @@
 ### development
 * [Flux3](https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy) support
+* [MOSS Image](https://huggingface.co/OpenMOSS-Team/MOSS-Image-Base) support
 
 ### 26.09.02
 * [LTX 2.5](https://huggingface.co/Lightricks/LTX-2.5) support
