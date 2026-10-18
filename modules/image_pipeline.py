@@ -67,6 +67,7 @@ from comfy_extras.nodes_chroma_radiance import EmptyChromaRadianceLatentImage
 from comfy_extras.nodes_edit_model import ReferenceLatent
 from comfy_extras.nodes_qwen import TextEncodeQwenImageEdit
 from comfy_extras.nodes_mage import TextEncodeMageFlowEdit
+from comfy_extras.nodes_slg import SkipLayerGuidanceDiTSimple
 from node_helpers import conditioning_set_values
 
 from comfy.samplers import KSampler
@@ -280,7 +281,15 @@ class pipeline:
             "latent": "Flux2",
             "clip_type": comfy.sd.CLIPType.MOSS_IMAGE,
             "clip_names": [get_clip_name("clip_qwen35_4b")],
-            "vae_name": get_vae_name("vae_flux2")
+            "vae_name": get_vae_name("vae_flux2"),
+            "options": {
+                "SkipLayerGuidanceDiTSimple": {
+                    "double_layers": "",
+                    "single_layers": "22",
+                    "start_percent": 0,
+                    "end_percent": 0.5,
+                }
+            }
         },
         "NewBieImage": {
             "latent": "SD3",
@@ -618,7 +627,15 @@ class pipeline:
                 blend='median',
                 strength=1.00,
             )[0]
-
+        if options.get("SkipLayerGuidanceDiTSimple", None) is not None:
+            args = options.get("SkipLayerGuidanceDiTSimple", {})
+            self.xl_base.unet = SkipLayerGuidanceDiTSimple().execute(
+                model=self.xl_base.unet,
+                double_layers=args.get("double_layers", ""),
+                single_layers=args.get("single_layers", ""),
+                start_percent=args.get("start_percent", 0),
+                end_percent=args.get("end_percent", 1.0),
+            )[0]
         return
 
     def load_loras(self, loras):
