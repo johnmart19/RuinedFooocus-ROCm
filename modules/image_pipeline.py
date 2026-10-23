@@ -200,6 +200,12 @@ class pipeline:
             "clip_names": [get_clip_name("clip_ministral3")],
             "vae_name": get_vae_name("vae_flux2")
         },
+        "Fibo2": {
+            "latent": "FLUX2",
+            "clip_type": comfy.sd.CLIPType.FIBO2,
+            "clip_names": [get_clip_name("clip_qwen3vl_4b")],
+            "vae_name": get_vae_name("vae_flux2")
+        },
         "Flux": {
             "latent": "SD3",
             "clip_type": comfy.sd.CLIPType.FLUX,
