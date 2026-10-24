@@ -205,8 +205,25 @@ def download_models():
             file_name=file_name,
         )
 
-
 from argparser import args
+
+# Warn if using python 3.10
+import platform
+import time
+py_ver = platform.python_version().split(".")
+if int(py_ver[0]) == 3 and int(py_ver[1]) <= 10:
+    print("")
+    print("WARNING!WARNING!WARNING!WARNING!WARNING!WARNING!WARNING!")
+    print("WARNING!                                       !WARNING!")
+    print("WARNING! You have an old version of python!    !WARNING!")
+    print("WARNING! Please check the README.md file in    !WARNING!")
+    print("WARNING! the RuinedFooocus/help/ folder for    !WARNING!")
+    print("WARNING! instructions.                         !WARNING!")
+    print("WARNING!                                       !WARNING!")
+    print("WARNING!WARNING!WARNING!WARNING!WARNING!WARNING!WARNING!")
+    print("")
+    time.sleep(5)
+    #input("Press enter to continue...")
 
 REINSTALL_ALL = False
 if os.path.exists("reinstall"):
