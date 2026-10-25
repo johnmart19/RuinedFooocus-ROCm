@@ -67,6 +67,7 @@ from comfy_extras.nodes_chroma_radiance import EmptyChromaRadianceLatentImage
 from comfy_extras.nodes_edit_model import ReferenceLatent
 from comfy_extras.nodes_qwen import TextEncodeQwenImageEdit
 from comfy_extras.nodes_mage import TextEncodeMageFlowEdit
+from comfy_extras.nodes_fibo2 import TextEncodeFibo2
 from comfy_extras.nodes_slg import SkipLayerGuidanceDiTSimple
 from node_helpers import conditioning_set_values
 
@@ -204,7 +205,8 @@ class pipeline:
             "latent": "FLUX2",
             "clip_type": comfy.sd.CLIPType.FIBO2,
             "clip_names": [get_clip_name("clip_qwen3vl_4b")],
-            "vae_name": get_vae_name("vae_flux2")
+            "vae_name": get_vae_name("vae_flux2"),
+            "options": {"has_image_edit": True}
         },
         "Flux": {
             "latent": "SD3",
@@ -281,7 +283,7 @@ class pipeline:
             "clip_type": comfy.sd.CLIPType.MAGE,
             "clip_names": [get_clip_name("clip_qwen3vl_4b")],
             "vae_name": get_vae_name("vae_mage_flow"),
-            "flags": ["has_image_edit"]
+            "options": {"has_image_edit": True}
         },
         "MOSSImage": {
             "latent": "Flux2",
@@ -324,7 +326,7 @@ class pipeline:
             "clip_names": [get_clip_name("clip_qwen25")],
             "vae_name": get_vae_name("vae_qwen_image"),
             "model_sampling": ('AuraFlow', settings.default_settings.get("qwen_image_shift", 3.10)),
-            "flags": ["has_image_edit"]
+            "options": {"has_image_edit": True}
         },
         "SD3": {
             "latent": "SD3",
@@ -781,7 +783,7 @@ class pipeline:
             input_images = 1 # "Counter" for the single input-image we have. (for now)
 
         # Text-encoding
-        if 'has_image_edit' in self.model_info.get('flags', []) and input_images > 0:
+        if self.model_info.get('options', {}).get('has_image_edit', False) and input_images > 0:
             if callback is not None:
                 worker.add_result(
                     gen_data["task_id"],
@@ -791,7 +793,29 @@ class pipeline:
             controlnet = None # Disable any other controlnet
             self.conditions = clean_prompt_cond_caches()
 
+            img = gen_data["input_image"]
+            img = np.array(img).astype(np.float32) / 255.0
+            img = torch.from_numpy(img)[None,]
+
             match self.xl_base_patched.unet.model.__class__.__name__:
+                case 'Fibo2':
+                    self.conditions["+"]["cache"], self.conditions["-"]["cache"], latent = TextEncodeFibo2().execute(
+                        clip=self.xl_base_patched.clip,
+                        prompt=positive_prompt,
+                        negative_prompt=negative_prompt,
+                        vae=self.xl_base_patched.vae,
+                        width=gen_data["width"],
+                        height=gen_data["height"],
+                        images={"image_1": img}
+                    ).result
+                case 'MageFlow':
+                    self.conditions["+"]["cache"], self.conditions["-"]["cache"], latent = TextEncodeMageFlowEdit().execute(
+                        clip=self.xl_base_patched.clip,
+                        vae=self.xl_base_patched.vae,
+                        prompt=positive_prompt,
+                        negative_prompt=negative_prompt,
+                        images={"image_1": img}
+                    ).result
                 case 'QwenImage':
                     self.conditions["+"]["cache"] = TextEncodeQwenImageEdit().execute(
                         clip=self.xl_base_patched.clip,
@@ -805,17 +829,6 @@ class pipeline:
                         vae=self.xl_base.vae,
                         image=input_image
                     )[0]
-                case 'MageFlow':
-                    img = gen_data["input_image"]
-                    img = np.array(img).astype(np.float32) / 255.0
-                    img = torch.from_numpy(img)[None,]
-                    self.conditions["+"]["cache"], self.conditions["-"]["cache"], latent = TextEncodeMageFlowEdit().execute(
-                        clip=self.xl_base_patched.clip,
-                        vae=self.xl_base_patched.vae,
-                        prompt=positive_prompt,
-                        negative_prompt=negative_prompt,
-                        images={"image_1": img}
-                    ).result
                 case _:
                     print(f"ERROR: Trying to encode with unknown model {self.xl_base_patched.unet.__class__.__name__}. (This should never happen.")
                     raise
