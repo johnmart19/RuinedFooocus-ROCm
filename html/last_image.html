@@ -26,12 +26,12 @@
     </style>
     <head>
         <script type="module">
-            import { client } from "https://cdn.jsdelivr.net/npm/@gradio/client/dist/index.min.js";
-            const app = await client(window.location.origin);
+            import { Client } from "https://cdn.jsdelivr.net/npm/@gradio/client@2.7.1/dist/index.min.js";
+            const app = await Client.connect(window.location.origin);
             async function getimage() {
                 try {
                     var result = await app.predict("/last_image");    
-                    document.getElementById("last_image").src = "/gradio_api/file=" + result.data;
+                    document.getElementById("last_image").src = "/gradio_api/file=" + encodeURIComponent(result.data[0]).replace(/%2F/gi, "/").replace(/%3A/gi, ":");
                     result = null;
                     setTimeout(getimage, 3000);
                 } catch (error) {
