@@ -1,15 +1,15 @@
 import gradio as gr
+from gradio.processing_utils import get_upload_folder, save_file_to_cache
 import os
 from PIL import Image
 from PIL.PngImagePlugin import PngImageFile
 import json
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple
 from pathlib import Path
 import sqlite3
 import time
-from modules.path import PathManager # FIXME import from shared?
 from modules.util import TimeIt
-from shared import settings, state
+from shared import settings, path_manager
 import version
 
 
@@ -18,6 +18,8 @@ def format_metadata(metadata: Dict) -> Dict:
     try:
         # Create formatted output dictionary
         formatted = {"File Path": metadata.get("file_path", "Unknown")}
+        formatted["Settings"] = {key.capitalize(): metadata[key]
+                                 for key in ("width", "height", "frames") if key in metadata}
 
         # Parse the parameters string if it exists
         if "parameters" in metadata:
@@ -50,7 +52,15 @@ def format_metadata(metadata: Dict) -> Dict:
             ]:
                 if key in params and params[key] is not None:
                     settings[key.capitalize()] = params[key]
-            formatted["Settings"] = settings
+            formatted["Settings"].update(settings)
+
+            if params.get("generation_width") and params.get("generation_height"):
+                formatted["Generation size"] = f"{params['generation_width']} x {params['generation_height']}"
+            if params.get("width") and params.get("height"):
+                formatted["Output size"] = f"{params['width']} x {params['height']}"
+            if params.get("upscaler"):
+                formatted["Upscale"] = {"Model": params["upscaler"],
+                                        "Option": params.get("automatic_upscale", "Input image upscale")}
 
             # Comment info
             if "meta_comment" in params:
@@ -104,6 +114,12 @@ def format_metadata_string(metadata: Dict) -> str:
             for key, value in formatted["Settings"].items():
                 output.append(f"  {key}: {value}")
             output.append("")
+
+        for key in ("Generation size", "Output size"):
+            if key in formatted:
+                output.append(f"{key}: {formatted[key]}")
+        if "Upscale" in formatted:
+            output.append(f"Upscale: {formatted['Upscale']['Option']} ({formatted['Upscale']['Model']})")
 
         # Comment
         if "Meta_Comment" in formatted:
@@ -183,29 +199,59 @@ def connect_database(path="cache/images.db"):
     return conn
 
 
+def get_media_metadata(path):
+    if path.suffix.lower() in (".mp4", ".webm"):
+        import av
+        with av.open(str(path)) as video:
+            stream = video.streams.video[0]
+            metadata = {"width": stream.width, "height": stream.height, "frames": stream.frames}
+            parameters = video.metadata.get("metadata") or video.metadata.get("comment")
+    else:
+        with Image.open(path) as image:
+            metadata = {"width": image.width, "height": image.height,
+                        "frames": getattr(image, "n_frames", 1)}
+            parameters = image.info.get("parameters") or image.info.get("comment")
+    if isinstance(parameters, bytes):
+        parameters = parameters.decode("utf-8", errors="replace")
+    if parameters:
+        try:
+            data = json.loads(parameters)
+            # ComfyUI's video writer JSON-encodes string metadata once more.
+            if isinstance(data, str):
+                data = json.loads(data)
+            if isinstance(data, dict):
+                metadata["parameters"] = json.dumps(data)
+        except (ValueError, TypeError):
+            pass
+    return metadata
+
+
 class ImageBrowser:
     def __init__(self):
-        self.path_manager = PathManager()
+        self.path_manager = path_manager
         self.base_path = Path(self.path_manager.model_paths["temp_outputs_path"])
         self.current_display_paths = []  # Track currently displayed images
         self.sql_conn = connect_database()
-        self.images_per_page = int(settings.default_settings.get("images_per_page", 100))
+        self.images_per_page = max(1, int(settings.default_settings.get("images_per_page", 100)))
         self.filter = ""
 
     def num_images_pages(self):
-        result = self.sql_conn.execute(f"SELECT count(*) FROM images WHERE json LIKE '%{self.filter}%'") # FIXME!!! should only match prompt?
+        result = self.sql_conn.execute("SELECT count(*) FROM images WHERE json LIKE ?", (f"%{self.filter}%",))
         image_cnt = result.fetchone()[0]
-        pages = int(image_cnt/self.images_per_page) + 1
+        pages = max(1, (image_cnt + self.images_per_page - 1) // self.images_per_page)
         return image_cnt, pages
 
     def load_images(self, page: int) -> Tuple[List[str], str]:
         text = ""
-        if page == None:
-            page = 1
+        missing = [(path,) for (path,) in self.sql_conn.execute("SELECT fullpath FROM images")
+                   if not Path(path).is_file()]
+        if missing:
+            self.sql_conn.executemany("DELETE FROM images WHERE fullpath = ?", missing)
+            self.sql_conn.commit()
+        page = min(max(1, int(page or 1)), self.num_images_pages()[1])
         result = self.sql_conn.execute(
-            #f"SELECT fullpath, path FROM images WHERE json LIKE '%{self.filter}%' ORDER BY path GLOB '[0-9]*' DESC, Upper(path) ASC LIMIT ? OFFSET ?",
-            f"SELECT fullpath, path FROM images\
-              WHERE json LIKE '%{self.filter}%'\
+            "SELECT fullpath, path FROM images\
+              WHERE json LIKE ?\
               ORDER BY\
                 CASE\
                   WHEN path GLOB '[0-9]*' THEN 0\
@@ -221,11 +267,20 @@ class ImageBrowser:
                 END ASC\
                 LIMIT ? OFFSET ?",
             (
+                f"%{self.filter}%",
                 str(self.images_per_page),
                 str((page-1)*self.images_per_page),
             )
         )
-        image_paths = result.fetchall()
+        image_paths = []
+        cached_paths = []
+        for fullpath, relpath in result.fetchall():
+            try:
+                cached_paths.append(save_file_to_cache(fullpath, get_upload_folder()))
+                image_paths.append((fullpath, relpath))
+            except OSError:
+                # Files can disappear between the database query and cache copy.
+                continue
         self.current_display_paths = image_paths  # Store current display order
         if image_paths:
             path1 = str(Path(image_paths[0][1]))
@@ -235,7 +290,7 @@ class ImageBrowser:
             text = ""
 
         if image_paths:
-            return list(Path(x[0]) for x in image_paths), text
+            return cached_paths, text
         return [], text
 
     def add_image(self, full_path, rel_path, metadata, commit=False):
@@ -251,15 +306,10 @@ class ImageBrowser:
     def update_images(self) -> Tuple[List[str], str]:
         """Check all images and update database"""
         try:
-            if not self.base_path.exists():
-                return [], f"Folder not found: {self.base_path}"
-
+            self.base_path = self.path_manager.get_abspath(self.path_manager.paths["path_outputs"])
             image_cnt = 0
             self.sql_conn.cursor()
-            self.sql_conn.execute("DROP TABLE images")
-            self.sql_conn.commit()
-            self.sql_conn = connect_database()
-            self.sql_conn.cursor()
+            self.sql_conn.execute("DELETE FROM images")
 
             # Walk through directory and all subdirectories
             print("Scanning folder to update DB:")
@@ -268,14 +318,19 @@ class ImageBrowser:
                     print(f"    {folder}")
                     for root, _, files in os.walk(folder):
                         for filename in files:
-                            if filename.lower().endswith((".png", ".gif")):
-                            #if filename.lower().endswith(".png"):
+                            if filename.lower().endswith((".png", ".jpg", ".jpeg", ".webp", ".gif", ".mp4", ".webm")):
                                 full_path = Path(root) / filename
                                 rel_path = str(full_path.relative_to(folder))
                                 if filename.lower().endswith(".png"):
                                     metadata = get_png_metadata(str(full_path))
                                 else:
-                                    metadata = {} # FIXME fake data for non-png images
+                                    try:
+                                        metadata = get_media_metadata(full_path)
+                                    except (OSError, ValueError, IndexError) as error:
+                                        print(f"Skipping unreadable media {full_path}: {error}")
+                                        continue
+                                if not full_path.is_file():
+                                    continue
                                 metadata["file_path"] = rel_path
 
                                 self.add_image(str(full_path), str(rel_path), metadata)
@@ -289,21 +344,24 @@ class ImageBrowser:
                     gr.update(value=self.load_images(1)[0]),
                     gr.update(
                         value=1,
-                        maximum=max(int(image_cnt/self.images_per_page) + 1, 2),
+                        maximum=self.num_images_pages()[1],
                     ),
                     gr.update(
                         value=f"Found {image_cnt} images from {folders} and subdirectories",
                     )
                 )
+            self.current_display_paths = []
             return (
                 gr.update(value=[]),
-                gr.update(value=1, maximum=2),
+                gr.update(value=1, maximum=1),
                 gr.update(value=f"No images found in {folders} or subdirectories")
             )
 
         except Exception as e:
+            self.sql_conn.rollback()
+            self.current_display_paths = []
             return (
-                gr.update(value=["html/error.png"]),
+                gr.update(value=[]),
                 gr.update(value=1, maximum=1),
                 gr.update(value=f"Error updating folder: {e}")
             )
@@ -312,10 +370,12 @@ class ImageBrowser:
         """Get metadata for selected image."""
         try:
             selected_path = self.current_display_paths[evt.index][0]
+            if not Path(selected_path).is_file():
+                return gr.update(value={}), gr.update(value="This file was removed. Update DB to refresh the list.")
             result = self.sql_conn.execute("SELECT json FROM images WHERE fullpath = ?", (str(selected_path),))
             data = json.loads(result.fetchone()[0])
             return (
-                gr.update(value=json.loads(data.get('parameters', {}))),
+                gr.update(value=json.loads(data['parameters']) if data.get('parameters') else data),
                 gr.update(value=format_metadata_string(data)),
             )
         except Exception as e:
