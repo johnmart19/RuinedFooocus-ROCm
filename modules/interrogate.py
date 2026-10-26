@@ -1,116 +1,101 @@
-import torch
-from clip_interrogator import Config, Interrogator
-from PIL import Image
+"""Image captioning through native Transformers and the shared serial worker."""
+from functools import lru_cache
 import json
-from shared import path_manager, settings
-from transformers import AutoProcessor, Florence2ForConditionalGeneration
-from modules.util import TimeIt
-
+import logging
 import os
-from transformers.dynamic_module_utils import get_imports
-from unittest.mock import patch
+
+import torch
+
+from modules.caption_runtime import caption_device, run_caption
+
+
+@lru_cache(maxsize=1)
+def caption_model(kind):
+    from transformers import AutoProcessor, BlipForConditionalGeneration, Florence2ForConditionalGeneration
+    from argparser import args
+    options = {'local_files_only': args.offline or os.environ.get('RF_OFFLINE') == '1'}
+    if kind == 'brainblip':
+        processor = AutoProcessor.from_pretrained('Salesforce/blip-image-captioning-base', **options)
+        model = BlipForConditionalGeneration.from_pretrained('braintacles/brainblip', dtype=torch.float32, **options)
+    else:
+        checkpoint = 'florence-community/Florence-2-base'
+        processor = AutoProcessor.from_pretrained(checkpoint, **options)
+        model = Florence2ForConditionalGeneration.from_pretrained(checkpoint, dtype=torch.float32, **options)
+    return processor, model
+
 
 def brainblip_look(image, prompt, gr):
-    from transformers import AutoProcessor, BlipForConditionalGeneration
-    from PIL import Image
+    processor, model = caption_model('brainblip')
+    def infer(device):
+        inputs = processor(image.convert('RGB'), return_tensors='pt').to(device)
+        out = model.generate(**inputs, min_length=40, max_new_tokens=150,
+                             num_beams=5, repetition_penalty=1.40)
+        return processor.decode(out[0], skip_special_tokens=True)
+    return run_caption(model, infer)
 
-    gr.Info("BrainBlip is creating Your Prompt")
-    print(f"Loading BrainBlip.")
-    processor = AutoProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
-    model = BlipForConditionalGeneration.from_pretrained("braintacles/brainblip").to("cpu")
-
-    print(f"Processing...")
-    inputs = processor(image, return_tensors="pt").to("cpu")
-    out = model.generate(**inputs, min_length=40, max_new_tokens=150, num_beams=5, repetition_penalty=1.40)
-    caption = processor.decode(out[0], skip_special_tokens=True)
-
-    return caption
 
 def clip_look(image, prompt, gr):
-    text = "Lets interrogate"
+    from clip_interrogator import Config, Interrogator
+    from shared import path_manager
+    from comfy import model_management
+    def infer(device):
+        config = Config(device=device, clip_model_name='ViT-L-14/openai',
+                        cache_path=path_manager.model_paths['clip_path'])
+        config.apply_low_vram_defaults()
+        interrogator = None
+        try:
+            if device.type != 'cpu':
+                model_management.free_memory(4 * 1024**3, device)
+            with torch.inference_mode():
+                interrogator = Interrogator(config)
+                return interrogator.interrogate(image.convert('RGB'))
+        finally:
+            if interrogator is not None:
+                for model in (interrogator.caption_model, interrogator.clip_model):
+                    if model is not None:
+                        model.to('cpu')
+    device = caption_device()
+    try:
+        return infer(device)
+    except torch.OutOfMemoryError:
+        if device.type == 'cpu':
+            raise
+        logging.warning('CLIP interrogation exceeded GPU memory; retrying on CPU.')
+    return infer(torch.device('cpu'))
 
-    # Unload models, if needed?
-    #state["pipeline"] = None
-    gr.Info("Clip is reading Your Prompt")
-
-    conf = Config(
-        device=torch.device("cuda"),
-        clip_model_name="ViT-L-14/openai",
-        cache_path=path_manager.model_paths["clip_path"],
-    )
-    conf.apply_low_vram_defaults()
-
-    i = Interrogator(conf)
-    text = i.interrogate(image)
-
-    return text
 
 def florence_look(image, prompt, gr):
-    def fixed_get_imports(filename: str | os.PathLike) -> list[str]:
-        """Work around for https://huggingface.co/microsoft/Florence-2-large-ft/discussions/4 ."""
-        if os.path.basename(filename) != "modeling_florence2.py":
-            return get_imports(filename)
-        imports = get_imports(filename)
-        try:
-            imports.remove("flash_attn")
-        except:
-            pass
-        return imports
-
-    text = "Lets interrogate"
-    print(f"Looking...")
     image = image.convert('RGB')
+    task = '<MORE_DETAILED_CAPTION>'
+    processor, model = caption_model('florence')
+    def infer(device):
+        inputs = processor(text=task, images=image, return_tensors='pt').to(device)
+        generated = model.generate(**inputs, max_new_tokens=2048, num_beams=6, do_sample=False)
+        text = processor.batch_decode(generated, skip_special_tokens=False)[0]
+        result = processor.post_process_generation(text, task=task, image_size=image.size)
+        return result[task]
+    return run_caption(model, infer)
 
-    #state["pipeline"] = None
-    gr.Info("Florence is creating Your Prompt")
 
-    with TimeIt(""):
-        device = "cpu"
-        torch_dtype = torch.float32
+looks = {'brainblip': brainblip_look, 'clip': clip_look, 'florence': florence_look}
 
-        prompt = "<MORE_DETAILED_CAPTION>"
 
-        with patch("transformers.dynamic_module_utils.get_imports", fixed_get_imports):
-            model = Florence2ForConditionalGeneration.from_pretrained(
-                "florence-community/Florence-2-base",
-                dtype=torch.bfloat16,
-            ).to(device)
-            processor = AutoProcessor.from_pretrained("florence-community/Florence-2-large")
+def queued_caption(image, kind, gr):
+    from modules.api_runtime import submit, wait_for_result
+    gr.Info(f'{kind.title()} is creating your prompt. Waiting for the image worker.')
+    # Upload callbacks otherwise race generation and its GPU memory controller.
+    job = submit(lambda job, task_id: looks[kind](image, kind, gr))
+    return wait_for_result(job)
 
-        inputs = processor(text=prompt, images=image, return_tensors="pt").to(device, torch.bfloat16)
-        print(f"Judging...")
-        generated_ids = model.generate(
-            input_ids=inputs["input_ids"],
-            pixel_values=inputs["pixel_values"],
-            max_new_tokens=2048,
-            num_beams=6,
-            do_sample=False
-        )
-        generated_text = processor.batch_decode(generated_ids, skip_special_tokens=False)[0]
-        result = processor.post_process_generation(generated_text, task=prompt, image_size=(image.width, image.height))
-        text = result[prompt]
-
-    return text
-
-looks = {
-    "brainblip": brainblip_look,
-    "clip": clip_look,
-    "florence": florence_look,
-}
 
 def look(image, prompt, gr):
-    if prompt.strip(" :") in looks:
-        text = looks[prompt.strip(" :")](image, prompt, gr)
-    else:
-        if prompt != "":
-            return prompt
-        try:
-            info = image.info
-            params = info.get("parameters", "")
-            text = json.dumps(json.loads(params))
-        except:
-            # Default interrogator
-            interrogator = settings.default_settings.get("interrogator", "florence")
-            text = looks[interrogator](image, prompt, gr)
-
-    return text
+    selected = prompt.strip(' :')
+    if selected in looks:
+        return queued_caption(image, selected, gr)
+    if prompt:
+        return prompt
+    try:
+        return json.dumps(json.loads(image.info.get('parameters', '')))
+    except (AttributeError, TypeError, ValueError):
+        from shared import settings
+        return queued_caption(image, settings.default_settings.get('interrogator', 'florence'), gr)
