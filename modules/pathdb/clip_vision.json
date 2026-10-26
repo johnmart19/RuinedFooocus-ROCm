@@ -1,11 +1,16 @@
 {
+    "clip_vision/llava_llama3_vision.safetensors": {
+        "url": "https://huggingface.co/Comfy-Org/Hunyuan-Video/resolve/533a43813f01517d9e624f9e824a85bb94094120/split_files/clip_vision/llava_llama3_vision.safetensors",
+        "path": "path_clip_vision",
+        "filename": "llava_llama3_vision.safetensors"
+    },
     "clip_vision/clip_vision_h_fp16.safetensors": {
         "url": "https://huggingface.co/calcuis/wan-gguf/resolve/main/clip_vision_h_fp16.safetensors",
         "path": "path_clip_vision",
         "filename": "clip_vision_h_fp16.safetensors"
     },
     "clip_vision/clip_vision_h_fp8_e4m3fn.safetensors": {
-        "url": "https://huggingface.co/calcuis/wan-gguf/resolve/main/clip_vision_h_fp8_e4m3fn.safetensors",
+        "url": "https://huggingface.co/calcuis/wan-gguf/resolve/a06b67e9de7a93117b8734c24bcae740dfd2cdad/clip_vision_h_fp8_e4m3fn.safetensors",
         "path": "path_clip_vision",
         "filename": "clip_vision_h_fp8_e4m3fn.safetensors"
     }

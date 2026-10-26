@@ -24,16 +24,7 @@ class pipeline:
         self.model_hash = name
         return
 
-    def load_keywords(self, lora):
-        return ""
-
     def load_loras(self, loras):
-        return
-
-    def refresh_controlnet(self, name=None):
-        return
-
-    def clean_prompt_cond_caches(self):
         return
 
     def process(
