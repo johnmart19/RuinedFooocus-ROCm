@@ -1,9 +1,12 @@
+from modules.resource_defaults import resource_name
+from modules.video_preview import video_callback
+from modules.video_output import save_mp4
 import numpy as np
 import os
 import torch
-import einops
+from modules.gguf_loader import load_diffusion_model as load_gguf_model
+from modules.video_settings import frame_count
 import traceback
-import cv2
 
 import modules.async_worker as worker
 from modules.util import generate_temp_filename
@@ -26,11 +29,7 @@ import comfy.latent_formats
 import comfy.model_management
 from comfy.sd import load_checkpoint_guess_config
 
-#from calcuis_gguf.pig import load_gguf_sd, GGMLOps, GGUFModelPatcher, DualClipLoaderGGUF
-#from comfyui_gguf.nodes import gguf_sd_loader as load_gguf_sd, GGUFModelPatcher
-#from comfyui_gguf.ops import GGMLOps
-from molbal_comfyui_gguf.nodes import gguf_sd_loader as load_gguf_sd, GGUFModelPatcher
-from molbal_comfyui_gguf.ops import GGMLOps
+from molbal_comfyui_gguf.nodes import gguf_sd_loader as load_gguf_sd
 
 from nodes import (
     CLIPTextEncode,
@@ -64,22 +63,26 @@ class pipeline:
     model_hash_patched = ""
     model_base_patched = None
     conditions = None
-    latent_rgb_factors = None
-    latent_rgb_factors_bias = None
     wan_version = None
 
-    ggml_ops = GGMLOps()
 
     # Optional function
     def parse_gen_data(self, gen_data):
-        gen_data["original_image_number"] = 1 + ((int(gen_data["image_number"] / 4.0) + 1) * 4)
+        if gen_data.get("video_duration") is not None:
+            gen_data["original_image_number"] = frame_count(gen_data["video_duration"], gen_data.get("video_fps", 16))
+        else:
+            gen_data["original_image_number"] = 1 + ((int(gen_data["image_number"] / 4.0) + 1) * 4)
         gen_data["image_number"] = 1
         return gen_data
 
     def load_base_model(self, name, unet_only=True, hash=None): # Wan_Video never has the clip and vae models?
         # Check if model is already loaded
-        if self.model_hash == name:
+        components = {key: value for key, value in settings.default_settings.items()
+                      if key.startswith(("clip_", "vae_"))}
+        if (self.model_hash == name and self.model_base is not None
+                and components == getattr(self, "component_settings", None)):
             return
+        self.component_settings = components
 
         self.model_base = None
         self.model_hash = ""
@@ -87,39 +90,20 @@ class pipeline:
         self.model_hash_patched = ""
         self.conditions = None
 
-# FIXME? Add default model for video
-#        default_name = path_manager.get_folder_file_path(
-#            "checkpoints",
-#            settings.default_settings.get("base_model", "sd_xl_base_1.0_0.9vae.safetensors"),
-#        )
-#        default = shared.models.get_file("checkpoints", default_name)
-        default = None
-
-        filename = str(
-            shared.models.get_model_path(
-                "checkpoints",
-                name,
-                hash=hash,
-                default=default,
-            )
-        )
+        filename = shared.models.get_model_path("checkpoints", name, hash=hash)
+        if filename is None:
+            raise FileNotFoundError(f"Could not find video checkpoint: {name}")
+        filename = str(filename)
 
         print(f"Loading WAN video {'unet' if unet_only else 'model'}: {name}")
 
-        if filename.endswith(".gguf") or unet_only:
+        if filename.lower().endswith(".gguf") or unet_only:
             with torch.torch.inference_mode():
                 try:
-                    if filename.endswith(".gguf"):
-                        sd = load_gguf_sd(filename)
-                        unet = comfy.sd.load_diffusion_model_state_dict(
-                            sd, model_options={"custom_operations": self.ggml_ops}
-                        )
-                        unet = GGUFModelPatcher.clone(unet)
-                        unet.patch_on_device = True
+                    if filename.lower().endswith(".gguf"):
+                        unet = load_gguf_model(filename)
                     else:
-                        model_options = {}
-                        model_options["dtype"] = torch.float8_e4m3fn # FIXME should be a setting
-                        unet = comfy.sd.load_diffusion_model(filename, model_options=model_options)
+                        unet = comfy.sd.load_diffusion_model(filename)
 
                     clip_paths = []
                     clip_names = []
@@ -127,22 +111,16 @@ class pipeline:
                     self.wan_version = type(unet.model).__name__
 
                     if self.wan_version == 'WAN21':
-                        latent_format = comfy.latent_formats.Wan21()
-                        self.latent_rgb_factors = latent_format.latent_rgb_factors
-                        self.latent_rgb_factors_bias = latent_format.latent_rgb_factors_bias
                         # https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged
-                        vae_name = settings.default_settings.get("vae_wan", "wan_2.1_vae.safetensors")
+                        vae_name = resource_name("vae_wan", settings.default_settings)
                     elif self.wan_version == 'WAN22':
-                        latent_format = comfy.latent_formats.Wan22()
-                        self.latent_rgb_factors = latent_format.latent_rgb_factors
-                        self.latent_rgb_factors_bias = latent_format.latent_rgb_factors_bias
-                        vae_name = settings.default_settings.get("vae_wan_22", "wan2.2_vae.safetensors")
+                        vae_name = resource_name("vae_wan_22", settings.default_settings)
                     else:
                         print(f"ERROR: Not a Wan Video model?")
                         unet = None
                         return
 
-                    clip_name = settings.default_settings.get("clip_umt5", "umt5_xxl_fp8_e4m3fn_scaled.safetensors")
+                    clip_name = resource_name("clip_umt5", settings.default_settings)
                     clip_names.append(str(clip_name))
                     clip_path = path_manager.get_folder_file_path(
                         "clip",
@@ -168,31 +146,33 @@ class pipeline:
                         default = os.path.join(path_manager.model_paths["vae_path"], vae_name)
                     )
                     if str(vae_path).endswith(".gguf"):
-                        sd = load_gguf_sd(str(vae_path))
+                        sd, extra = load_gguf_sd(str(vae_path), handle_prefix=None)
+                        metadata = extra.get("metadata", {})
                     else:
-                        sd = comfy.utils.load_torch_file(str(vae_path))
-                    vae = comfy.sd.VAE(sd=sd)
+                        sd, metadata = comfy.utils.load_torch_file(str(vae_path), return_metadata=True)
+                    vae = comfy.sd.VAE(sd=sd, metadata=metadata)
+                    vae.throw_exception_if_invalid()
 
 
-                    # FIXME: Is this needed for WAN22?
-                    clip_vision_name = settings.default_settings.get("clip_vision", "clip_vision_h_fp8_e4m3fn.safetensors")
-                    clip_vision_path = path_manager.get_folder_file_path(
-                        "clip_vision",
-                        clip_vision_name,
-                        default = os.path.join(path_manager.model_paths["clip_vision_path"], clip_vision_name)
-                    )
-                    print(f"Loading CLIP Vision: {clip_vision_name}")
-                    if str(clip_vision_path).endswith(".gguf"):
-                        sd = load_gguf_sd(str(clip_vision_path))
-                    else:
-                        sd = comfy.utils.load_torch_file(str(clip_vision_path))
-                    if "visual.transformer.resblocks.0.attn.in_proj_weight" in sd:
-                        clip_vision = comfy.clip_vision.load_clipvision_from_sd(sd, prefix="visual.", convert_keys=True)
-                    else:
-                        clip_vision = comfy.clip_vision.load_clipvision_from_sd(sd=sd)
+                    clip_vision = None
+                    if unet.model.diffusion_model.img_emb is not None:
+                        clip_vision_name = resource_name("clip_vision", settings.default_settings)
+                        clip_vision_path = path_manager.get_folder_file_path(
+                            "clip_vision",
+                            clip_vision_name,
+                            default = os.path.join(path_manager.model_paths["clip_vision_path"], clip_vision_name)
+                        )
+                        print(f"Loading CLIP Vision: {clip_vision_name}")
+                        if str(clip_vision_path).endswith(".gguf"):
+                            sd, extra = load_gguf_sd(str(clip_vision_path), handle_prefix=None)
+                        else:
+                            sd = comfy.utils.load_torch_file(str(clip_vision_path))
+                        if "visual.transformer.resblocks.0.attn.in_proj_weight" in sd:
+                            clip_vision = comfy.clip_vision.load_clipvision_from_sd(sd, prefix="visual.", convert_keys=True)
+                        else:
+                            clip_vision = comfy.clip_vision.load_clipvision_from_sd(sd=sd)
                 except Exception as e:
-                    unet = None
-                    traceback.print_exc() 
+                    raise RuntimeError(f"Could not load video model {name}: {e}") from e
 
         else:
             try:
@@ -257,7 +237,7 @@ class pipeline:
             )
 
             if filename is None:
-                continue
+                raise FileNotFoundError(f"Could not find video LoRA: {name}")
 
             print(f"Loading LoRAs: {name}")
             try:
@@ -272,9 +252,11 @@ class pipeline:
                     clip_vision=model.clip_vision,
                 )
                 loaded_loras += [(name, weight)]
-            except:
-                pass
+            except Exception as error:
+                raise RuntimeError(f"Could not load video LoRA {name}: {error}") from error
         self.model_base_patched = model
+        if self.model_hash_patched != str(loras):
+            self.conditions = None
         self.model_hash_patched = str(loras)
 
         print(f"LoRAs loaded: {loaded_loras}")
@@ -300,16 +282,6 @@ class pipeline:
         update = True
         return update
 
-    @torch.no_grad()
-    def vae_decode_fake(self, latents):
-        weight = torch.tensor(self.latent_rgb_factors, device=latents.device, dtype=latents.dtype).transpose(0, 1)[:, :, None, None, None]
-        bias = torch.tensor(self.latent_rgb_factors_bias, device=latents.device, dtype=latents.dtype)
-
-        images = torch.nn.functional.conv3d(latents, weight, bias=bias, stride=1, padding=0, dilation=1, groups=1)
-        images = images.clamp(0.0, 1.0)
-
-        return images
-
     @torch.inference_mode()
     def process(
         self,
@@ -318,13 +290,15 @@ class pipeline:
     ):
         shared.state["preview_total"] = 1
 
+        if self.model_base_patched is None:
+            raise RuntimeError("Video model is not loaded. Check its required components.")
         seed = gen_data["seed"] if isinstance(gen_data["seed"], int) else random.randint(1, 2**32)
 
         if callback is not None:
             worker.add_result(
                 gen_data["task_id"],
                 "preview",
-                (-1, f"Processing text encoding ...", "html/generate_video.jpeg")
+                (-1, f"Processing text encoding ...", "html/logo.png")
             )
 
         if self.conditions is None:
@@ -337,38 +311,10 @@ class pipeline:
         self.textencode("+", positive_prompt, clip_skip)
         self.textencode("-", negative_prompt, clip_skip)
 
-        pbar = comfy.utils.ProgressBar(gen_data["steps"])
-
-        def callback_function(step, x0, x, total_steps):
-            y = self.vae_decode_fake(x0)
-            y = (y * 255.0).detach().cpu().numpy().clip(0, 255).astype(np.uint8)
-            y = einops.rearrange(y, 'b c t h w -> (b h) (t w) c')
-            # Skip callback() since we'll just confuse the preview grid and push updates outselves
-            status = "Generating video"
-
-            maxw = 1920
-            maxh = 1080
-            image = Image.fromarray(y)
-            ow, oh = image.size
-            scale = min(maxh / oh, maxw / ow)
-            image = image.resize((int(ow * scale), int(oh * scale)), Image.LANCZOS)
-
-            worker.add_result(
-                gen_data["task_id"],
-                "preview",
-                (
-                    int(100 * (step / total_steps)),
-                    f"{status} - {step}/{total_steps}",
-                    image
-                )
-            )
-#            pbar.update_absolute(step + 1, total_steps, None)
+        callback_function = video_callback(self.model_base_patched.unet, gen_data)
 
         # ModelSamplingSD3
-        if self.wan_version == "WAN21":
-            shift = 8.0
-        else: # WAN22
-            shift = 5.0
+        shift = 8.0
         model_sampling = ModelSamplingSD3().patch(
             model = self.model_base_patched.unet,
             shift = shift,
@@ -382,7 +328,8 @@ class pipeline:
 
         if self.wan_version == "WAN21":
             if image is not None:
-                clip_vision_output = self.model_base_patched.clip_vision.encode_image(image)
+                clip_vision_output = (self.model_base_patched.clip_vision.encode_image(image)
+                                      if self.model_base_patched.clip_vision is not None else None)
 
                 (positive, negative, latent_image) = WanImageToVideo().execute(
                     positive = self.conditions["+"]["cache"],
@@ -397,7 +344,7 @@ class pipeline:
                 )
             else:
                 # latent_image
-                latent_image = EmptyHunyuanLatentVideo().generate(
+                latent_image = EmptyHunyuanLatentVideo().execute(
                     width = gen_data["width"],
                     height = gen_data["height"],
                     length = gen_data["original_image_number"],
@@ -420,10 +367,15 @@ class pipeline:
         worker.add_result(
             gen_data["task_id"],
             "preview",
-            (-1, f"Generating ...", "html/generate_video.jpeg")
+            (-1, f"Generating ...", "html/logo.png")
         )
 
-        noise = comfy.sample.prepare_noise(latent_image["samples"], seed)
+        latent_image = latent_image.copy()
+        latent_image["samples"] = comfy.sample.fix_empty_latent_channels(
+            model_sampling, latent_image["samples"],
+            latent_image.get("downscale_ratio_spacial"), latent_image.get("downscale_ratio_temporal"),
+        )
+        noise = comfy.sample.prepare_noise(latent_image["samples"], seed, latent_image.get("batch_index"))
 
         try:
             sampled = comfy.sample.sample(
@@ -438,8 +390,15 @@ class pipeline:
                 latent_image = latent_image["samples"],
 
                 denoise = 1,
+                noise_mask = latent_image.get("noise_mask"),
+                seed = seed,
                 callback = callback_function,
+                disable_pbar=not comfy.utils.PROGRESS_BAR_ENABLED,
             )
+
+            worker.check_interrupt(gen_data)
+            # Let native VAE memory budgeting retain sampling weights whenever
+            # the decode workspace fits, and offload them under pressure.
 
             if callback is not None:
                 worker.add_result(
@@ -449,10 +408,12 @@ class pipeline:
                 )
 
             latent_image["samples"] = sampled
+            latent_image.pop("downscale_ratio_spacial", None)
+            latent_image.pop("downscale_ratio_temporal", None)
 
             decoded_latent = VAEDecodeTiled().decode(
                 samples=latent_image,
-                tile_size=128,
+                tile_size=512,
                 overlap=64,
                 vae=self.model_base_patched.vae,
             )[0]
@@ -475,7 +436,7 @@ class pipeline:
             )
             os.makedirs(os.path.dirname(file), exist_ok=True)
 
-            fps=12.0
+            fps=float(gen_data.get("video_fps", 16.0))
             compress_level=9 # Min = 0, Max = 9
 
             # Save GIF
@@ -490,14 +451,10 @@ class pipeline:
             )
 
             # Save mp4
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-            mp4_file = file.with_suffix(".mp4")
-            out = cv2.VideoWriter(mp4_file, fourcc, fps, (gen_data["width"], gen_data["height"]))
-            for frame in pil_images:
-                out.write(cv2.cvtColor(np.asarray(frame), cv2.COLOR_BGR2RGB))
-            out.release()
-        except Exception as e:
-            traceback.print_exc()
-            file = "html/error.png"
+            save_mp4(file.with_suffix(".mp4"), pil_images, fps)
+        except comfy.model_management.InterruptProcessingException:
+            raise
+        except Exception as error:
+            raise RuntimeError(f"Wan video generation failed: {error}") from error
 
         return [file]
