@@ -9,6 +9,7 @@ from modules.resolutions import ResolutionSettings
 from modules.path import PathManager
 from argparser import args
 import time
+import os
 
 gradio_root = None
 server_app = None
@@ -40,11 +41,12 @@ except:
 
 settings = SettingsManager()
 path_manager = PathManager()
-performance_settings = PerformanceSettings()
+models_offline = args.offline or os.environ.get("RF_OFFLINE") == "1" or settings.default_settings.get("local_model_metadata", False)
+performance_settings = PerformanceSettings(cache_dir=path_manager.model_paths["cache_path"] / "checkpoints", offline=models_offline)
 resolution_settings = ResolutionSettings()
-from modules.model_handler import Models
-models = Models()
 shared_cache = {}
+from modules.model_handler import Models
+models = Models(offline=models_offline)
 
 # Call this to trigger a refresh of ui components
 def update_cfg():

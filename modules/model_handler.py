@@ -1,4 +1,5 @@
 import requests
+import base64
 import hashlib
 import shutil
 import os
@@ -10,28 +11,30 @@ from pathlib import Path
 import numpy as np
 
 from shared import translate as t
+from modules.config_io import save_json
 
 class Models:
-    civit_workers = []
-
     def civit_update_worker(self, model_type, folder_paths):
+        if model_type in self.civit_workers:
+            return
+        self.civit_workers.append(str(model_type))
+        try:
+            self.cache_paths[model_type].mkdir(parents=True, exist_ok=True)
+            self._update_models(model_type, folder_paths)
+        except Exception as error:
+            print(f"Model update failed for {model_type}: {error}")
+        finally:
+            from shared import shared_cache
+            for key in list(shared_cache):
+                if isinstance(key, Path) and key.parent == self.cache_paths[model_type]:
+                    shared_cache.pop(key, None)
+            self.ready[model_type] = True
+            self.civit_workers.remove(str(model_type))
+            self.revision += 1
+
+    def _update_models(self, model_type, folder_paths):
         from shared import path_manager
 
-        try:
-            import imageio.v3
-        except:
-            # Skip updates if we are missing imageio
-            print(f"Can't find imageio.v3 module: Skip CivitAI update")
-            return
-        if str(model_type) in self.civit_workers:
-            # Already working on this folder
-            print(t("Skip CivitAI check. Update for {type} already running.", mapping={'type': model_type}))
-            return
-        if not Path(self.cache_paths[model_type]).is_dir():
-            print(t("WARNING: Can't find {path} Will not update thumbnails.", mapping={'path': self.cache_paths[model_type]}))
-            return
-
-        self.civit_workers.append(str(model_type))
         self.ready[model_type] = False
         updated = 0
 
@@ -55,10 +58,6 @@ class Models:
         )
         self.ready[model_type] = True
 
-        if self.offline:
-            self.civit_workers.remove(str(model_type))
-            return
-
         if model_type == "inbox" and self.names["inbox"]:
             checkpoints = path_manager.model_paths["modelfile_path"]
             checkpoints = checkpoints[0] if isinstance(checkpoints, list) else checkpoints
@@ -77,25 +76,72 @@ class Models:
                 if path.suffix.lower() in self.EXTENSIONS:
                     # get file name, add cache path change suffix
                     cache_file = Path(self.cache_paths[model_type] / path.name)
-                    model_data = self.get_models_by_path(model_type, str(path))
-                    if model_data is None:
-                        break
+                    model_data = self.get_models_by_path(model_type, path, fetch=True)
 
-                    suffixes = [".jpeg", ".jpg", ".png", ".gif"]
+                    from modules.model_previews import SUFFIXES, VERSION, is_warning, valid_preview
+                    suffixes = list(SUFFIXES)
                     has_preview = False
                     for suffix in suffixes:
                         thumbcheck = cache_file.with_suffix(suffix)
-                        if Path(thumbcheck).is_file():
+                        if thumbcheck.is_file() and valid_preview(thumbcheck) and not is_warning(thumbcheck):
+                            # Retain valid artwork if its online refresh fails.
                             has_preview = True
                             break
 
+                    # Rebuild legacy low-resolution/animated network thumbnails
+                    # once, preserving the old valid file if fetching fails.
+                    marker = cache_file.with_suffix(".preview.json")
+                    try:
+                        preview_state = json.loads(marker.read_text())
+                        preview_state = preview_state if isinstance(preview_state, dict) else {}
+                    except (OSError, ValueError):
+                        preview_state = {}
+                    real_artwork = any(isinstance(item, dict) and item.get("url") and
+                                       "cdn-thumbnails.huggingface.co/social-thumbnails/" not in item["url"]
+                                       for item in (model_data.get("images") or []))
+                    replace_generated = preview_state.get("generated") and real_artwork
+                    if has_preview and not self.offline and (preview_state.get("version") != VERSION or replace_generated) and model_data.get("images"):
+                        from PIL import Image
+                        with Image.open(thumbcheck) as image:
+                            legacy = replace_generated or max(image.size) <= 166 or getattr(image, "n_frames", 1) > 1
+                        local_artwork = any(path.with_suffix(suffix).is_file() or path.with_suffix(".preview" + suffix).is_file() for suffix in suffixes)
+                        if legacy and not local_artwork:
+                            self.get_image(model_data, cache_file)
+
                     if not has_preview:
+                        for suffix in suffixes:
+                            for local in (path.with_suffix(suffix), path.with_suffix(".preview" + suffix)):
+                                if local.is_file():
+                                    shutil.copyfile(local, cache_file.with_suffix(suffix))
+                                    has_preview = True
+                                    break
+                            if has_preview:
+                                break
+
+                    if not has_preview:
+                        has_preview = self.copy_embedded_preview(path, cache_file)
+
+                    if not has_preview and not self.offline:
                         self.get_image(model_data, thumbcheck)
+                        if not any(valid_preview(cache_file.with_suffix(suffix)) and not is_warning(cache_file.with_suffix(suffix)) for suffix in suffixes):
+                            from modules.model_sources import huggingface_preview
+                            from modules.model_identity import checkpoint_hashes
+                            hash = checkpoint_hashes(model_data).get("SHA256") or self.model_sha256(path)
+                            metadata = self.read_safetensors_header(path).get("__metadata__", {})
+                            source = (f"https://huggingface.co/{model_data['hf_repo_id']}"
+                                      if model_data.get("hf_repo_id") else metadata.get("modelspec.source", ""))
+                            fallback = huggingface_preview(path, hash, source)
+                            if fallback:
+                                model_data = model_data | fallback
+                                save_json(cache_file.with_suffix(".json"), model_data)
+                                self.get_image(model_data, thumbcheck)
+                            else:
+                                print(f"No published artwork found for {path.name}; add a local .preview image to supply artwork.")
                         updated += 1
                         time.sleep(1)
 
                     txtcheck = cache_file.with_suffix(".txt")
-                    if model_type == "loras" and not txtcheck.exists():
+                    if model_type == "loras" and model_data.get("trainedWords") and not txtcheck.exists():
                         print(
                             t(
                                 "Get LoRA keywords for {name} ({base} - {type})",
@@ -111,74 +157,48 @@ class Models:
                             f.write(", ".join(keywords))
                         updated += 1
 
-                    if model_type == "inbox":
-                        name = str(path.relative_to(folder_paths[0])) # FIXME handle if inbox is a list
-                        filename =  self.get_file_from_name("inbox", name)
+                    if model_type == "inbox" and not self.offline:
+                        name = str(path.relative_to(folder))
+                        filename = path
                         baseModel = self.get_model_base(model_data)
-                        folder, cache = folders.get(self.get_model_type(model_data), [None, None])
-                        if folder is None or baseModel is None:
+                        destination, cache = folders.get(self.get_model_type(model_data), [None, None])
+                        if destination is None or baseModel is None:
                             print(t('Skipping {name} not sure what {type} is.', mapping={'name': str(name), 'type': self.get_model_type(model_data)}))
                             updated += 1
                             continue
-                        # Move model to correct folder
-                        dest = Path(folder) / baseModel
-                        if not dest.exists():
-                            dest.mkdir(parents=True, exist_ok=True)
-                        cache_file = Path(self.cache_paths[model_type] / name)
-                        try:
-                            hash_sha256 = model_data["files"][0]["hashes"]["SHA256"]
-                        except:
-                            print(f"ERROR: {name} doesn't have a sha256 hash")
-                            hash_sha256 = ""
-
-                        move = False
-                        rename = False
-                        if cache_file.with_suffix(".json").exists():
-                            try:
-                                with open(cache_file.with_suffix(".json")) as old_json:
-                                    old_data = json.load(old_json)
-                                if hash_sha256 == old_data["files"][0]["hashes"]["SHA256"]:
-                                    if Path(dest / name).exists():
-                                        print(f"WARNING: {name} in Inbox already exists. Ignoring.")
-                                    else:
-                                        move = True
-                                else:
-                                    print(f"WARNING: Renaming to {name}-{sha256} to avoid overwriting old model.")
-                                    rename = True
-                                    move = True
-                            except Exception as e:
-                                print(f"ERROR: {e}")
-
-                        if move:
-                            if rename:
-                                destname = Path(f"{name.stem}-{hash_sha256}{name.suffix}")
-                            else:
-                                destname = name
-                            shutil.move(Path(filename), Path(dest) / destname)
-                            # Move cache-files
-                            suffixes = [".json", ".txt", ".jpeg", ".jpg", ".png", ".gif"]
-                            for suffix in suffixes:
-                                cachefile = cache_file.with_suffix(suffix)
-                                if rename:
-                                    destfile = Path(f"{cache_file.stem}-{hash_sha256}{cache_file.suffix}")
-                                else:
-                                    destfile = cachefile
-                                if cachefile.is_file():
-                                    shutil.move(cachefile, Path(cache) / destfile.name)
-                            print(t("Moved {name} to {dest}", mapping={'name': name, 'dest': dest}))
-                            updated += 1
+                        # Never overwrite an existing model or its cached metadata.
+                        dest = Path(destination) / baseModel / name
+                        if not dest.resolve().is_relative_to(Path(destination).resolve()):
+                            print(f"WARNING: Invalid destination for {name}. Leaving it in Inbox.")
+                            continue
+                        cache_file = self.cache_paths[model_type] / path.name
+                        suffixes = [".json", ".txt", ".jpeg", ".jpg", ".png", ".gif"]
+                        cached = [(cache_file.with_suffix(suffix),
+                                   (Path(cache) / path.name).with_suffix(suffix))
+                                  for suffix in suffixes]
+                        if dest.exists() or any(target.exists() for _, target in cached):
+                            print(f"WARNING: {name} already exists at the destination. Leaving it in Inbox.")
+                            continue
+                        dest.parent.mkdir(parents=True, exist_ok=True)
+                        Path(cache).mkdir(parents=True, exist_ok=True)
+                        shutil.move(filename, dest)
+                        for source, target in cached:
+                            if source.is_file():
+                                shutil.move(source, target)
+                        print(t("Moved {name} to {dest}", mapping={'name': name, 'dest': dest}))
+                        updated += 1
 
                     else:
                         # If this isn't the inbox, store some info about the "live" model
                         try:
-                            self.model_hash[model_type][model_data["files"][0]["hashes"]["SHA256"]] = str(path)
+                            from modules.model_identity import checkpoint_hashes
+                            self.model_hash[model_type][checkpoint_hashes(model_data)["SHA256"]] = str(path)
                         except:
                             # Some models seem to not have sha256 hashes, just ignore those.
                             pass
 
         if updated > 0:
             print(t("CivitAI update for {type} done.", mapping={'type': model_type}))
-        self.civit_workers.remove(str(model_type))
 
     def get_names(self, model_type):
         while not self.ready[model_type]:
@@ -214,6 +234,8 @@ class Models:
         from shared import path_manager, settings
 
         self.offline = offline
+        self.civit_workers = []
+        self.revision = 0
 
         self.ready = {
             "checkpoints": False,
@@ -265,6 +287,24 @@ class Models:
         return None
 
     def model_sha256(self, filename):
+        filename = Path(filename)
+        try:
+            stat = filename.stat()
+        except OSError as error:
+            print(f"model_sha256(): Failed reading {filename}: {error}")
+            return None
+        signature = [str(filename.resolve()), stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns]
+        key = hashlib.sha256(json.dumps(signature).encode()).hexdigest()
+        cache = self.cache_paths["checkpoints"].parent / "hashes" / (key + ".json")
+        try:
+            cached = json.loads(cache.read_text(encoding="utf-8"))
+            if (isinstance(cached, dict) and cached.get("signature") == signature
+                    and isinstance(cached.get("sha256"), str)
+                    and len(cached["sha256"]) == 64
+                    and all(char in "0123456789ABCDEF" for char in cached["sha256"])):
+                return cached["sha256"]
+        except (OSError, ValueError):
+            pass
         print(t("Hashing {filename}", mapping={'filename': filename}))
         blksize = 1024 * 1024
         hash_sha256 = hashlib.sha256()
@@ -274,6 +314,14 @@ class Models:
                     hash_sha256.update(chunk)
             f.close()
             ret = hash_sha256.hexdigest().upper()
+            # Cache locally, never beside the potentially read-only model. Only
+            # publish a hash if the file remained unchanged while being read.
+            after = filename.stat()
+            if (stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns) == (after.st_size, after.st_mtime_ns, after.st_ctime_ns):
+                try:
+                    save_json(cache, {"signature": signature, "sha256": ret})
+                except OSError as error:
+                    print(f"Could not cache model hash: {error}")
         except Exception as e:
             print(f"model_sha256(): Failed reading {filename}")
             print(f"Error: {e}")
@@ -281,65 +329,174 @@ class Models:
         return ret
 
     def search_civitai_with_hash(self, hash):
-        url = f"{self.base_url}model-versions/by-hash/{hash}"
-        data = None
-        try:
-            response = requests.get(url, headers=self.headers)
-            response.raise_for_status()
-            data = response.json()
-        except requests.exceptions.HTTPError as e:
-            if response.status_code in [404, 451]:
-                print(
-                    t("Warning: Could not get {name} from civit.ai ({code})",
-                    mapping={'name': hash, 'code': response.status_code})
-                )
-                # Create our own data
-                data = {
-                    "files": [
-                        {
-                            "hashes": {
-                                "SHA256": hash,
-                            }
-                        }
-                    ]
-                }
-            elif response.status_code == 503:
-                print("Error: Civit.ai Service Currently Unavailable")
-            else:
-                print(f"HTTP Error: {e}")
-        except requests.exceptions.RequestException as e:
-            print(f"Error: {e}")
-        return data
+        if self.offline:
+            return None
+        from modules.model_sources import civitai_metadata
+        return civitai_metadata(f"model-versions/by-hash/{hash}") or {
+            "files": [{"hashes": {"SHA256": hash}}]
+        }
 
-    def get_models_by_path(self, model_type, path):
-        data = None
-        cache_path = Path(self.cache_paths[model_type]) / Path(Path(path).name)
-        if cache_path.is_dir():
-            # Give up
+    def get_models_by_path(self, model_type, path, fetch=False):
+        path = Path(path)
+        if not path.is_file():
+            path = self.get_file(model_type, path)
+        if path is None:
             return {}
-        json_path = Path(cache_path).with_suffix(".json")
-
-        if json_path.exists():
-            try:
-                with open(json_path) as f:
-                    data = json.load(f)
-            except:
-                data = None
-        if data is not None:
-            return data
-
-        if Path(path).suffix == ".merge":
+        if path.suffix == ".merge":
             return {"baseModel": "Merge"}
 
-        hash = self.model_sha256(path)
-        data = self.search_civitai_with_hash(hash)
+        json_path = (self.cache_paths[model_type] / path.name).with_suffix(".json")
+        try:
+            data = json.loads(json_path.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                data = {}
+        except (OSError, ValueError):
+            data = {}
 
-        if data is not None:
-            print(t("Update model data: {path}", mapping={'path': json_path}))
-            with open(json_path, "w") as f:
-                json.dump(data, f, indent=2)
+        stat = path.stat()
+        signature = [str(path.resolve()), stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns]
+        previous_signature = data.get("_rf_file_signature")
+        if previous_signature is not None and previous_signature != signature:
+            # A checkpoint replaced under the same name needs fresh identity.
+            data = {}
 
+        # Optimized checkpoints have a different hash. Keep downloaded metadata
+        # beside them as <checkpoint>.civitai.info to retain the original identity.
+        local_metadata = bool(data.get("rf_source"))
+        if not data.get("id"):
+            try:
+                local = json.loads(path.with_suffix(".civitai.info").read_text(encoding="utf-8"))
+                if isinstance(local, dict) and local.get("baseModel"):
+                    data = local
+                    local_metadata = True
+            except (OSError, ValueError):
+                pass
+
+        # Record the actual local file hash separately from all release artifacts.
+        # model_sha256 reuses the file-signature cache; never hash on UI selection.
+        if fetch and not self.offline and not data.get("_rf_local_sha256"):
+            local_hash = self.model_sha256(path)
+            if local_hash:
+                data["_rf_local_sha256"] = local_hash
+                save_json(json_path, data)
+
+        # Retry incomplete metadata during background refresh, never on UI selection.
+        needs_metadata = not (data.get("id") or data.get("hf_repo_id")) or not data.get("images")
+        if fetch and not self.offline and needs_metadata and (not local_metadata or data.get("id")):
+            from modules.model_identity import checkpoint_hashes
+            hash = checkpoint_hashes(data).get("SHA256")
+            if not hash and not data.get("id"):
+                hash = self.model_sha256(path)
+            if hash or data.get("id"):
+                from modules.model_sources import civitai_metadata
+                remote = (civitai_metadata(f"model-versions/{data['id']}") if data.get("id")
+                          else self.search_civitai_with_hash(hash))
+                if remote:
+                    data = data | remote
+                if hash and not data.get("id") and not data.get("hf_repo_id"):
+                    # Identity discovery must not depend on needing new artwork.
+                    from modules.model_sources import huggingface_preview
+                    header = self.read_safetensors_header(path).get("__metadata__", {})
+                    source = header.get("modelspec.source", "") if isinstance(header, dict) else ""
+                    fallback = huggingface_preview(path, hash, source)
+                    if fallback:
+                        data = data | fallback
+                if hash:
+                    # An existing files entry may lack hashes. setdefault on the
+                    # outer key alone loses the computed hash and rehashes on
+                    # every background refresh when lookup returns no metadata.
+                    data["_rf_local_sha256"] = hash
+                data["_rf_file_signature"] = signature
+                save_json(json_path, data)
+
+        if fetch and data and data.get("_rf_file_signature") != signature:
+            # Stamp legacy metadata once without rehashing an unchanged model.
+            data["_rf_file_signature"] = signature
+            save_json(json_path, data)
+
+        from modules.video_settings import VIDEO_FPS
+        base = self.detect_checkpoint_base(path)
+        if base and (base in VIDEO_FPS or base in ("Flux2Klein4B", "Flux2Klein9B")
+                     or data.get("baseModel") in (None, "", "Unknown", "Other", "Lumina2")):
+            data = data | {"baseModel": base}
         return data
+
+    @staticmethod
+    def read_safetensors_header(path):
+        from modules.model_identity import read_safetensors_header
+        try:
+            return read_safetensors_header(path)
+        except (OSError, ValueError):
+            return {}
+
+    @staticmethod
+    def detect_checkpoint_base(path):
+        from modules.video_settings import detect_video_model
+        if path.suffix.lower() == ".gguf":
+            import gguf
+            try:
+                reader = gguf.GGUFReader(str(path))
+                try:
+                    tensors = {t.name: {"shape": list(reversed(t.shape.tolist()))} for t in reader.tensors}
+                    video = detect_video_model(tensors)
+                    if video:
+                        return video
+                    field = reader.get_field("general.architecture")
+                    architecture = field.contents() if field else None
+                    if architecture == "ltxv":
+                        for tensor in reader.tensors:
+                            if tensor.name.endswith("keyframes_abs_pos_embedding") and 4096 in tensor.shape:
+                                return "LTXV 2.5"
+                        if any(t.name.endswith("transformer_blocks.0.attn1.to_gate_logits.weight") for t in reader.tensors):
+                            return "LTXV 2.3"
+                        return "LTXV2" if any(t.name.startswith("audio_") for t in reader.tensors) else "LTXV"
+                    family = {"wan": "Wan Video", "hyvid": "Hunyuan Video",
+                              "minimax_h3": "MiniMaxH3"}.get(architecture)
+                    if family:
+                        return family
+                    from modules.model_architecture import detect_tensor_architecture
+                    return detect_tensor_architecture(tensors)
+                finally:
+                    reader.data._mmap.close()
+            except (OSError, ValueError, IndexError):
+                return None
+        # Inspect tensor names, not the filename or optimizer's family label.
+        tensors = Models.read_safetensors_header(path)
+        video = detect_video_model(tensors)
+        if video:
+            return video
+        if ("conditioner.embedders.1.model.text_projection" in tensors
+                and "model.diffusion_model.input_blocks.0.0.weight" in tensors):
+            return "SDXL 1.0"
+        prefix = "model.diffusion_model."
+        for anima_prefix in (prefix, "net.", ""):
+            if (anima_prefix + "blocks.0.mlp.layer1.weight" in tensors
+                    and anima_prefix + "llm_adapter.blocks.0.cross_attn.q_proj.weight" in tensors):
+                return "Anima"
+        if (prefix + "double_blocks.0.img_attn.qkv.weight" in tensors
+                and prefix + "single_blocks.0.linear1.weight" in tensors
+                and tensors.get(prefix + "img_in.weight", {}).get("shape") == [3072, 64]):
+            return "Flux.1 D" if prefix + "guidance_in.in_layer.weight" in tensors else "Flux.1 S"
+        try:
+            from modules.model_architecture import detect_tensor_architecture
+            return detect_tensor_architecture(tensors)
+        except ImportError:
+            return None  # Backend is not installed during first-run setup.
+
+    @staticmethod
+    def copy_embedded_preview(model_path, cache_path):
+        metadata = Models.read_safetensors_header(model_path).get("__metadata__", {})
+        thumbnail = metadata.get("modelspec.thumbnail", "")
+        if not isinstance(thumbnail, str) or not thumbnail.startswith("data:image/"):
+            return False
+        try:
+            data = base64.b64decode(thumbnail.split(",", 1)[1], validate=True)
+            image = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_COLOR)
+            if image is not None:
+                return cv2.imwrite(str(cache_path.with_suffix(".jpeg")), image)
+        except (ValueError, IndexError, cv2.error):
+            pass
+        return False
 
 
     def get_model_path(self, model_type, name, hash=None, default=None):
@@ -353,6 +510,16 @@ class Models:
             filename = self.get_file_from_hash(model_type, hash)
             if filename is not None:
                 print(f"INFO: Found {filename} from hash")
+
+        # Download the selected catalog entry for checkpoints and LoRAs.
+        # Do not replace a missing custom model with an unrelated default.
+        if filename is None and model_type in ("checkpoints", "loras"):
+            from argparser import args
+            if not args.offline and os.environ.get("RF_OFFLINE") != "1":
+                filename = path_manager.get_folder_file_path(model_type, name)
+                if filename is not None:
+                    threading.Thread(target=self.civit_update_worker,
+                        args=(model_type, self.model_dirs[model_type]), daemon=True).start()
 
         # If we don't have a filename, get the default.
         if filename is None and default is not None:
@@ -381,10 +548,10 @@ class Models:
         return keywords
 
     def get_model_base(self, model):
-        return model.get("baseModel", "Unknown")
+        return (model or {}).get("baseModel", "Unknown")
 
     def get_model_type(self, model):
-        res = model.get("model", None)
+        res = (model or {}).get("model", None)
         if res is not None:
             res = res.get("type", "Unknown")
         else:
@@ -393,114 +560,28 @@ class Models:
 
     def get_image(self, model, path):
         from shared import settings
+        from modules.model_previews import write_preview
 
-        if "baseModel" in model and model["baseModel"] == "Merge":
-            return
-
-        import imageio.v3 as iio
-        if "model_preview" in settings.default_settings:
-            opts = settings.default_settings["model_preview"].split(",")
-            if "caption" in opts:
-                caption=True
-            if "nogifzoom" in opts:
-                nogifzoom=True
-            if "zoom" in opts:
-                zoom=True
-        else:
-            caption=False
-            nogifzoom=False
-            zoom=False
-
-        def make_thumbnail(image, text, zoom=False, caption=False):
-            max = 166  # Max width or height
-
-            if image is None:
-                return None
-
-            if zoom:
-                oh = image.shape[0]
-                ow = image.shape[1]
-                scale = max / oh if oh > ow else max / ow
-                image = cv2.resize(
-                    image,
-                    dsize=(int(ow * scale), int(oh * scale)),
-                    interpolation=cv2.INTER_LANCZOS4,
-                )
-
-            if caption:
-                font = cv2.FONT_HERSHEY_SIMPLEX
-                fontScale = 0.35
-                thickness = 1
-
-                org = (3, 10)
-                color = (25, 15, 11) # BGR
-                image = cv2.putText(
-                    image,
-                    text,
-                    org,
-                    font,
-                    fontScale,
-                    color,
-                    thickness*2,
-                    cv2.LINE_AA
-                )
-                org = (3, 10)
-                color = (255, 215, 185) # BGR
-                image = cv2.putText(
-                    image,
-                    text,
-                    org,
-                    font,
-                    fontScale,
-                    color,
-                    thickness,
-                    cv2.LINE_AA
-                )
-
-            return image
-
-        path = path.with_suffix(".jpeg")
-        caption_text = f"{path.with_suffix('').name}"
-
-        image_url = None
-        for preview in model.get("images", [{}]):
-            url = preview.get("url")
-            format = preview.get("type")
-            if url:
-                print(t("Updating preview for {text}.", mapping={'text': caption_text}))
-                image_url = url
-                response = self.session.get(image_url)
-                if response.status_code != 200:
-                    print(f"WARNING: get_image() for {caption_text} - {response.status_code} : {response.reason}")
-                    break
-                image = np.asarray(bytearray(response.content), dtype="uint8") 
-                out = make_thumbnail(cv2.imdecode(image, cv2.IMREAD_COLOR), caption_text, caption=caption, zoom=zoom)
-                if out is not None:
-                    out = cv2.imencode('.jpg', out)[1] 
-                else:
-                    out = response.content
-                with open(path, "wb") as file:
-                    file.write(out)
-
-                try:
-                    fps = iio.immeta(path).get("fps", False)
-                except Exception as e:
-                    print(f"WARNING: Could not read/decode {path}: Please remove it: {e}")
-                    break
-                if format == "video" and fps:
-                    tmp_path = f"{path}.tmp"
-                    shutil.move(path, tmp_path)
-                    video = iio.imiter(tmp_path)
-                    video_out = []
-                    for i in video:
-                        out = make_thumbnail(i, caption_text, caption=caption, zoom=not nogifzoom)
-                        if out is None:
-                            out = i
-                        video_out.append(out)
-                    iio.imwrite(
-                        str(path.with_suffix(".gif")), video_out, fps=fps, loop=0
-                    )
-                    os.remove(tmp_path)
-                break
-        if image_url is None:
-            shutil.copyfile("html/warning.jpeg", path)
+        if model.get("baseModel") == "Merge":
+            return False
+        caption = Path(path).stem if "caption" in settings.default_settings.get("model_preview", "").split(",") else ""
+        previews = model.get("images") or []
+        if not isinstance(previews, list):
+            return False
+        for preview in previews[:5]:
+            if not isinstance(preview, dict) or not preview.get("url") or "cdn-thumbnails.huggingface.co/social-thumbnails/" in preview["url"]:
+                continue
+            try:
+                with self.session.get(preview["url"], timeout=(5, 20), stream=True) as response:
+                    response.raise_for_status()
+                    data = bytearray()
+                    started = time.monotonic()
+                    for chunk in response.iter_content(65536):
+                        if len(data) + len(chunk) > 64 * 1024 * 1024 or time.monotonic() - started > 60:
+                            raise ValueError("Preview exceeds the download size or time limit")
+                        data.extend(chunk)
+                write_preview(bytes(data), path, caption, video=preview.get("type") == "video")
+                return True
+            except Exception as error:
+                print(f"Could not update preview for {Path(path).stem}: {error}")
+        return False
