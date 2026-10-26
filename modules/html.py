@@ -1,101 +1,12 @@
-css = """
-textarea {
-  resize: vertical;
-}
-.loader-container {
-  display: flex; /* Use flex to align items horizontally */
-  align-items: center; /* Center items vertically within the container */
-  white-space: nowrap; /* Prevent line breaks within the container */
-  overflow-x:hidden;
-  overflow-y:scroll;
-}
-/* Style the progress bar */
-progress {
-  appearance: none; /* Remove default styling */
-  height: 20px; /* Set the height of the progress bar */
-  border-radius: 5px; /* Round the corners of the progress bar */
-  background-color: #f3f3f3; /* Light grey background */
-  width: 100%;
-}
-/* Style the progress bar container */
-.progress-container {
-  margin-left: 20px;
-  margin-right: 20px;
-  flex-grow: 1; /* Allow the progress container to take up remaining space */
-}
-/* Set the color of the progress bar fill */
-progress::-webkit-progress-value {
-  background-color: #3498db; /* Blue color for the fill */
-}
-progress::-moz-progress-bar {
-  background-color: #3498db; /* Blue color for the fill in Firefox */
-}
-/* Style the text on the progress bar */
-progress::after {
-  content: attr(value '%'); /* Display the progress value followed by '%' */
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  color: white; /* Set text color */
-  font-size: 14px; /* Set font size */
-}
-/* Style other texts */
-.loader-container > span {
-  margin-left: 5px; /* Add spacing between the progress bar and the text */
-}
-.progress-bar > .generating {
-  display: none !important;
-}
-.progress-bar{
-  height: 30px !important;
-}
-.hint-container > .generating {
-  display: none !important;
-}
-.hint-container{
-  height: 150px !important;
-}
-.json-container{
-  height: 600px;
-  overflow: auto !important;
-}
-.type_small_row{
-  height: 100px !important;
-}
-.scroll-hide{
-  resize: auto !important;
-}
-.refresh_button{
-  border: none !important;
-  background: none !important;
-  font-size: none !important;
-  box-shadow: none !important;
-}
-.element1 {
-  opacity: 0.01;
-}
-#inpaint_sketch { overflow: overlay !important; resize: auto; background: var(--panel-background-fill); z-index: 5; }
-/* Custom CSS for mobile-friendliness */
-@media (max-width: 768px) {
-  body, .gr-textbox, .gr-button {
-    font-size: 14px;
-  }
-  #component-321
-  {
-    padding: unset;
-  }
-  #main_view {
-    height: 100% !important;
-  }
-  #component-19{
-    padding: 0px 6% 0 7%;
-  }
-  #component-22{
-    margin-top: 55px;
-  }
-}
-"""
+from pathlib import Path
+
+css = (Path(__file__).resolve().parents[1] / "html" / "ui.css").read_text(encoding="utf-8")
+
+# Gradio scopes component CSS below main; outer page spacing belongs in head.
+head = """<style>@media (max-width: 600px) {
+.gradio-container .main.fillable.app { padding: 8px !important; }
+}</style>"""
+
 progress_html = """
 <div class="loader-container">
   <div class="progress-container">
@@ -106,6 +17,35 @@ progress_html = """
 """
 scripts = """
 function generate_shortcut(){
+  const size = document.getElementById('rf-text-size');
+  const app = document.getElementById('app-tabs');
+  const output = document.getElementById('rf-text-size-value');
+  const applySize = (value) => {
+    const percent = Math.min(200, Math.max(100, Number(value) || 100));
+    size.value = String(percent);
+    output.value = `${percent}%`;
+    app.style.setProperty('--rf-text-scale', percent / 100);
+    output.parentElement.style.setProperty('--rf-text-scale', percent / 100);
+  };
+  if (size && app && output) {
+    try { applySize(localStorage.getItem('rf-text-size')); } catch { applySize(100); }
+    size.addEventListener('input', () => {
+      applySize(size.value);
+      try { localStorage.setItem('rf-text-size', size.value); } catch {}
+    });
+  }
+  // Gradio treats non-navigation keys as search edits, even modifiers and
+  // PrintScreen, filtering the list to its selected label. Keep these keys
+  // out of dropdown handlers without cancelling the OS screenshot chord.
+  const preserveDropdown = (e) => {
+    if (['Alt', 'Control', 'Shift', 'Meta', 'PrintScreen'].includes(e.key) &&
+        e.target?.closest?.('[role="combobox"][aria-expanded="true"]')) {
+      e.stopImmediatePropagation();
+      if (e.key === 'Alt') e.preventDefault();
+    }
+  };
+  document.addEventListener('keydown', preserveDropdown, {capture: true});
+  document.addEventListener('keyup', preserveDropdown, {capture: true});
   document.addEventListener('keydown', (e) => {
     let handle = 'none';
     if (e.key !== undefined) {

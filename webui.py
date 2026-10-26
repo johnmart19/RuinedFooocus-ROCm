@@ -1,55 +1,10 @@
-import torchruntime
-import platform
 import os
-from modules.shared_functions import broken_torch_platforms
-gpus = torchruntime.device_db.get_gpus()
-if "TORCH_PLATFORM" in os.environ:
-    torch_platform = os.environ["TORCH_PLATFORM"]
-else:
-    torch_platform = torchruntime.platform_detection.get_torch_platform(gpus)
-os_platform = platform.system()
-
-# Some platform checks
-torch_platform, os_platform = broken_torch_platforms(torch_platform, os_platform)
+os.environ["GRADIO_ANALYTICS_ENABLED"] = "False"
+from modules.video_settings import VIDEO_FPS, fixed_video_settings, uses_negative_prompt
 
 from argparser import args
-import comfy.cli_args
-comfy.cli_args.args.cpu = args.cpu
-comfy.cli_args.args.highvram = args.highvram
-comfy.cli_args.args.normalvram = args.normalvram
-comfy.cli_args.args.lowvram = args.lowvram
-comfy.cli_args.args.novram = args.novram
-comfy.cli_args.args.reserve_vram = args.reserve_vram
-
-comfy.cli_args.args.force_fp32 = args.force_fp32
-comfy.cli_args.args.force_fp16 = args.force_fp16
-
-comfy.cli_args.args.fp32_unet = args.fp32_unet
-comfy.cli_args.args.fp64_unet = args.fp64_unet
-comfy.cli_args.args.bf16_unet = args.bf16_unet
-comfy.cli_args.args.fp16_unet = args.fp16_unet
-comfy.cli_args.args.fp8_e4m3fn_unet = args.fp8_e4m3fn_unet
-comfy.cli_args.args.fp8_e5m2_unet = args.fp8_e5m2_unet
-comfy.cli_args.args.fp8_e8m0fnu_unet = args.fp8_e8m0fnu_unet
-
-comfy.cli_args.args.fp16_vae = args.fp16_vae
-comfy.cli_args.args.fp32_vae = args.fp32_vae
-comfy.cli_args.args.bf16_vae = args.bf16_vae
-
-comfy.cli_args.args.cpu_vae = args.cpu_vae
-
-comfy.cli_args.args.fp8_e4m3fn_text_enc = args.fp8_e4m3fn_text_enc
-comfy.cli_args.args.fp8_e5m2_text_enc = args.fp8_e5m2_text_enc
-comfy.cli_args.args.fp16_text_enc = args.fp16_text_enc
-comfy.cli_args.args.fp32_text_enc = args.fp32_text_enc
-comfy.cli_args.args.bf16_text_enc = args.bf16_text_enc
-
-if torch_platform == "cpu":
-    comfy.cli_args.args.cpu = True
-#if args.directml is not None:
-#    comfy.cli_args.args.directml = args.directml
-#elif torch_platform == "directml":
-#    comfy.cli_args.args.directml = -1
+from modules.comfy_compat import initialize_backend
+torch_platform, os_platform = initialize_backend(args)
 
 from pathlib import Path
 import shared
@@ -68,7 +23,13 @@ import re
 import traceback
 
 import version
+if args.guest:
+    from modules.ui.ui_guest import launch_guest
+    launch_guest(args)
+    raise SystemExit(0)
+
 import modules.async_worker as worker
+worker.start_worker()
 import modules.html
 import modules.hints
 import modules.ui.ui_onebutton as ui_onebutton
@@ -81,16 +42,13 @@ import transformers
 transformers.utils.logging.set_verbosity_error()
 
 from comfy.samplers import KSampler
-from modules.sdxl_styles import load_styles, styles, allstyles, apply_style
+from modules.sdxl_styles import load_styles, apply_style
 from modules.prompt_processing import get_promptlist
 from modules.util import (
     get_wildcard_files,
     load_keywords,
     get_checkpoint_thumbnail,
     get_lora_thumbnail,
-    get_model_thumbnail,
-    get_checkpoint_path,
-    get_lora_path,
 )
 from modules.imagebrowser import ImageBrowser
 
@@ -113,6 +71,9 @@ def find_unclosed_markers(s):
 
 
 def launch_app(args):
+    from modules.web_access import PrivateResponses, validate_web_access
+    from starlette.middleware import Middleware
+    validate_web_access(args)
     inbrowser = not args.nobrowser
     favicon_path = "logo.ico"
 
@@ -128,33 +89,65 @@ def launch_app(args):
             print(f"ERROR: Could not find theme {settings['theme']}. Check https://huggingface.co/spaces/gradio/theme-gallery for themes")
             theme = gr.themes.Default()
 
-    # Override some settings
-    theme.spacing_lg = '8px'
-    theme.spacing_md = '6px'
-    theme.spacing_sm = '4px'
-    theme.spacing_xl = '8px'
-    theme.spacing_xs = '2px'
-    theme.spacing_xxl = '2px'
-    theme.spacing_xxs = '1px' 
-    theme.text_xxl = '8px' 
+    # Keep theme spacing proportional to the browser's base font size.
+    for name, value in zip(('xxs', 'xs', 'sm', 'md', 'lg', 'xl', 'xxl'),
+                           ('.125rem', '.25rem', '.375rem', '.5rem', '.75rem', '1rem', '1.5rem')):
+        setattr(theme, 'spacing_' + name, value)
+    theme = theme.set(layout_gap='.75rem', block_padding='.75rem', input_padding='.625rem')
 
     # Create the image gallery from the new module
-    app_image_browser = ui_image_gallery.create_image_gallery()
-    app_llama_chat = ui_llama_chat.create_chat()
+    app_image_browser, browser_refresh_outputs = ui_image_gallery.create_image_gallery()
+    image_keys = {"base_model_name", "performance_selection", "custom_steps", "cfg", "sampler_name",
+                  "scheduler", "clip_skip", "aspect_ratios_selection", "custom_width", "custom_height",
+                  "loras", "style_selection", "negative",
+                  "moss_image_edit_format", "moss_image_edit_strength", "moss_image_slg",
+                  "sampling_shift", "cfg_norm_strength"}
+    image_controls = {name: control for name, control in zip(state["ctrls_name"], state["ctrls_obj"])
+                      if name in image_keys}
+    if args.api:
+        from modules import api_runtime
+        import copy
+        def api_image_defaults(*values):
+            snapshot = dict(zip(image_controls, values))
+            snapshot['_image_guidance_checkpoint'] = values[-1]
+            api_runtime.image_defaults = copy.deepcopy(snapshot)
+        api_image_defaults(*(control.value for control in image_controls.values()), effective_image_checkpoint.value)
+        with shared.gradio_root:
+            gr.on(triggers=[control.change for control in image_controls.values()] + [effective_image_checkpoint.change],
+                  fn=api_image_defaults, inputs=list(image_controls.values()) + [effective_image_checkpoint], outputs=[],
+                  api_visibility='undocumented', queue=False)
+    app_llama_chat = ui_llama_chat.create_chat(image_controls)
     app_settings = ui_settings.create_settings()
 
-    main_tabs = gr.TabbedInterface(
-        [shared.gradio_root, app_image_browser, app_llama_chat, app_settings],
-        [t("Main"), t("Image browser"), t("Chat bots"), t("Settings")],
+    main_tabs = gr.Blocks(
         title="RuinedFooocus " + version.version,
         analytics_enabled=False,
     )
+    with main_tabs:
+        gr.HTML('<div id="display-preferences"><label for="rf-text-size">Text size</label>'
+                '<input id="rf-text-size" type="range" min="100" max="200" step="10" value="100">'
+                '<output for="rf-text-size" id="rf-text-size-value">100%</output></div>')
+        with gr.Tabs(elem_id="app-tabs", overflow_behavior="wrap") as top_tabs:
+            for interface, label in zip(
+                [shared.gradio_root, app_image_browser, app_llama_chat, app_settings],
+                [t("Main"), t("Image browser"), t("Chat bots"), t("Settings")],
+            ):
+                # Include automatically created nested tab groups in the responsive layout.
+                for component in interface.blocks.values():
+                    if isinstance(component, gr.Tabs):
+                        component.overflow_behavior = "wrap"
+                with gr.Tab(label):
+                    interface.render()
+        top_tabs.children[1].select(
+            ui_image_gallery.browser.update_images, outputs=browser_refresh_outputs,
+            concurrency_id="image_browser_refresh",
+            api_visibility='undocumented')
 
     shared.server_app, shared.local_url, shared.share_url = main_tabs.launch(
         inbrowser=inbrowser,
         server_name=args.listen,
         server_port=args.port,
-        share=args.share,
+        share=False,
         auth=(
             args.auth.split("/", 1)
             if isinstance(args.auth, str) and "/" in args.auth
@@ -163,11 +156,14 @@ def launch_app(args):
         theme=theme,
         favicon_path=favicon_path,
         css=modules.html.css,
+        head=modules.html.head,
         js=modules.html.scripts,
-        allowed_paths=["html", "/", path_manager.model_paths["temp_outputs_path"]]
+        allowed_paths=["html", str(path_manager.model_paths["temp_outputs_path"])]
+        + [str(path) for path in shared.models.cache_paths.values()]
         + settings.get("archive_folders", []),
+        app_kwargs={"middleware": [Middleware(PrivateResponses)]},
         enable_monitoring=False,
-        pwa=True,
+        pwa=False,
         mcp_server=args.mcp,
         prevent_thread_lock=True,
     )
@@ -251,10 +247,18 @@ def append_work(gen_data):
 def generate_clicked(*args):
     global status
 
-    yield update_clicked()
     gen_data = {}
     for key, val in zip(state["ctrls_name"], args):
         gen_data[key] = val
+    input_upscale = (gen_data.get("automatic_upscale") != "Off"
+                     and gen_data.get("automatic_upscale_target") == "Input image only")
+    if input_upscale:
+        gen_data["input_image"] = gen_data.get("upscale_upload")
+    def display(updates):
+        if input_upscale:
+            updates.pop(main_view, None)  # Preserve the generated image while using the upload view.
+        return updates
+    yield display(update_clicked())
 
     gen_data["generate_forever"] = int(gen_data["image_number"]) == 0
 
@@ -278,6 +282,10 @@ def generate_clicked(*args):
                     gen_data["sampler_name"] = preset_data["sampler_name"]
                     gen_data["scheduler"] = preset_data["scheduler"]
                     gen_data["clip_skip"] = preset_data["clip_skip"]
+                    from modules.image_guidance import restore_guidance_metadata
+                    from modules.ui.ui_image_guidance import family_for_checkpoint
+                    gen_data.update(restore_guidance_metadata(preset_data,
+                        family=family_for_checkpoint(gen_data['base_model_name'])))
 
                 if 0b001 & settings.get("preset_mode", 7):
                     gen_data["width"] = preset_data["width"]
@@ -293,13 +301,22 @@ def generate_clicked(*args):
     finished = False
 
     while not finished:
-        flag, product = worker.task_result(task_id)
+        try:
+            flag, product = worker.task_result(task_id)
+        except Exception as error:
+            from modules.task_errors import describe_error
+            gr.Warning(describe_error(error))
+            yield display(update_results([]))
+            break
 
         if flag == "preview":
-            yield update_preview(product)
+            yield display(update_preview(product))
+
+        elif flag == "error":
+            gr.Warning(f"Generation failed: {product}")
 
         elif flag == "results":
-            yield update_results(product)
+            yield display(update_results(product))
             finished = True
         time.sleep(0.1)
 
@@ -325,23 +342,29 @@ with shared.gradio_root as block:
     cfg_timer = gr.Timer(value=5)
     cfg_timer.tick(fn=get_cfg_timestamp, api_visibility='undocumented', outputs=[cfg_timestamp])
 
-    with gr.Row():
-        with gr.Column(scale=5):
+    with gr.Row(elem_id="generation-layout"):
+        with gr.Column(scale=5, min_width=0, elem_id="generation-workspace"):
             main_view = gr.Image(
                 elem_id="main_view",
                 value="html/init_image.png",
-                height=680,
+                height="var(--rf-preview-height)",
                 type="filepath",
                 visible=True,
-                buttons=['download', 'share', 'fullscreen'],
+                buttons=['download', 'fullscreen'],
             )
             add_ctrl("main_view", main_view)
+            upscale_upload = gr.Image(label=t("Drop Image Here or Click to Upload"), type="pil",
+                image_mode="RGBA",
+                height="var(--rf-preview-height)", visible=False, elem_id="upscale-upload",
+                buttons=['download', 'fullscreen'])
+            add_ctrl("upscale_upload", upscale_upload)
             inpaint_view = gr.ImageEditor(
-                height=680,
+                height="var(--rf-preview-height)",
+                elem_id="inpaint_view",
                 type="numpy",
                 visible='hidden',
                 show_label=False,
-                buttons=['download', 'share', 'fullscreen'],
+                buttons=['download', 'fullscreen'],
                 layers=False,
                 interactive=True,
                 transforms=(),
@@ -366,7 +389,7 @@ with shared.gradio_root as block:
                 preview=False,
                 interactive=False,
                 visible='hidden',
-                buttons=['download', 'share', 'fullscreen'],
+                buttons=['download', 'fullscreen'],
                 value=["html/init_image.png"],
             )
 
@@ -388,11 +411,12 @@ with shared.gradio_root as block:
                     metadata_json: gr.update(value=metadata),
                 }
 
-            with gr.Row(elem_classes="type_row"):
-                with gr.Column(scale=5):
+            with gr.Row(elem_id="prompt-row"):
+                with gr.Column(scale=5, min_width=0):
                     with gr.Group():
                         with gr.Group(), gr.Row():
                             prompt = gr.Textbox(
+                                label=t("Prompt"),
                                 show_label=False,
                                 placeholder=t("Type prompt here."),
                                 container=False,
@@ -403,7 +427,7 @@ with shared.gradio_root as block:
                             )
                             add_ctrl("prompt", prompt)
 
-                with gr.Column(scale=1, min_width=0):
+                with gr.Column(scale=1, min_width=0, elem_id="prompt-actions"):
                     run_button = gr.Button(value=t("Generate"), elem_id="generate")
                     stop_button = gr.Button(
                         value=t("Stop"), interactive=False, visible='hidden'
@@ -452,8 +476,8 @@ with shared.gradio_root as block:
                         params = look(image, prompt, gr)
                         return params, [file]
 
-        with gr.Column(scale=2) as right_col:
-            with gr.Tab(label=t("Setting")):
+        with gr.Column(scale=2, min_width=0, elem_id="generation-controls") as right_col:
+            with gr.Tab(label=t("Generation")):
                 preset_accordion = gr.Accordion(
                     label="Preset:",
                     open=False,
@@ -461,6 +485,7 @@ with shared.gradio_root as block:
                 with preset_accordion:
                     with gr.Group(), gr.Column():
                         preset_image = gr.Image(
+                            buttons=['download', 'fullscreen'],
                             placeholder="Select or drop preset image here",
                             show_label=False,
                             type="filepath",
@@ -476,7 +501,7 @@ with shared.gradio_root as block:
                             rows=[3],
                             object_fit="contain",
                             visible=True,
-                            buttons=['download', 'share', 'fullscreen'],
+                            buttons=['download', 'fullscreen'],
                             min_width=60,
                             selected_index=None,
                             value=path_manager.get_presets(),
@@ -487,143 +512,133 @@ with shared.gradio_root as block:
                 )
                 add_ctrl("preset_selection", preset_selection)
 
-                performance_add = gr.Button(value="+", size="sm")
-                performance_delete = gr.Button(value="-", size="sm")
-                performance_selection = gr.Dropdown(
-                    label=t("Performance"),
-                    choices=list(performance_settings.performance_options.keys())
-                    + [performance_settings.CUSTOM_PERFORMANCE],
-                    value=settings["performance"],
-                    buttons=[performance_add, performance_delete],
-                )
-                add_ctrl("performance_selection", performance_selection, True)
-                perf_name = gr.Textbox(
-                    show_label=False,
-                    placeholder=t("Name"),
-                    interactive=True,
-                    visible='hidden',
-                )
-                perf_save = gr.Button(
-                    value=t("Save (or Cancel)"),
-                    visible='hidden',
-                )
-                custom_default_values = performance_settings.get_perf_options(
-                    settings["performance"]
-                )
-                custom_steps = gr.Slider(
-                    label=t("Custom Steps"),
-                    minimum=1,
-                    maximum=200,
-                    step=1,
-                    value=custom_default_values["custom_steps"],
-                    visible='hidden',
-                )
-                add_ctrl("custom_steps", custom_steps)
+                with gr.Accordion("Sampling", open=True, elem_id="generation-sampling"):
+                    initial_performance = settings["performance"]
+                    initial_model_base = shared.models.get_model_base(
+                        shared.models.get_models_by_path("checkpoints", settings["base_model"]))
+                    model_family = gr.State(initial_model_base)
+                    video_checkpoint = gr.State(settings["base_model"])
+                    effective_image_checkpoint = gr.Textbox(value=settings["base_model"], visible=False)
+                    initial_performance_choices = performance_settings.choices_for_model(initial_model_base, settings["base_model"])
+                    initial_performance = performance_settings.selection_for_model(
+                        initial_model_base, settings["base_model"], initial_performance)
+                    initial_fixed = fixed_video_settings(initial_model_base, settings["base_model"])
+                    def custom_visible(key):
+                        return initial_performance == performance_settings.CUSTOM_PERFORMANCE and key not in initial_fixed
+                    performance_selection = gr.Dropdown(
+                        label=t("Performance"),
+                        choices=initial_performance_choices,
+                        value=initial_performance,
+                        buttons=[],
+                    )
+                    add_ctrl("performance_selection", performance_selection, True)
+                    performance_help = gr.Markdown(
+                        performance_settings.describe(initial_performance),
+                    )
+                    with gr.Accordion(t("Workflow settings"), open=False):
+                        initial_recipe = performance_settings.get_perf_options(initial_performance, settings["base_model"], initial_model_base)
+                        workflow_help = gr.Markdown(performance_settings.describe_workflow(
+                            initial_model_base, settings["base_model"], initial_performance,
+                            initial_recipe["custom_steps"], initial_recipe["cfg"],
+                            initial_recipe["sampler_name"], initial_recipe["scheduler"],
+                        ))
+                    performance_selection.change(
+                        fn=performance_settings.describe,
+                        inputs=[performance_selection], outputs=[performance_help],
+                        api_visibility='undocumented',
+                    )
+                    custom_default_values = performance_settings.get_perf_options(
+                        initial_performance, settings["base_model"], initial_model_base
+                    ) | initial_fixed
+                    custom_steps = gr.Slider(
+                        label=t("Custom Steps"),
+                        minimum=1,
+                        maximum=200,
+                        step=1,
+                        value=custom_default_values["custom_steps"],
+                        visible=custom_visible("custom_steps"),
+                    )
+                    add_ctrl("custom_steps", custom_steps)
 
-                cfg = gr.Slider(
-                    label=t("CFG"),
-                    minimum=0.0,
-                    maximum=20.0,
-                    step=0.1,
-                    value=custom_default_values["cfg"],
-                    visible='hidden',
-                )
-                add_ctrl("cfg", cfg)
-                sampler_name = gr.Dropdown(
-                    label=t("Sampler"),
-                    choices=sorted(KSampler.SAMPLERS),
-                    value=custom_default_values["sampler_name"],
-                    visible='hidden',
-                )
-                add_ctrl("sampler_name", sampler_name)
-                scheduler = gr.Dropdown(
-                    label=t("Scheduler"),
-                    choices=sorted(KSampler.SCHEDULERS),
-                    value=custom_default_values["scheduler"],
-                    visible='hidden',
-                )
-                add_ctrl("scheduler", scheduler)
+                    cfg = gr.Slider(
+                        label=t("CFG"),
+                        minimum=0.0,
+                        maximum=20.0,
+                        step=0.1,
+                        value=custom_default_values["cfg"],
+                        visible=custom_visible("cfg"),
+                    )
+                    add_ctrl("cfg", cfg)
+                    sampler_name = gr.Dropdown(
+                        label=t("Sampler"),
+                        choices=sorted(KSampler.SAMPLERS),
+                        value=custom_default_values["sampler_name"],
+                        visible=custom_visible("sampler_name"),
+                    )
+                    add_ctrl("sampler_name", sampler_name)
+                    scheduler = gr.Dropdown(
+                        label=t("Scheduler"),
+                        choices=sorted(KSampler.SCHEDULERS),
+                        value=custom_default_values["scheduler"],
+                        visible=custom_visible("scheduler"),
+                    )
+                    add_ctrl("scheduler", scheduler)
 
-                clip_skip = gr.Slider(
-                    label=t("Clip Skip"),
-                    minimum=1,
-                    maximum=5,
-                    step=1,
-                    value=1,
-                    visible='hidden',
-                )
+                    clip_skip = gr.Slider(
+                        label=t("Clip Skip"),
+                        info="Used by ordinary text encoding. Native image-edit encoders choose their own layers.",
+                        minimum=1,
+                        maximum=5,
+                        step=1,
+                        value=custom_default_values["clip_skip"],
+                        visible=custom_visible("clip_skip"),
+                    )
 
-                add_ctrl("clip_skip", clip_skip)
+                    add_ctrl("clip_skip", clip_skip)
 
-                performance_outputs = [
-                    perf_name,
-                    perf_save,
-                    cfg,
-                    sampler_name,
-                    scheduler,
-                    clip_skip,
-                    custom_steps,
-                ]
+                    with gr.Accordion("Model Defaults", open=False):
+                        recommendation_status = gr.Markdown()
+                        auto_recommendations = gr.Checkbox(label="Automatically refresh recommendations", value=True)
+                        with gr.Row():
+                            recommendation_use = gr.Button("Use model defaults")
+                            recommendation_refresh = gr.Button("Refresh")
+                        with gr.Row():
+                            recommendation_save = gr.Button("Save sampling defaults")
+                            recommendation_reset = gr.Button("Remove sampling override")
 
-                @perf_save.click(
-                    api_visibility='undocumented',
-                    inputs=[performance_selection] + performance_outputs,
-                    outputs=[performance_selection],
-                )
-                def performance_save(
-                    perf_selection,
-                    perf_name,
-                    perf_save,
-                    cfg,
-                    sampler_name,
-                    scheduler,
-                    clip_skip,
-                    custom_steps,
-                ):
-                    if perf_name != "":
-                        perf_options = performance_settings.load_performance()
-                        opts = {
-                            "custom_steps": custom_steps,
-                            "cfg": cfg,
-                            "sampler_name": sampler_name,
-                            "scheduler": scheduler,
-                            "clip_skip": clip_skip,
-                        }
-                        perf_options[perf_name] = opts
-                        performance_settings.save_performance(perf_options)
-                        choices = list(perf_options.keys()) + [
-                            performance_settings.CUSTOM_PERFORMANCE
-                        ]
-                        return gr.update(choices=choices, value=perf_name)
-                    else:
-                        selection = settings.get("performance") # Stupid workaround, we need the Dropdown to chang
-                        if perf_selection == selection: # ...so we pick the option that isn't currently selected
-                            selection = None
-                        return gr.update(value=selection)
+                    performance_outputs = [
+                        cfg,
+                        sampler_name,
+                        scheduler,
+                        clip_skip,
+                        custom_steps,
+                    ]
 
-                with gr.Group():
+                with gr.Accordion("Size and upscale", open=True, elem_id="generation-size"):
+                    initial_resolution = resolution_settings.selection_for_model(initial_model_base, settings["resolution"])
+                    custom_resolution = initial_resolution == resolution_settings.CUSTOM_RESOLUTION
                     aspect_ratios_selection = gr.Dropdown(
                         label=t("Aspect Ratios (width x height)"),
-                        choices=list(resolution_settings.aspect_ratios.keys())
-                        + [resolution_settings.CUSTOM_RESOLUTION],
-                        value=settings["resolution"],
+                        choices=resolution_settings.choices_for_model(initial_model_base),
+                        value=initial_resolution,
                     )
                     add_ctrl("aspect_ratios_selection", aspect_ratios_selection, True)
+                    resolution_recommendation = gr.Markdown(resolution_settings.recommendation_text(initial_model_base))
+                    ratio_delete = gr.Button(t("Remove saved custom size"), visible=resolution_settings.is_custom(initial_resolution), size="sm")
                     ratio_name = gr.Textbox(
-                        show_label=False,
+                        label=t("Saved size name"),
+                        show_label=True,
                         placeholder=t("Name"),
                         interactive=True,
-                        visible='hidden',
+                        visible=custom_resolution,
                     )
-                    default_resolution = resolution_settings.get_aspect_ratios(
-                        settings["resolution"]
-                    )
+                    default_resolution = resolution_settings.aspect_ratios.get(initial_resolution, (1024, 1024))
                     custom_width = gr.Slider(
                         label=t("Width"),
                         minimum=256,
                         maximum=4096,
                         step=2,
-                        visible='hidden',
+                        visible=custom_resolution,
                         value=default_resolution[0],
                     )
                     add_ctrl("custom_width", custom_width)
@@ -632,28 +647,54 @@ with shared.gradio_root as block:
                         minimum=256,
                         maximum=4096,
                         step=2,
-                        visible='hidden',
+                        visible=custom_resolution,
                         value=default_resolution[1],
                     )
                     add_ctrl("custom_height", custom_height)
+                    from modules.automatic_upscale import choices as upscale_choices, describe_size, PRESETS
+                    with gr.Group(visible=initial_model_base not in VIDEO_FPS) as automatic_upscale_controls:
+                        automatic_upscale = gr.Dropdown(
+                            label=t("Automatic Upscale"), choices=list(PRESETS), value="Off",
+                            info=t("Choose anime, general or another upscale model. Downloaded on first use."),
+                        )
+                        add_ctrl("automatic_upscale", automatic_upscale)
+                        with gr.Group(visible=False) as upscale_options:
+                            advanced_upscalers = gr.Checkbox(label=t("Show advanced upscale models"), value=False,
+                                info=t("Adds specialist models by filename. Start with Anime or General for everyday images."))
+                            automatic_upscale_target = gr.Dropdown(label=t("Upscale source"),
+                            choices=["Generated image", "Input image only"], value="Generated image",
+                            info=t("Input image only switches the main preview to an upload area and skips generation."))
+                            add_ctrl("automatic_upscale_target", automatic_upscale_target)
+                            add_ctrl("advanced_upscalers", advanced_upscalers)
+                            upscale_size = gr.Textbox(label=t("Output size"), interactive=False, lines=2, value=describe_size(
+                            "Off", initial_resolution, default_resolution[0], default_resolution[1],
+                            resolution_settings.aspect_ratios), elem_id="upscale-output-size")
+                        advanced_upscalers.change(
+                            lambda enabled, current: gr.update(choices=upscale_choices() if enabled else list(PRESETS),
+                                value=current if enabled or current in PRESETS else "Off"),
+                            inputs=[advanced_upscalers, automatic_upscale], outputs=automatic_upscale,
+                            api_visibility='undocumented')
                     ratio_save = gr.Button(
-                        value=t("Save"),
-                        visible='hidden',
+                        value=t("Save size"),
+                        visible=custom_resolution,
                     )
 
                     @ratio_save.click(
                         api_visibility='undocumented',
-                        inputs=[ratio_name, custom_width, custom_height],
+                        inputs=[ratio_name, custom_width, custom_height, model_family],
                         outputs=[aspect_ratios_selection],
                     )
-                    def ratio_save_click(ratio_name, custom_width, custom_height):
+                    def ratio_save_click(ratio_name, custom_width, custom_height, family):
+                        ratio_name = ratio_name.strip()
+                        if ratio_name in resolution_settings.builtin_names:
+                            raise gr.Error("Choose a different name: built-in sizes cannot be overwritten.")
                         if ratio_name != "":
                             ratio_options = resolution_settings.load_resolutions()
                             ratio_options[ratio_name] = (custom_width, custom_height)
+                            resolution_settings.video_models[ratio_name] = [family] if family in VIDEO_FPS else []
+                            resolution_settings.image_models[ratio_name] = [] if family in VIDEO_FPS else [family]
                             resolution_settings.save_resolutions(ratio_options)
-                            choices = list(resolution_settings.aspect_ratios.keys()) + [
-                                resolution_settings.CUSTOM_RESOLUTION
-                            ]
+                            choices = resolution_settings.choices_for_model(family)
                             new_ratio_name = (
                                 f"{custom_width}x{custom_height} ({ratio_name})"
                             )
@@ -661,17 +702,22 @@ with shared.gradio_root as block:
                         else:
                             return gr.update()
 
+                    @ratio_delete.click(inputs=[aspect_ratios_selection, model_family], outputs=aspect_ratios_selection, api_visibility='undocumented')
+                    def ratio_delete_click(selection, family):
+                        resolution_settings.remove_custom(selection)
+                        return gr.update(choices=resolution_settings.choices_for_model(family),
+                                         value=resolution_settings.selection_for_model(family, None))
+
+                with gr.Accordion("Style", open=False, elem_id="generation-style"):
                     style_button = gr.Button(value="⬅️ " + t("Send Style to prompt"), size="sm")
                     style_selection = gr.Dropdown(
+                        elem_id="style-selection",
                         label=t("Style Selection"),
                         multiselect=True,
                         container=True,
                         choices=list(load_styles().keys()),
                         buttons=[style_button],
-                        value=list(
-                            set(settings["style"]) &
-                            set(load_styles().keys())
-                        ),
+                        value=[],
                     )
                     add_ctrl("style_selection", style_selection)
                 image_number = gr.Slider(
@@ -680,31 +726,44 @@ with shared.gradio_root as block:
                     maximum=settings.get("image_number_max", 50),
                     step=1,
                     value=settings.get("image_number", 1),
+                    visible=initial_model_base not in VIDEO_FPS,
                 )
                 add_ctrl("image_number", image_number, configurable=True)
-                auto_negative_prompt = gr.Checkbox(
-                    label=t("Auto Negative Prompt"),
-                    show_label=True,
-                    value=settings["auto_negative_prompt"],
-                )
-                add_ctrl("auto_negative", auto_negative_prompt)
-                negative_prompt = gr.Textbox(
-                    label="Negative Prompt",
-                    show_label=True,
-                    placeholder="Type prompt here.",
-                    value=settings["negative_prompt"],
-                )
-                add_ctrl("negative", negative_prompt)
-                seed_random = gr.Checkbox(
-                    label=t("Random Seed"), value=settings["seed_random"]
-                )
-                image_seed = gr.Number(
-                    label=t("Seed"),
-                    value=settings["seed"],
-                    precision=0,
-                    visible='hidden' if settings["seed_random"] else True,
-                )
-                add_ctrl("seed", image_seed)
+                with gr.Group(visible=initial_model_base in VIDEO_FPS) as video_controls:
+                    video_duration = gr.Slider(label="Video duration (seconds)", minimum=0.5,
+                                               maximum=10, step=0.5, value=3)
+                    video_fps = gr.Slider(label="Frame rate (FPS)", minimum=8, maximum=60,
+                                          step=1, value=VIDEO_FPS.get(initial_model_base, 24),
+                                          visible=custom_visible("video_fps"))
+                    add_ctrl("video_duration", video_duration, configurable=True)
+                    add_ctrl("video_fps", video_fps, configurable=True)
+                with gr.Accordion("Negative prompt and seed", open=False, elem_id="generation-seed"):
+                    auto_negative_prompt = gr.Checkbox(
+                        label=t("Auto Negative Prompt"),
+                        show_label=True,
+                        value=settings["auto_negative_prompt"],
+                        visible=uses_negative_prompt(initial_model_base, settings["base_model"]),
+                    )
+                    add_ctrl("auto_negative", auto_negative_prompt)
+                    negative_prompt = gr.Textbox(
+                        label="Negative Prompt",
+                        show_label=True,
+                        placeholder="Type prompt here.",
+                        value=settings["negative_prompt"],
+                        visible=uses_negative_prompt(initial_model_base, settings["base_model"]),
+                    )
+                    add_ctrl("negative", negative_prompt)
+                    seed_random = gr.Checkbox(
+                        label=t("Random Seed"), value=settings["seed_random"]
+                    )
+                    add_ctrl("seed_random", seed_random)
+                    image_seed = gr.Number(
+                        label=t("Seed"),
+                        value=settings["seed"],
+                        precision=0,
+                        visible='hidden' if settings["seed_random"] else True,
+                    )
+                    add_ctrl("seed", image_seed)
 
                 @style_button.click(
                     api_visibility='undocumented',
@@ -742,6 +801,7 @@ with shared.gradio_root as block:
                     )
                     with gr.Group():
                         modelfilter = gr.Textbox(
+                            label=t("Search checkpoints"),
                             placeholder=t("Model name"),
                             value="",
                             show_label=False,
@@ -757,7 +817,7 @@ with shared.gradio_root as block:
                             rows=[3],
                             object_fit="contain",
                             visible=True,
-                            buttons=None,
+                            buttons=[],
                             min_width=60,
                             value=list(
                                 map(
@@ -772,6 +832,13 @@ with shared.gradio_root as block:
                         value=settings["base_model"],
                     )
                     add_ctrl("base_model_name", base_model)
+
+                    from modules.ui.ui_model_components import create_ui as create_components_ui
+                    from modules.ui.ui_checkpoint_tools import create_ui as create_checkpoint_ui
+                    with gr.Accordion("Image model components", open=False):
+                        create_components_ui(base_model)
+                    with gr.Accordion("Checkpoint tools", open=False):
+                        create_checkpoint_ui(base_model)
 
                     @modelfilter.input(
                         api_visibility='undocumented',
@@ -817,9 +884,38 @@ with shared.gradio_root as block:
                         outputs=[model_current, base_model]
                     )
 
+                    def model_video_controls(name, performance):
+                        model_base = shared.models.get_model_base(
+                            shared.models.get_models_by_path("checkpoints", name))
+                        video = model_base in VIDEO_FPS
+                        choices = performance_settings.choices_for_model(model_base, name)
+                        selection = performance_settings.selection_for_model(model_base, name, performance)
+                        count_update = gr.update(visible=False, value=1) if video else gr.update(visible=True)
+                        return (gr.update(visible=video), count_update,
+                                gr.update(choices=choices, value=selection),
+                                gr.update(value=VIDEO_FPS.get(model_base, 24),
+                                          visible=selection == performance_settings.CUSTOM_PERFORMANCE
+                                          and "video_fps" not in fixed_video_settings(model_base, name)), model_base, name)
+
+                    model_controls_event = base_model.change(model_video_controls, inputs=[base_model, performance_selection],
+                                      outputs=[video_controls, image_number, performance_selection, video_fps, model_family, video_checkpoint],
+                                      api_visibility='undocumented')
+                    model_controls_event.then(lambda family: gr.update(visible=family not in VIDEO_FPS),
+                        inputs=[model_family], outputs=[automatic_upscale_controls], api_visibility='undocumented')
+                    model_controls_event.then(
+                        lambda family, current: gr.update(
+                            choices=resolution_settings.choices_for_model(family),
+                            value=resolution_settings.selection_for_model(family, current)),
+                        inputs=[model_family, aspect_ratios_selection], outputs=aspect_ratios_selection,
+                        api_visibility='undocumented')
+
+                    model_controls_event.then(resolution_settings.recommendation_text,
+                        inputs=model_family, outputs=resolution_recommendation, api_visibility='undocumented')
+
                 with gr.Tab(label="LoRAs"):
                     with gr.Group(visible=False) as lora_add:
                         lorafilter = gr.Textbox(
+                            label=t("Search LoRAs"),
                             placeholder=t("Search LoRA"),
                             value="",
                             show_label=False,
@@ -836,7 +932,7 @@ with shared.gradio_root as block:
                             columns=[2],
                             rows=[3],
                             object_fit="contain",
-                            buttons=None,
+                            buttons=[],
                             min_width=60,
                             value=list(
                                 map(
@@ -879,7 +975,7 @@ with shared.gradio_root as block:
                             rows=[3],
                             object_fit="contain",
                             visible=True,
-                            buttons=None,
+                            buttons=[],
                             min_width=60,
                             value=default_active,
                         )
@@ -1133,13 +1229,66 @@ with shared.gradio_root as block:
 
                 return results
 
-            ui_onebutton.ui_onebutton(prompt, run_event)
+            # Refresh thumbnails when the background metadata scan finishes.
+            model_revision = gr.State(-1)
 
-            inpaint_toggle = ui_controlnet.add_controlnet_tab(
-                main_view, inpaint_view, prompt, image_number, run_event
+            def update_model_previews(revision, model_filter, lora_filter, active_loras):
+                current = shared.models.revision
+                if revision == current:
+                    return gr.skip(), gr.skip(), gr.skip()
+                return (current, update_model_filter(model_filter),
+                        update_lora_filter(lora_filter, active_loras))
+
+            cfg_timer.tick(
+                fn=update_model_previews,
+                inputs=[model_revision, modelfilter, lorafilter, lora_active_gallery],
+                outputs=[model_revision, model_gallery, lora_gallery],
+                api_visibility='undocumented',
+                queue=False,
             )
 
-            with gr.Tab(label=t("Info")):
+            ui_onebutton.ui_onebutton(prompt, run_event)
+
+            # Image tools follow a preset's effective checkpoint without changing
+            # the user's Main model selection or API-default identity.
+            def update_effective_image_checkpoint(checkpoint, preset):
+                from modules.image_guidance import effective_preset_checkpoint
+                selected = effective_preset_checkpoint(checkpoint, preset, settings.get('preset_mode', 7))
+                return gr.update(value=selected) if selected is not None else gr.update()
+            gr.on(triggers=[base_model.change, preset_selection.change],
+                fn=update_effective_image_checkpoint, inputs=[base_model, preset_selection],
+                outputs=effective_image_checkpoint, api_visibility='undocumented')
+            inpaint_toggle = ui_controlnet.add_controlnet_tab(
+                main_view, inpaint_view, prompt, image_number, run_event,
+                effective_image_checkpoint, preset_selection=preset_selection, main_model=base_model
+            )
+            upscale_input = upscale_upload
+            def update_upscale_size(scale, target, resolution, width, height, image):
+                if target == "Input image only":
+                    if image is None:
+                        return "Drop an image in the main upload area to see its output size."
+                    width, height = image.size
+                    resolution = "Input image"
+                return describe_size(scale, resolution, width, height, resolution_settings.aspect_ratios)
+            upscale_size_inputs = [automatic_upscale, automatic_upscale_target,
+                aspect_ratios_selection, custom_width, custom_height, upscale_input]
+            for size_control in upscale_size_inputs:
+                size_control.change(update_upscale_size, inputs=upscale_size_inputs,
+                    outputs=[upscale_size], api_visibility='undocumented')
+            def switch_upscale_view(scale, target):
+                enabled = scale != "Off"
+                upload = enabled and target == "Input image only"
+                return [gr.update(visible=enabled),
+                        gr.update(visible=not upload), gr.update(visible=upload),
+                        gr.update(value=t("Upscale") if upload else t("Generate"))]
+            for view_control in (automatic_upscale, automatic_upscale_target):
+                view_control.change(switch_upscale_view, inputs=[automatic_upscale, automatic_upscale_target],
+                    outputs=[upscale_options, main_view, upscale_upload, run_button],
+                    api_visibility='undocumented')
+            automatic_upscale.change(lambda scale: gr.update(value="Generated image") if scale == "Off" else gr.update(),
+                inputs=[automatic_upscale], outputs=[automatic_upscale_target], api_visibility='undocumented')
+
+            with gr.Tab(label=t("Details")):
                 with gr.Row():
                     metadata_json.render()
                 with gr.Row():
@@ -1147,7 +1296,7 @@ with shared.gradio_root as block:
                         value="""
                         <a href="https://discord.gg/CvpAFya9Rr"><img src="gradio_api/file=html/icon_clyde_white_RGB.svg" height="16" width="16" style="display:inline-block;">&nbsp;Discord</a><br>
                         <a href="https://github.com/runew0lf/RuinedFooocus"><img src="gradio_api/file=html/github-mark-white.svg" height="16" width="16" style="display:inline-block;">&nbsp;Github</a><br>
-                        <a href="gradio_api/file/html/last_image.html" style="color: gray; text-decoration: none" target="_blank">&pi;</a>
+                        <a href="gradio_api/file=html/last_image.html" target="_blank" rel="noopener">Last image</a>
                         """,
                     )
 
@@ -1156,96 +1305,109 @@ with shared.gradio_root as block:
                     hints = update_log.read()
             except:
                 hints = ''
-            hint_text = gr.Markdown(
-                value=hints,
-                elem_id="hint-container",
-                elem_classes="hint-container",
-            )
+            with gr.Accordion(t("Changelog"), open=False, elem_id="changelog-panel"):
+                hint_text = gr.Markdown(
+                    value=hints,
+                    elem_id="hint-container",
+                    elem_classes="hint-container",
+                )
 
-            @performance_add.click(
-                api_visibility='undocumented',
-                inputs=[performance_selection],
-                outputs=[perf_name] + performance_outputs,
-            )
-            def performance_add_clicked(perf):
-                return [gr.update(value="")] + [gr.update(visible=True)] * len(performance_outputs)
-            @performance_delete.click(
-                api_visibility='undocumented',
-                inputs=[performance_selection],
-                outputs=[performance_selection],
-            )
-            def performance_delete_clicked(perf_name):
-                perf_options = performance_settings.load_performance()
-                choices = list(perf_options.keys()) + [
-                    performance_settings.CUSTOM_PERFORMANCE
-                ]
-                if perf_name == settings.get("performance", ""):
-                    gr.Info(f"ERROR: Can't remove \"{perf_name}\" since it is the default selection.")
-                    perf_name = ""
-                if perf_name != "":
-                    try:
-                        print(f"INFO: removing performance \"{perf_name}\"")
-                        del perf_options[perf_name]
-                        choices.remove(perf_name)
-                    except Exception as e:
-                        print(f"ERROR: performance_delete_clicked: {e}")
-                    performance_settings.save_performance(perf_options)
-                    return gr.update(choices=choices, value=settings.get("performance", choices[0]))
-                else:
-                    return gr.update()
+            def performance_control_updates(selection, family, checkpoint):
+                custom = selection == performance_settings.CUSTOM_PERFORMANCE
+                fixed = fixed_video_settings(family, checkpoint)
+                options = performance_settings.get_perf_options(selection, checkpoint, family)
+                updates = []
+                for key in ("cfg", "sampler_name", "scheduler", "clip_skip", "custom_steps"):
+                    update = {"visible": custom and key not in fixed}
+                    if key in fixed:
+                        update["value"] = fixed[key]
+                    elif selection != performance_settings.CUSTOM_PERFORMANCE:
+                        update["value"] = options[key]
+                    if key == "cfg":
+                        update["label"] = "Guidance" if family == "Hunyuan Video" else t("CFG")
+                    updates.append(gr.update(**update))
+                updates.append(gr.update(visible=family in VIDEO_FPS and custom and "video_fps" not in fixed,
+                                         **({"value": fixed["video_fps"]} if "video_fps" in fixed else {})))
+                updates.extend([gr.update(visible=uses_negative_prompt(family, checkpoint))] * 2)
+                return updates
 
-            @performance_selection.change(
-                api_visibility='undocumented',
-                inputs=[performance_selection],
-                outputs=[perf_name] + performance_outputs,
-            )
-            def performance_changed(selection):
-                if selection == performance_settings.CUSTOM_PERFORMANCE:
-                    return [gr.update(value="")] + [gr.update(visible=True)] * len(
-                        performance_outputs
-                    )
-                else:
-                    return [gr.update(visible='hidden')] + [
-                        gr.update(visible='hidden')
-                    ] * len(performance_outputs)
+            video_performance_outputs = performance_outputs + [video_fps, auto_negative_prompt, negative_prompt]
 
-            @performance_selection.change(
-                api_visibility='undocumented',
-                inputs=[performance_selection],
-                outputs=[custom_steps]
-                + [cfg]
-                + [sampler_name]
-                + [scheduler]
-                + [clip_skip],
-            )
-            def performance_changed_update_custom(selection):
-                # Skip if Custom was selected
-                if selection == performance_settings.CUSTOM_PERFORMANCE or selection == None:
-                    return [gr.update()] * 5
+            def refresh_recommendation(selection, family, checkpoint, automatic, force=False):
+                if family in VIDEO_FPS:
+                    return "Checkpoint recommendations currently support image models."
+                store = performance_settings.model_recommendations
+                if force or (automatic and selection == performance_settings.MODEL_PERFORMANCE):
+                    store.refresh(checkpoint, KSampler.SAMPLERS, KSampler.SCHEDULERS, force)
+                from modules.model_recommendations import FAMILY_PRESETS
+                options = performance_settings.get_perf_options(performance_settings.MODEL_PERFORMANCE, checkpoint, family)
+                return store.describe(checkpoint, options, KSampler.SAMPLERS, KSampler.SCHEDULERS,
+                                      family_default=FAMILY_PRESETS.get(family, family) in performance_settings.performance_options)
 
-                # Update Custom values based on selected Performance mode
-                selected_perf_options = performance_settings.get_perf_options(selection)
-                return {
-                    custom_steps: gr.update(
-                        value=selected_perf_options["custom_steps"]
-                    ),
-                    cfg: gr.update(value=selected_perf_options["cfg"]),
-                    sampler_name: gr.update(
-                        value=selected_perf_options["sampler_name"]
-                    ),
-                    scheduler: gr.update(value=selected_perf_options["scheduler"]),
-                    clip_skip: gr.update(value=selected_perf_options["clip_skip"]),
-                }
+            recommendation_inputs = [performance_selection, model_family, base_model, auto_recommendations]
+            recommendation_use.click(lambda: performance_settings.MODEL_PERFORMANCE,
+                                     outputs=[performance_selection], api_visibility='undocumented')
+            recommendation_refresh.click(
+                lambda selection, family, checkpoint, automatic: refresh_recommendation(selection, family, checkpoint, automatic, True),
+                inputs=recommendation_inputs, outputs=[recommendation_status], api_visibility='undocumented').then(
+                    performance_control_updates, inputs=[performance_selection, model_family, base_model],
+                    outputs=video_performance_outputs, api_visibility='undocumented')
+
+            def save_checkpoint_override(checkpoint, family, steps, guidance, sampler, schedule, skip):
+                if family in VIDEO_FPS:
+                    raise gr.Error("Checkpoint overrides currently support image models.")
+                performance_settings.model_recommendations.save_override(
+                    checkpoint, dict(custom_steps=steps, cfg=guidance, sampler_name=sampler, scheduler=schedule, clip_skip=skip),
+                    KSampler.SAMPLERS, KSampler.SCHEDULERS)
+                return performance_settings.MODEL_PERFORMANCE
+
+            recommendation_save.click(save_checkpoint_override,
+                inputs=[base_model, model_family, custom_steps, cfg, sampler_name, scheduler, clip_skip],
+                outputs=[performance_selection], api_visibility='undocumented')
+            def reset_checkpoint_override(checkpoint, family):
+                if family in VIDEO_FPS:
+                    raise gr.Error("Checkpoint overrides currently support image models.")
+                performance_settings.model_recommendations.reset_override(checkpoint)
+                return performance_settings.MODEL_PERFORMANCE
+            recommendation_reset.click(reset_checkpoint_override, inputs=[base_model, model_family],
+                outputs=[performance_selection], api_visibility='undocumented').then(
+                    performance_control_updates, inputs=[performance_selection, model_family, base_model],
+                    outputs=video_performance_outputs, api_visibility='undocumented')
+            performance_selection.change(
+                refresh_recommendation, inputs=recommendation_inputs, outputs=[recommendation_status],
+                api_visibility='undocumented').then(
+                performance_control_updates, inputs=[performance_selection, model_family, base_model],
+                outputs=video_performance_outputs, api_visibility='undocumented')
+            model_controls_event.then(
+                refresh_recommendation, inputs=recommendation_inputs, outputs=[recommendation_status],
+                api_visibility='undocumented').then(
+                performance_control_updates, inputs=[performance_selection, model_family, base_model],
+                outputs=video_performance_outputs, api_visibility='undocumented')
+            block.load(refresh_recommendation, inputs=recommendation_inputs,
+                       outputs=[recommendation_status], api_visibility='undocumented').then(
+                performance_control_updates, inputs=[performance_selection, model_family, base_model],
+                outputs=video_performance_outputs, api_visibility='undocumented')
+
+            workflow_inputs = [model_family, base_model, performance_selection,
+                               custom_steps, cfg, sampler_name, scheduler]
+            for component in workflow_inputs:
+                if component is not model_family:
+                    component.change(performance_settings.describe_workflow,
+                                     inputs=workflow_inputs, outputs=[workflow_help],
+                                     api_visibility='undocumented')
+            model_controls_event.then(performance_settings.describe_workflow,
+                                      inputs=workflow_inputs, outputs=[workflow_help],
+                                      api_visibility='undocumented')
 
             @aspect_ratios_selection.change(
                 api_visibility='undocumented',
                 inputs=[aspect_ratios_selection],
-                outputs=[ratio_name, custom_width, custom_height, ratio_save],
+                outputs=[ratio_name, custom_width, custom_height, ratio_save, ratio_delete],
             )
             def aspect_ratios_changed(selection):
                 # Show resolution controls when selecting Custom
                 if selection == resolution_settings.CUSTOM_RESOLUTION:
-                    return [gr.update(visible=True)] * 4
+                    return [gr.update(visible=True)] * 4 + [gr.update(visible=False)]
 
                 # Hide resolution controls and update with selected resolution
                 selected_width, selected_height = resolution_settings.get_aspect_ratios(
@@ -1256,6 +1418,7 @@ with shared.gradio_root as block:
                     custom_width: gr.update(visible='hidden', value=selected_width),
                     custom_height: gr.update(visible='hidden', value=selected_height),
                     ratio_save: gr.update(visible='hidden'),
+                    ratio_delete: gr.update(visible=resolution_settings.is_custom(selection)),
                 }
 
         run_event.change(
@@ -1286,8 +1449,7 @@ with shared.gradio_root as block:
         run_button.click(fn=poke, api_visibility='undocumented', inputs=run_event, outputs=run_event)
 
         def stop_clicked():
-            worker.interrupt_ruined_processing = True
-            shared.state["interrupted"] = False
+            worker.interrupt_processing()
 
         stop_button.click(fn=stop_clicked, api_visibility='undocumented', queue=False)
 
@@ -1309,30 +1471,31 @@ with shared.gradio_root as block:
             outputs=[main_view, inpaint_view, progress_html, gallery],
         )
 
-        def update_cfg():
+        def update_cfg(family, checkpoint, current_resolution):
+            family = shared.models.get_model_base(shared.models.get_models_by_path("checkpoints", checkpoint))
             # Update ui components
             # Only refresh things like minimum, maximum and choices. Assume the user already
             # have options selected and don't overwrite them. (They should restart if they want that)
             return {
                 image_number: gr.update(maximum=settings.get("image_number_max", 50)),
                 performance_selection: gr.update(
-                    choices=list(performance_settings.performance_options.keys()) + [performance_settings.CUSTOM_PERFORMANCE]
+                    choices=performance_settings.choices_for_model(family, checkpoint)
                 ),
                 aspect_ratios_selection: gr.update(
-                    choices=list(resolution_settings.aspect_ratios.keys())
-                    + [resolution_settings.CUSTOM_RESOLUTION]
+                    choices=resolution_settings.choices_for_model(family),
+                    value=resolution_settings.selection_for_model(family, current_resolution)
                 ),
                 cfg_timestamp: gr.update(value=shared.state["last_config"]),
             }
         # If cfg_timestamp has a new value, trigger an update
-        cfg_timestamp.change(fn=update_cfg, api_visibility='undocumented', outputs=[cfg_timestamp] + state["cfg_items_obj"])
+        cfg_timestamp.change(fn=update_cfg, inputs=[model_family, base_model, aspect_ratios_selection], api_visibility='undocumented', outputs=[cfg_timestamp] + state["cfg_items_obj"])
 
         # Preset functions
         def preset_select(preset_gallery, evt: gr.SelectData):
             path = evt.value['image']['path']
             preset = Path(path).with_suffix('').name
             show_models = gr.update(visible='hidden') if (0b100 & settings.get("preset_mode", 7)) else gr.update()
-            show_perf = gr.update(visible='hidden') if (0b010 & settings.get("preset_mode", 7)) else gr.update()
+            show_perf = gr.update(visible=False)
             show_size = gr.update(visible='hidden') if (0b001 & settings.get("preset_mode", 7)) else gr.update()
             return {
                 preset_image: gr.update(value=path),
@@ -1340,8 +1503,7 @@ with shared.gradio_root as block:
                 preset_accordion: gr.update(label=t("Preset:") + " " + preset),
 
                 performance_selection: show_perf,
-                perf_name: show_perf,
-                perf_save: show_perf,
+                performance_help: show_perf,
                 cfg: show_perf,
                 sampler_name: show_perf,
                 scheduler: show_perf,
@@ -1356,7 +1518,7 @@ with shared.gradio_root as block:
             }
 
         def preset_unselect(performance_selection_val, aspect_ratios_selection_val):
-            show_perf = True if (performance_selection_val == performance_settings.CUSTOM_PERFORMANCE) else 'hidden'
+            show_perf = performance_selection_val == performance_settings.CUSTOM_PERFORMANCE
             show_size = True if (aspect_ratios_selection_val == resolution_settings.CUSTOM_RESOLUTION) else 'hidden'
 
             return {
@@ -1364,8 +1526,7 @@ with shared.gradio_root as block:
                 preset_accordion: gr.update(label=t("Preset:")),
 
                 performance_selection: gr.update(visible=True),
-                perf_name: gr.update(visible=show_perf),
-                perf_save: gr.update(visible=show_perf),
+                performance_help: gr.update(visible=True),
                 cfg: gr.update(visible=show_perf),
                 sampler_name: gr.update(visible=show_perf),
                 scheduler: gr.update(visible=show_perf),
@@ -1388,8 +1549,7 @@ with shared.gradio_root as block:
                 preset_accordion: gr.update(label=t("Preset:" + " " + preset)),
 
                 performance_selection: gr.update(visible='hidden'),
-                perf_name: gr.update(visible='hidden'),
-                perf_save: gr.update(visible='hidden'),
+                performance_help: gr.update(visible='hidden'),
                 cfg: gr.update(visible='hidden'),
                 sampler_name: gr.update(visible='hidden'),
                 scheduler: gr.update(visible='hidden'),
@@ -1415,8 +1575,7 @@ with shared.gradio_root as block:
                 preset_accordion,
 
                 performance_selection,
-                perf_name,
-                perf_save,
+                performance_help,
                 cfg,
                 sampler_name,
                 scheduler,
@@ -1441,8 +1600,7 @@ with shared.gradio_root as block:
                 preset_accordion,
 
                 performance_selection,
-                perf_name,
-                perf_save,
+                performance_help,
                 cfg,
                 sampler_name,
                 scheduler,
@@ -1466,8 +1624,7 @@ with shared.gradio_root as block:
                 preset_accordion,
 
                 performance_selection,
-                perf_name,
-                perf_save,
+                performance_help,
                 cfg,
                 sampler_name,
                 scheduler,
@@ -1484,18 +1641,14 @@ with shared.gradio_root as block:
 
     add_api()
 
-if isinstance(args.auth, str) and not "/" in args.auth:
-    if len(args.auth):
-        print(
-            f'\nERROR! --auth need be in the form of "username/password" not "{args.auth}"\n'
-        )
-    if args.share:
-        print(
-            f"\nWARNING! Will not enable --share without proper --auth=username/password\n"
-        )
-        args.share = False
+if args.api:
+    from modules.openai_api import install, validate_options
+    api_key = validate_options(args)
 launch_app(args)
 add_fastapi()
+if args.api:
+    install(shared.server_app, api_key)
+    print(f"API enabled: {shared.local_url}v1/docs | Image tool: {shared.local_url}tools/openapi.json")
 
 # Wait...
 while True:

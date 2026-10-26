@@ -1,7 +1,3 @@
-try:
-    from transformers import CLIPTokenizer
-except:
-    pass
 from modules.translation_manager import TranslationManager
 from modules.settings import SettingsManager
 from modules.performance import PerformanceSettings
@@ -33,11 +29,6 @@ state = {
 }
 
 wildcards = None
-try:
-    tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-large-patch14")
-except:
-    print("No tokenizer in shared.py yet")
-    tokenizer = None
 
 settings = SettingsManager()
 path_manager = PathManager()

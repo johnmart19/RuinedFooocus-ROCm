@@ -187,37 +187,3 @@ def remove_empty_str(items, default=None):
     if len(items) == 0 and default is not None:
         return [default]
     return items
-
-
-def get_model_thumbnail(model):
-    res = _get_model_thumbnail(
-        Path(path_manager.model_paths["cache_path"] / "checkpoints" / Path(model).name),
-        not_found=None
-    )
-    if res is not None:
-        return res
-    res = _get_model_thumbnail(
-        Path(path_manager.model_paths["cache_path"] / "loras" / Path(model).name),
-        not_found=None
-    )
-    if res is not None:
-        return str(res)
-    else:
-        return "html/warning.png"
-
-def get_model_path(model, folders):
-    for folder in folders:
-        filename = Path(folder) / model
-        if filename.exists():
-            return filename
-    return None
-
-def get_checkpoint_path(model, folders=None):
-    if folders is None:
-        folders = [path_manager_model_paths["modelfile_path"]]
-    return get_model_path(model, folders)
-
-def get_lora_path(model, folders=None):
-    if folders is None:
-        folders = [path_manager_model_paths["lorafile_path"]]
-    return get_model_path(model, folders)
