@@ -1,8 +1,4 @@
-import time
 import gradio as gr
-from typing import Any
-import base64
-import numpy as np
 from pathlib import Path
 from urllib.parse import quote
 import shared
@@ -34,72 +30,24 @@ def get_last_image() -> str:
 
 def add_api():
 
-    # llama
-    from modules.llama_pipeline import run_llama
-    def api_llama(system: str, user: str) -> str:
-        """
-        Talk to the RuinedFooocus llama llm model.
+    from modules import api_runtime
 
-        Args:
-            system (str): System prompt
-            user (str): user input
-        """
-        prompt = f"system: {system}\n\n{user}"
-        return run_llama(None, prompt)
+    def api_llama(system: str, user: str) -> str:
+        """Talk to the selected local chat model on the shared GPU worker."""
+        model, selected = api_runtime.configured_chat_model()
+        result = api_runtime.wait_for_result(api_runtime.chat({
+            "model": model,
+            "messages": [{"role": "system", "content": system},
+                         {"role": "user", "content": user}],
+            "max_tokens": settings.default_settings.get("llm_hp_max_tokens", 256),
+        }, selected))
+        return result["choices"][0]["message"]["content"] or user
     gr.api(api_llama, api_name="llama")
 
-    # process
-    import modules.async_worker as worker
-    def _api_process(prompt: str) -> list:
-        tmp_data = {
-            'task_type': "api_process",
-            'prompt': prompt,
-            'negative': "",
-            'loras': [
-                ("", f"{settings.default_settings.get('lora_1_weight', 1.0)} - {settings.default_settings.get('lora_1_model', 'None')}"),
-                ("", f"{settings.default_settings.get('lora_2_weight', 1.0)} - {settings.default_settings.get('lora_2_model', 'None')}"),
-                ("", f"{settings.default_settings.get('lora_3_weight', 1.0)} - {settings.default_settings.get('lora_3_model', 'None')}"),
-                ("", f"{settings.default_settings.get('lora_4_weight', 1.0)} - {settings.default_settings.get('lora_4_model', 'None')}"),
-                ("", f"{settings.default_settings.get('lora_5_weight', 1.0)} - {settings.default_settings.get('lora_5_model', 'None')}"),
-            ],
-            'style_selection': settings.default_settings['style'],
-            'seed': -1,
-            'base_model_name': settings.default_settings['base_model'],
-            'performance_selection': settings.default_settings['performance'],
-            'aspect_ratios_selection': settings.default_settings["resolution"],
-            'cn_selection': None,
-            'cn_type': None,
-
-            'image_number': 1,
-        }
-
-        # Add work
-        task_id = worker.add_task(tmp_data.copy())
-
-        # Wait for result
-        finished = False
-        while not finished:
-            flag, product = worker.task_result(task_id)
-            if flag == "results":
-                finished = True
-
-        return product
-
-    def api_generate_image(prompt: str) -> str:
-        """
-        Generates an image from a prompt describing a scene.
-
-        Args:
-            prompt (str): Description what the image should look like
-        """
-        file = _api_process(prompt)[0]
-
-        result = {
-            "path": str(file),
-            "meta": {"_type": "gradio.FileData"}
-        }
-
-        return result
+    def api_generate_image(prompt: str) -> dict:
+        """Generate an image using the shared API settings and GPU worker."""
+        files = api_runtime.wait_for_result(api_runtime.legacy_images(prompt))
+        return {"path": str(files[0]), "meta": {"_type": "gradio.FileData"}}
     gr.api(api_generate_image, api_name="generate_image")
 
     # Search
@@ -135,7 +83,13 @@ def add_api():
     gr.api(get_last_image, api_name="last_image")
 
 def add_fastapi():
-    async def last_image(w: int = 0, h: int = 0, format: str = "PNG"):
+    from fastapi import Request
+    from modules.web_access import require_ui_login
+    from modules.browser_python import install_routes
+    install_routes(shared.server_app)
+
+    async def last_image(request: Request, w: int = 0, h: int = 0, format: str = "PNG"):
+        require_ui_login(request)
         filename = get_last_image()
         img = Image.open(filename)
         ow, oh = img.size

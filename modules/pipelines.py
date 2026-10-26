@@ -1,8 +1,6 @@
-import os
-from shared import state, path_manager
+from shared import state
 import shared
 from pathlib import Path
-import re
 
 import modules.image_pipeline as image_pipeline
 import modules.template_pipeline as template_pipeline
@@ -16,12 +14,22 @@ import modules.hashbang_pipeline as hashbang_pipeline
 import modules.ltx_video_pipeline as ltx_video_pipeline
 import modules.video_pipeline as video_pipeline
 import modules.controlnet as controlnet
+from modules.video_settings import VIDEO_PIPELINES
 
 class NoPipeLine:
     pipeline_type = []
 
+def selected_pipeline():
+    from modules.auxiliary_resources import release_except
+    selected = state['pipeline']
+    release_except('rembg' if 'rembg' in selected.pipeline_type else None)
+    return selected
+
 def update(gen_data):
     prompt = gen_data["prompt"] if "prompt" in gen_data else ""
+    if "_api_job" in gen_data or gen_data.get("task_type") == "tool_call":
+        # API and model-generated tool prompts cannot invoke local commands.
+        prompt = ""
     cn_settings = controlnet.get_settings(gen_data)
     cn_type = cn_settings["type"] if "type" in cn_settings else ""
 
@@ -79,10 +87,17 @@ def update(gen_data):
                     path = shared.models.get_models_by_path("checkpoints", file)
                     baseModel = shared.models.get_model_base(path)
                 baseModelName = gen_data['base_model_name']
+            video_type = VIDEO_PIPELINES.get(baseModel)
+            if video_type:
+                if state["pipeline"] is None or video_type not in state["pipeline"].pipeline_type:
+                    factories = {"wan_video": wan_video_pipeline, "hunyuan_video": hunyuan_video_pipeline,
+                                 "ltx_video": ltx_video_pipeline, "video_pipeline": video_pipeline}
+                    state["pipeline"] = factories[video_type].pipeline()
+                return selected_pipeline()
             if state["pipeline"] is None:
                 state["pipeline"] = NoPipeLine()
 
-            elif (
+            if (
                 baseModel == "Hunyuan Video" or
                 Path(gen_data['base_model_name']).parts[0] == "Hunyuan Video" or
                 str(Path(file).name).startswith("hunyuan-video-t2v-") or
@@ -141,9 +156,7 @@ def update(gen_data):
             print(f"Using default pipeline.")
             state["pipeline"] = image_pipeline.pipeline()
 
-        return state["pipeline"]
-    except:
-        # If things fail. Use the template pipeline that only returns a logo
-        print(f"Something went wrong. Falling back to template pipeline.")
-        state["pipeline"] = template_pipeline.pipeline()
-        return state["pipeline"]
+        return selected_pipeline()
+    except Exception as error:
+        # Let the worker report the failure and restore controls for retry.
+        raise RuntimeError(f"Could not select generation pipeline: {error}") from error

@@ -1,4 +1,3 @@
-import comfy.model_management as model_management
 import threading
 import gc
 import torch
@@ -7,9 +6,9 @@ import time
 import pathlib
 from pathlib import Path
 import traceback
+from modules.task_errors import describe_error
 
 import json
-import os
 import shared
 import random
 
@@ -20,13 +19,29 @@ from PIL import Image
 from PIL.PngImagePlugin import PngInfo
 from modules.util import generate_temp_filename, TimeIt, get_checkpoint_hashes, get_lora_hashes
 import modules.pipelines
+import comfy.model_management as model_management
 from shared import settings
 
 buffer = []
 outputs = []
 current_task = 0
+task_lock = threading.Lock()
+api_jobs = {}
 
 interrupt_ruined_processing = False
+
+def interrupt_processing():
+    global interrupt_ruined_processing
+    interrupt_ruined_processing = True
+    model_management.interrupt_current_processing(True)
+
+
+def check_interrupt(gen_data):
+    job = gen_data.get("_api_job")
+    if interrupt_ruined_processing or (job is not None and job.cancelled.is_set()):
+        raise model_management.InterruptProcessingException()
+    model_management.throw_exception_if_processing_interrupted()
+
 
 def is_sha256_hash(input_string):
     # Check if the string is exactly 64 characters long
@@ -38,9 +53,25 @@ def is_sha256_hash(input_string):
     return True
 
 def _process(gen_data):
+    check_interrupt(gen_data)
     res = []
     metadatastrings = []
-    gen_data = process_metadata(gen_data)
+    # Named sampling defaults apply first; imported image/JSON metadata wins.
+    initial_family = shared.models.get_model_base(shared.models.get_models_by_path(
+        "checkpoints", gen_data.get("base_model_name", "")))
+    gen_data = shared.performance_settings.apply(gen_data, initial_family)
+    if "_api_job" not in gen_data and gen_data.get("task_type") != "tool_call":
+        gen_data = process_metadata(gen_data)
+
+    from modules.video_settings import VIDEO_FPS, constrain_video_settings
+    family = shared.models.get_model_base(shared.models.get_models_by_path(
+        "checkpoints", gen_data.get("base_model_name", "")))
+    if family in VIDEO_FPS and gen_data.get("performance_selection") not in shared.performance_settings.choices_for_model(
+            family, gen_data.get("base_model_name", "")):
+        gen_data["performance_selection"] = shared.performance_settings.selection_for_model(
+            family, gen_data.get("base_model_name", ""), None)
+        gen_data = shared.performance_settings.apply(gen_data, family)
+    gen_data = constrain_video_settings(gen_data, family)
 
     pipeline = modules.pipelines.update(gen_data)
     if pipeline == None:
@@ -87,18 +118,6 @@ def _process(gen_data):
     if "silent" not in gen_data:
         outputs.append([gen_data["task_id"], "preview", (-1, f"Loading LoRA models ...", None)])
 
-    # FIXME move this into get_perf_options?
-    if (
-        gen_data["performance_selection"] == shared.performance_settings.CUSTOM_PERFORMANCE or
-        gen_data["performance_selection"] == None
-    ):
-        steps = gen_data["custom_steps"]
-    else:
-        perf_options = shared.performance_settings.get_perf_options(
-            gen_data["performance_selection"]
-        ).copy()
-        perf_options.update(gen_data)
-        gen_data = perf_options
     steps = gen_data["custom_steps"]
     gen_data["steps"] = steps
 
@@ -121,16 +140,6 @@ def _process(gen_data):
     else:
         gen_data["height"] = height
 
-    # TODO: Leave this logic to the pipeline?
-    if gen_data["cn_selection"] == "Img2Img" or gen_data["cn_type"] == "Img2img":
-        if gen_data["input_image"]:
-            width = gen_data["input_image"].width
-            height = gen_data["input_image"].height
-        else:
-            print(f"WARNING: CheatCode selected but no Input image selected. Ignoring PowerUp!")
-            gen_data["cn_selection"] = "None"
-            gen_data["cn_type"] = "None"
-
     try:
         seed = int(gen_data["seed"])
     except:
@@ -145,16 +154,11 @@ def _process(gen_data):
     status = random.choice(lines)
     status = f"{status}"
 
-    class InterruptProcessingException(Exception):
-        pass
-
     def callback(step, x0, x, total_steps, y):
-        global status, interrupt_ruined_processing
-
-        if interrupt_ruined_processing:
-            shared.state["interrupted"] = True
-            interrupt_ruined_processing = False
-            raise InterruptProcessingException()
+        global status
+        check_interrupt(gen_data)
+        if "silent" in gen_data:
+            return
 
         # If we only generate 1 image, skip the last preview
         if (
@@ -180,7 +184,7 @@ def _process(gen_data):
         pheight = int(height * grid_ysize / grid_max)
         if shared.state["preview_grid"] is None:
             shared.state["preview_grid"] = Image.new("RGB", (pwidth, pheight))
-        if y is not None and step != 0: # FIXME: Weird bug where the 0th step has the preview from the last image, so just skip it
+        if y is not None:
             if isinstance(y, Image.Image):
                 image = y
             elif isinstance(y, str):
@@ -231,9 +235,12 @@ def _process(gen_data):
         gen_data["main_view"] = None
 
     stop_batch = False
+    prompt_styles = gen_data["style_selection"]
+    if modules.controlnet.get_settings(gen_data).get("preserve_details"):
+        prompt_styles = []
     for i in range(max(image_number, 1)):
         p_txt, n_txt = process_prompt(
-            gen_data["style_selection"], gen_data["prompt"], gen_data["negative"], gen_data
+            prompt_styles, gen_data["prompt"], gen_data["negative"], gen_data
         )
 
         distance = float(i) / max(image_number - 1.0, 1.0) # Use max() to avoid div. by 0
@@ -245,6 +252,7 @@ def _process(gen_data):
         denoise = None
         with TimeIt("Pipeline process"):
             try:
+                check_interrupt(gen_data)
                 # Load LoRAs
                 parsed_loras, p_txt, n_txt = parse_loras(p_txt, n_txt)
                 used_loras = loras + parsed_loras
@@ -254,9 +262,10 @@ def _process(gen_data):
 
                 imgs = pipeline.process(
                     gen_data=gen_data,
-                    callback=callback if "silent" not in gen_data else None,
+                    callback=callback,
                 )
-            except InterruptProcessingException as iex:
+            except model_management.InterruptProcessingException:
+                shared.state["interrupted"] = True
                 stop_batch = True
                 imgs = []
             except Exception as iex:
@@ -264,6 +273,10 @@ def _process(gen_data):
                 imgs = []
                 traceback.print_exc()
                 print(f"ERROR: {iex}")
+                if "_api_job" in gen_data:
+                    gen_data["_api_job"].events.put(("error", describe_error(iex)))
+                else:
+                    add_result(gen_data["task_id"], "error", describe_error(iex))
 
         for x in imgs:
             folder=shared.path_manager.model_paths["temp_outputs_path"]
@@ -288,11 +301,25 @@ def _process(gen_data):
                 "base_model_hash": gen_data["base_model_hash"],
                 "loras": [[f"{get_lora_hashes(lora['name'])['SHA256']}", f"{lora['weight']} - {lora['name']}"] for lora in used_loras],
                 "start_step": start_step,
-                "denoise": denoise,
+                "denoise": gen_data.get("sampling_denoise", denoise),
                 "clip_skip": gen_data["clip_skip"],
                 "comment": settings.default_settings.get("meta_comment", ""),
                 "software": "RuinedFooocus",
             }
+            if gen_data.get('image_guidance'):
+                # Flat effective fields round-trip through imported image
+                # metadata; the grouped form also identifies the applied recipe.
+                prompt.update(gen_data['image_guidance'])
+                prompt['image_guidance'] = dict(gen_data['image_guidance'])
+                prompt['reference_image_count'] = gen_data.get('reference_image_count', 0)
+            if "upscale" in pipeline.pipeline_type:
+                prompt.update(width=x.shape[1], height=x.shape[0],
+                              upscaler=modules.controlnet.get_settings(gen_data)["upscaler"])
+            elif gen_data.get("automatic_upscale_model"):
+                prompt.update(width=x.shape[1], height=x.shape[0],
+                              generation_width=width, generation_height=height,
+                              automatic_upscale=gen_data["automatic_upscale"],
+                              upscaler=gen_data["automatic_upscale_model"])
             metadata = PngInfo()
             # if True:
             #     def handle_whitespace(string: str):
@@ -346,13 +373,24 @@ def _process(gen_data):
     return res
 
 def worker():
+    global interrupt_ruined_processing
     global buffer, outputs
 
-    pipeline = modules.pipelines.update(
-        {"base_model_name": settings.default_settings.get("base_model")}
-    )
-    if not pipeline == None:
-        pipeline.load_base_model(settings.default_settings.get("base_model"))
+    pipeline = None
+    try:
+        pipeline = modules.pipelines.update(
+            {"base_model_name": settings.default_settings.get("base_model")}
+        )
+        if pipeline is not None:
+            pipeline.load_base_model(settings.default_settings.get("base_model"))
+    except Exception as error:
+        # A missing/broken startup model must not prevent later requests.
+        print(f"Startup model: {describe_error(error)}")
+        traceback.print_exc()
+    # shared.state owns the active pipeline. This thread lives for the entire
+    # session; retaining its startup reference pins the old checkpoint in RAM
+    # even after image/chat switching replaces it in shared.state.
+    del pipeline
 
     def job_start(gen_data):
         shared.state["preview_grid"] = None
@@ -418,8 +456,7 @@ def worker():
 
         pipeline = modules.pipelines.update(gen_data)
         if pipeline == None:
-            print(f"ERROR: No pipeline")
-            return
+            raise RuntimeError("No chat pipeline is available.")
 
         try:
             # See if pipeline wants to pre-parse gen_data
@@ -427,47 +464,93 @@ def worker():
         except:
             pass
 
-        results = pipeline.process(gen_data)
+        try:
+            results = pipeline.process(gen_data)
+        except Exception as error:
+            traceback.print_exc()
+            results = {"error": describe_error(error)}
 
         outputs.append([gen_data["task_id"], "results", results])
 
 
     def handler(gen_data):
+        from modules.auxiliary_resources import release_except
+        group = None
+        if gen_data['task_type'] == 'external_api':
+            group = getattr(gen_data['_api_job'].operation, 'resource_group', None)
+        elif gen_data['task_type'] == 'process':
+            control = modules.controlnet.get_settings(gen_data) or {}
+            group = 'rembg' if control.get('type') == 'rembg' else None
+        release_except(group)
         match gen_data["task_type"]:
+            case "external_api":
+                try:
+                    gen_data["_api_job"].run(gen_data["task_id"])
+                finally:
+                    api_jobs.pop(gen_data["task_id"], None)
             case "process":
-                process(gen_data)
-            case "api_process":
-                gen_data["silent"] = True
                 process(gen_data)
             case "llama":
                 txt2txt_process(gen_data)
             case _:
-                print(f"WARN: Unknown task_type: {gen_data['task_type']}")
+                raise ValueError(f"Unknown task type: {gen_data['task_type']}")
 
     while True:
         time.sleep(0.01)
         if len(buffer) > 0:
             task = buffer.pop(0)
-            handler(task)
-            gc.collect()
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-                torch.cuda.ipc_collect()
+            try:
+                handler(task)
+            except model_management.InterruptProcessingException:
+                shared.state["interrupted"] = True
+                if "_api_job" in task:
+                    task["_api_job"].events.put(("error", "Generation stopped."))
+                elif task.get("task_type") == "llama":
+                    add_result(task["task_id"], "results", {"error": "The operation was stopped. You can retry."})
+                else:
+                    add_result(task["task_id"], "results", [])
+            except Exception as error:
+                # Loading, metadata and prompt preparation can fail before the
+                # sampling try/except. Always finish the request and keep serving.
+                traceback.print_exc()
+                if "_api_job" in task:
+                    task["_api_job"].events.put(("error", str(error)))
+                elif task.get("task_type") == "llama":
+                    add_result(task["task_id"], "results", {"error": describe_error(error)})
+                else:
+                    add_result(task["task_id"], "error", describe_error(error))
+                    add_result(task["task_id"], "results", [])
+            finally:
+                interrupt_ruined_processing = False
+                try:
+                    model_management.interrupt_current_processing(False)
+                    gc.collect()
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                        torch.cuda.ipc_collect()
+                except Exception:
+                    # Cleanup must not kill the worker after a recoverable failure.
+                    traceback.print_exc()
 
 # Use this to add a task, then use task_result() to get data from the pipeline
 def add_task(gen_data):
     global current_task, buffer
 
-    current_task += 1
-    task_id = current_task 
-    gen_data["task_id"] = task_id
-    buffer.append(gen_data.copy())
+    start_worker()
+    with task_lock:
+        current_task += 1
+        task_id = current_task
+        gen_data["task_id"] = task_id
+        if "_api_job" in gen_data:
+            api_jobs[task_id] = gen_data["_api_job"]
+        buffer.append(gen_data.copy())
     return task_id
 
 # Pipelines use this to add results
 def add_result(task_id, flag, product):
     global outputs
-
+    if task_id is None or task_id in api_jobs:
+        return
     outputs.append([task_id, flag, product])
 
 # Use the task_id from add_task() to wait for data
@@ -475,6 +558,8 @@ def task_result(task_id):
     global outputs
 
     while True:
+        if (worker_thread is None or not worker_thread.is_alive()) and not any(res[0] == task_id for res in outputs):
+            raise RuntimeError("The task worker stopped unexpectedly. Retry to restart it; see the terminal for details.")
         if not outputs:
             # Throttle check/updates
             time.sleep(settings.default_settings.get("update_interval", 0.1))
@@ -489,14 +574,20 @@ def task_result(task_id):
                 outputs.remove([id, flag, product])
             break
 
+        # Other queued requests may already have output. Do not busy-spin while
+        # waiting for this task's first event.
+        time.sleep(settings.default_settings.get("update_interval", 0.1))
+
     return (flag, product)
 
 
-threading.Thread(target=worker, daemon=True).start()
+worker_thread = None
 
 
-def check_interrupt(gen_data):
-    job = gen_data.get("_api_job")
-    if interrupt_ruined_processing or (job is not None and job.cancelled.is_set()):
-        raise model_management.InterruptProcessingException()
-    model_management.throw_exception_if_processing_interrupted()
+def start_worker():
+    """Start after pipeline imports complete; a later request can restart a dead worker."""
+    global worker_thread
+    with task_lock:
+        if worker_thread is None or not worker_thread.is_alive():
+            worker_thread = threading.Thread(target=worker, daemon=True)
+            worker_thread.start()
