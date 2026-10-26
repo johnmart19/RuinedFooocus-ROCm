@@ -1,17 +1,14 @@
+from modules.resource_defaults import resource_name
 from .util import remove_empty_str
 from comfy.model_patcher import ModelPatcher
 from transformers import AutoTokenizer, AutoModelForCausalLM, set_seed
 import comfy.model_management as model_management
 from transformers.generation.logits_process import LogitsProcessorList
-#from comfyui_gguf.nodes import gguf_sd_loader as load_gguf_sd, DualCLIPLoaderGGUF, GGUFModelPatcher
-#from comfyui_gguf.ops import GGMLOps
-from molbal_comfyui_gguf.nodes import gguf_sd_loader as load_gguf_sd, DualCLIPLoaderGGUF, GGUFModelPatcher
-from molbal_comfyui_gguf.ops import GGMLOps
+from molbal_comfyui_gguf.nodes import DualCLIPLoaderGGUF
 from comfy.sd import CLIPType, load_clip
 from shared import path_manager, settings
 import os
 import random
-import sys
 import torch
 import math
 
@@ -61,12 +58,9 @@ class FooocusExpansion:
         self.logits_bias = (
             torch.zeros((1, len(self.tokenizer.vocab)), dtype=torch.float32) + neg_inf
         )
-        debug_list = []
         for k, v in self.tokenizer.vocab.items():
             if k in positive_words:
                 self.logits_bias[0, v] = 0
-                debug_list.append(k[1:])
-        # print(f'Expansion: Vocab with {len(debug_list)} words.')
 
         text = safe_str(prompt) + ","
         tokenized_kwargs = self.tokenizer(text, return_tensors="pt")
@@ -133,7 +127,7 @@ class Erniehancer:
         self.clip_paths = []
         self.clip_type = CLIPType.FLUX2
 
-        clip_name = settings.default_settings.get("clip_ernie_enhancer", "ernie-image-prompt-enhancer.safetensors")
+        clip_name = resource_name("clip_ernie_enhancer", settings.default_settings)
         self.clip_names.append(str(clip_name))
         clip_path = path_manager.get_folder_file_path(
             "clip",
@@ -146,8 +140,6 @@ class Erniehancer:
         if all(name.endswith(".safetensors") for name in self.clip_paths):
             model_options = {}
             device = model_management.get_torch_device()
-#            if device == "cpu":
-#                model_options["load_device"] = model_options["offload_device"] = torch.device("cpu")
             model_options["load_device"] = model_options["offload_device"] = device
             self.clip = load_clip(ckpt_paths=self.clip_paths, clip_type=self.clip_type, model_options=model_options)
         else:
@@ -155,7 +147,7 @@ class Erniehancer:
             self.clip = clip_loader.load_patcher(
                 self.clip_paths,
                 self.clip_type,
-                clip_loader.load_data(clip_paths)
+                clip_loader.load_data(self.clip_paths)
             )
 
     def execute(self, prompt, image=None, thinking=False):
@@ -188,6 +180,3 @@ class Erniehancer:
         generated_text = self.clip.decode(generated_ids, skip_special_tokens=True)
         print(f"Erniehanced prompt:\n{generated_text}")
         return generated_text
-
-
-# Define a mapping of node class names to their respective classes

@@ -26,7 +26,8 @@ from superprompter.superprompter import *
 from random_prompt.one_button_presets import OneButtonPresets
 OBPresets = OneButtonPresets()
 
-from modules.llama_pipeline import run_llama, llama_names
+from modules.llama_pipeline import run_llama
+from modules.prompt_enhancement import image_prompt_instruction
 
 #builds a prompt dynamically
 # insanity level controls randomness of propmt 0-10
@@ -34,6 +35,8 @@ from modules.llama_pipeline import run_llama, llama_names
 # Set artistmode to none, to exclude artists 
 def build_dynamic_prompt(insanitylevel = 5, forcesubject = "all", artists = "all", imagetype = "all", onlyartists = False, antivalues = "", prefixprompt = "", suffixprompt ="",promptcompounderlevel ="1", seperator = "comma", givensubject="",smartsubject = True,giventypeofimage="", imagemodechance = 20, gender = "all", subtypeobject="all", subtypehumanoid="all", subtypeconcept="all", advancedprompting=True, hardturnoffemojis=False, seed=-1, overrideoutfit="", prompt_g_and_l = False, base_model = "SD1.5", OBP_preset = "", prompt_enhancer = "none", subtypeanimal="all", subtypelocation="all", preset_prefix = "", preset_suffix = ""):
 
+    prompt_model = ("Anime Model" if OBP_preset in ("Waifu's", "Husbando's")
+                    and base_model != "Stable Cascade" else base_model)
     remove_weights = False
     less_verbose = False
     add_vomit = True
@@ -82,12 +85,14 @@ def build_dynamic_prompt(insanitylevel = 5, forcesubject = "all", artists = "all
         advancedprompting == False
 
     original_OBP_preset = OBP_preset
+    enhancement_focus = ""
     if(OBP_preset == OBPresets.RANDOM_PRESET_OBP):
         obp_options = OBPresets.load_obp_presets()
         random_preset = random.choice(list(obp_options.keys()))
         print("Engaging randomized presets, locking on to: " + random_preset)
 
         selected_opb_preset = OBPresets.get_obp_preset(random_preset)
+        enhancement_focus = selected_opb_preset.get("enhancement_focus", "")
         insanitylevel = selected_opb_preset.get("insanitylevel", 5)
         forcesubject = selected_opb_preset.get("subject", "all")
         artists = selected_opb_preset.get("artist", "all")
@@ -110,6 +115,7 @@ def build_dynamic_prompt(insanitylevel = 5, forcesubject = "all", artists = "all
 
     if(OBP_preset != "" and OBP_preset != 'Custom...'):
         selected_opb_preset = OBPresets.get_obp_preset(OBP_preset)
+        enhancement_focus = selected_opb_preset.get("enhancement_focus", "")
         insanitylevel = selected_opb_preset.get("insanitylevel", 5)
         forcesubject = selected_opb_preset.get("subject", "all")
         artists = selected_opb_preset.get("artist", "all")
@@ -159,8 +165,8 @@ def build_dynamic_prompt(insanitylevel = 5, forcesubject = "all", artists = "all
 
     partlystylemode = False
     # cheat for presets
-    if(OBP_preset=='Waifu''s' or OBP_preset=='Husbando''s'):
-        basemodel = "Anime Model"
+    if OBP_preset in ("Waifu's", "Husbando's") and base_model != "Stable Cascade":
+        base_model = "Anime Model"
     # Base model options, used to change things in prompt generation. Might be able to extend to different forms like animatediff as well?
     base_model_options = ["SD1.5", "SDXL", "Stable Cascade", "Anime Model"]
     if base_model not in base_model_options:
@@ -3680,9 +3686,10 @@ def build_dynamic_prompt(insanitylevel = 5, forcesubject = "all", artists = "all
         subjectprompt = cleanup(promptlist[1], advancedprompting, insanitylevel)
         startprompt = cleanup(promptlist[0], advancedprompting, insanitylevel)
         endprompt = cleanup(promptlist[2], advancedprompting, insanitylevel)
-        randomllama = random.choice(llama_names())[1]
-        llamapromptresult = run_llama(randomllama, subjectprompt)
-        completeprompt = startprompt + ", " + llamapromptresult + ", " + endprompt
+        scene = ", ".join(part for part in (startprompt, subjectprompt, endprompt) if part.strip())
+        llamapromptresult = run_llama(None, scene,
+                                     instruction=image_prompt_instruction(prompt_model, enhancement_focus))
+        completeprompt = llamapromptresult
         prompt_g = llamapromptresult
         prompt_l = completeprompt
     elif(prompt_g_and_l == True):
@@ -5214,9 +5221,9 @@ def one_button_superprompt(insanitylevel = 5, prompt = "", seed = -1, override_s
     5: 0.6,
     6: 0.7,
     7: 1.0,
-    8: 2.5,
-    9: 5.0,
-    10: 10.0
+    8: 0.8,
+    9: 0.9,
+    10: 1.0
     }
 
     max_new_tokens_lookup = {
@@ -5235,14 +5242,14 @@ def one_button_superprompt(insanitylevel = 5, prompt = "", seed = -1, override_s
     top_p_lookup = {
     1: 0.1,
     2: 1.0,
-    3: 1.3,
-    4: 1.5,
-    5: 1.6,
-    6: 1.75,
-    7: 2.0,
-    8: 3.0,
-    9: 5.0,
-    10: 15.0
+    3: 0.9,
+    4: 0.9,
+    5: 0.95,
+    6: 0.95,
+    7: 0.95,
+    8: 1.0,
+    9: 1.0,
+    10: 1.0
     }
 
     chosensubject_lookup = {
@@ -5278,7 +5285,7 @@ def one_button_superprompt(insanitylevel = 5, prompt = "", seed = -1, override_s
         max_new_tokens = max_new_tokens_lookup.get(insanitylevel, 70)
     else:
         max_new_tokens = setnewtokens
-    top_p = top_p_lookup.get(insanitylevel, 1.6)
+    top_p = top_p_lookup.get(insanitylevel, 0.95)
     subject_to_generate = chosensubject_lookup.get(chosensubject, "")
 
     translation_table_remove_stuff = str.maketrans('', '', '.,:()<>|[]"" ')
@@ -5348,7 +5355,7 @@ def one_button_superprompt(insanitylevel = 5, prompt = "", seed = -1, override_s
 
 
 
-    prompt = prompt.translate(translation_table_remove_numbers)
+    # Keep counts, years and requested text intact.
 
     while done == False:
         #print(seed)
@@ -5358,7 +5365,7 @@ def one_button_superprompt(insanitylevel = 5, prompt = "", seed = -1, override_s
         #print("chosen subject: " + chosensubject)
         
 
-        superpromptresult = answer(input_text=question + prompt, max_new_tokens=max_new_tokens, repetition_penalty=2.0, temperature=temperature, top_p=top_p, top_k=10, seed=seed)
+        superpromptresult = answer(input_text=question + prompt, max_new_tokens=max_new_tokens, repetition_penalty=2.0, temperature=temperature, top_p=min(1.0, max(0.01, top_p)), top_k=10, seed=seed)
 
         #print("orignal: " + prompt)
         #print("insanitylevel: " + str(insanitylevel))
