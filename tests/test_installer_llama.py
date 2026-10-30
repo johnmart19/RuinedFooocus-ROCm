@@ -14,6 +14,11 @@ class NativePackagePlanTests(unittest.TestCase):
             ('Windows', 'AMD64', True, 'CUDA 12.4', 'win-cuda-12.4-x64.zip'),
             ('Windows', 'AMD64', True, 'CUDA 13.4', 'win-cuda-13.4-x64.zip'),
             ('Windows', 'ARM64', False, 'CPU', 'win-cpu-arm64.zip'),
+            ('Windows', 'ARM64', True, 'Auto', 'win-vulkan-arm64.zip'),
+            ('Windows', 'ARM64', True, 'CUDA 13.4', 'win-cuda-13.4-arm64.zip'),
+            ('Linux', 'x86_64', True, 'CUDA 12.8', 'ubuntu-cuda-12.8-x64.tar.gz'),
+            ('Linux', 'x86_64', True, 'CUDA 13.4', 'ubuntu-cuda-13.4-x64.tar.gz'),
+            ('Linux', 'aarch64', True, 'CUDA 13.4', 'ubuntu-cuda-13.4-arm64.tar.gz'),
             ('Linux', 'x86_64', False, 'CPU', 'ubuntu-x64.tar.gz'),
             ('Linux', 'x86_64', True, 'Vulkan', 'ubuntu-vulkan-x64.tar.gz'),
             ('Linux', 'x86_64', True, 'ROCm', 'ubuntu-rocm-10.0-x64.tar.gz'),
@@ -43,3 +48,16 @@ class NativePackagePlanTests(unittest.TestCase):
                 llama_installer.requests, 'get') as download:
             self.assertEqual(llama_installer.server_path(), executable)
             download.assert_not_called()
+
+    def test_linux_cuda_runtime_uses_bundled_cuda_libraries(self):
+        from pathlib import Path
+        import tempfile
+        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'LD_LIBRARY_PATH': '/opt/lib'}), patch.object(
+                llama_installer.platform, 'system', return_value='Linux'), patch.object(
+                llama_installer.platform, 'machine', return_value='x86_64'), patch.object(
+                llama_installer, 'package_directory', return_value=Path(folder)):
+            libraries = Path(folder) / 'cudart-llama-bin-ubuntu-cuda-13.4-x64'
+            libraries.mkdir()
+            (libraries / 'libcudart.so.13').write_bytes(b'')
+            environment = llama_installer.runtime_environment(True, backend='CUDA 13.4')
+        self.assertEqual(environment['LD_LIBRARY_PATH'], f'{libraries}:/opt/lib')

@@ -20,7 +20,7 @@ class OnnxInstallerTests(unittest.TestCase):
 
 
     def test_marker_rejects_changed_binary_or_python_abi(self):
-        with tempfile.TemporaryDirectory(dir=installer.ROOT / 'tmp') as folder:
+        with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             (root / 'binary.pyd').write_bytes(b'original')
             marker = dict(version=installer.VERSION, python=list(sys.version_info[:2]), binary='binary.pyd',

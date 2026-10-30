@@ -29,3 +29,16 @@ class RocmPackagePlanTests(unittest.TestCase):
                 rocm_installer, 'detect_rocm_targets') as detect:
             self.assertIsNone(rocm_installer.automatic_rocm_plan('Windows', 'cu128'))
             detect.assert_not_called()
+
+    def test_unsupported_gpu_keeps_automatic_selection_but_explicit_request_fails(self):
+        with patch.dict(os.environ, {}, clear=True), patch.object(
+                rocm_installer, 'detect_rocm_targets', return_value=['gfx803']), patch(
+                'torchruntime.device_db.get_gpus', return_value=[type('Gpu', (), {'vendor_id': '1002'})()]):
+            self.assertIsNone(rocm_installer.automatic_rocm_plan('Windows', 'directml'))
+            self.assertIsNone(rocm_installer.automatic_rocm_plan('Linux', 'rocm6.2'))
+            with self.assertRaises(RuntimeError):
+                rocm_installer.automatic_rocm_plan('Windows', 'directml', force=True)
+        with patch.dict(os.environ, {'TORCH_PLATFORM': rocm_installer.ROCM_PLATFORM}), patch.object(
+                rocm_installer, 'detect_rocm_targets', return_value=['gfx803']):
+            with self.assertRaises(RuntimeError):
+                rocm_installer.automatic_rocm_plan('Windows', rocm_installer.ROCM_PLATFORM)

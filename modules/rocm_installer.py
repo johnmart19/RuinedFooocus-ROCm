@@ -84,15 +84,20 @@ def automatic_rocm_plan(os_platform, selected_platform, force=False):
                 targets = detect_rocminfo_targets()
             if not targets:
                 return None
+    explicit = force or override == target_platform
     targets = targets or detect_rocm_targets(os_platform)
     if not targets:
-        if force or override == target_platform or selected_platform.startswith("rocm"):
+        if explicit:
             raise RuntimeError(
                 "ROCm requested, but no AMD GFX target could be determined. "
                 "Check the AMD driver and clinfo (Windows) or rocminfo (Linux/WSL)."
             )
         return None
     unsupported = set(targets) - SUPPORTED_TARGETS[os_platform]
+    if unsupported and not explicit:
+        # Older Radeon GPUs keep the automatic DirectML/ROCm/CPU selection instead of blocking startup.
+        print(f"ROCm {target_platform} does not support {', '.join(sorted(unsupported))}; keeping {selected_platform}.")
+        return None
     if unsupported:
         raise RuntimeError(
             f"Automatic ROCm installation is not validated for {os_platform}: "
@@ -100,6 +105,8 @@ def automatic_rocm_plan(os_platform, selected_platform, force=False):
             "or explicitly select another TORCH_PLATFORM."
         )
     if platform.machine().lower() not in ("x86_64", "amd64"):
+        if not explicit:
+            return None
         raise RuntimeError("Automatic ROCm wheels require x86_64 Python.")
     if os_platform == "Windows" and set(targets) & {"gfx1200", "gfx1201"}:
         print("Windows RDNA 4 wheels are available but not yet qualified by TheRock; GPU validation is required after installation.")

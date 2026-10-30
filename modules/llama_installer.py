@@ -39,15 +39,18 @@ def backend_choices(system=None, machine=None):
     system = system or platform.system()
     machine = (machine or platform.machine()).lower()
     choices = ["Auto", "CPU"]
-    if system == "Windows" and machine in ("amd64", "x86_64"):
-        choices += ["Vulkan", "ROCm", "CUDA 12.4", "CUDA 13.4"]
+    x64 = machine in ("amd64", "x86_64")
+    if system == "Windows" and (x64 or machine in ("arm64", "aarch64")):
+        choices += ["Vulkan", "ROCm", "CUDA 12.4", "CUDA 13.4"] if x64 else ["Vulkan", "CUDA 13.4"]
     elif system == "Linux":
         choices += ["Vulkan"]
-        if machine in ("amd64", "x86_64"):
-            choices += ["ROCm"]
+        if x64:
+            choices += ["ROCm", "CUDA 12.8", "CUDA 13.4"]
             from modules.llama_build import LABEL, built_server
             if built_server():
                 choices.append(LABEL)
+        elif machine in ("arm64", "aarch64"):
+            choices += ["CUDA 13.4"]
     return choices
 
 
@@ -64,11 +67,14 @@ def package_name(system, machine, gpu, rocm=False, backend="Auto"):
     if system == "Windows":
         backend = ({"ROCm": "rocm-10.0", "CUDA 12.4": "cuda-12.4",
                     "CUDA 13.4": "cuda-13.4", "Vulkan": "vulkan"}.get(backend)
-                   or ("vulkan" if gpu and arch == "x64" else "cpu"))
+                   or ("vulkan" if gpu else "cpu"))
         return f"llama-{VERSION}-bin-win-{backend}-{arch}.zip"
     if system == "Linux":
         use_rocm = gpu and (backend == "ROCm" or backend == "Auto" and rocm)
-        backend = "rocm-10.0-" if use_rocm else "vulkan-" if gpu else ""
+        if backend.startswith("CUDA "):
+            backend = "cuda-" + backend.split()[1] + "-"
+        else:
+            backend = "rocm-10.0-" if use_rocm else "vulkan-" if gpu else ""
         return f"llama-{VERSION}-bin-ubuntu-{backend}{arch}.tar.gz"
     if system == "Darwin":
         return f"llama-{VERSION}-bin-macos-{arch}.tar.gz"
@@ -91,6 +97,13 @@ def runtime_environment(gpu, reinstall=False, backend="Auto"):
     env = os.environ.copy()
     if backend == "ROCm" and platform.system() == "Windows" and gpu and not os.environ.get("LLAMA_SERVER"):
         return windows_rocm_environment(env, reinstall)
+    if (backend in ("CUDA 12.8", "CUDA 13.4") and platform.system() == "Linux"
+            and gpu and not os.environ.get("LLAMA_SERVER")):
+        # Official Linux CUDA builds load the cudart/cuBLAS bundle extracted beside them.
+        directory = package_directory(package_name(platform.system(), platform.machine(), gpu, backend=backend))
+        libraries = sorted({str(path.parent) for path in directory.rglob("libcudart.so*")})
+        env["LD_LIBRARY_PATH"] = ":".join(libraries + [env.get("LD_LIBRARY_PATH", "")]).rstrip(":")
+        return env
     target = rocm_target(gpu) if backend in ("Auto", "ROCm") else None
     if not target or os.environ.get("LLAMA_SERVER"):
         return env
@@ -160,6 +173,10 @@ def windows_rocm_environment(env, reinstall=False, install=True):
     return env
 
 
+def package_directory(package):
+    return Path("cache/llama.cpp") / VERSION / package.removesuffix(".zip").removesuffix(".tar.gz")
+
+
 def server_path(gpu=True, backend="Auto"):
     override = os.environ.get("LLAMA_SERVER")
     if override:
@@ -177,7 +194,7 @@ def server_path(gpu=True, backend="Auto"):
         validate_cuda_backend(backend)
     package = package_name(platform.system(), platform.machine(), gpu,
                            bool(rocm_target(gpu)) if backend == "Auto" else False, backend)
-    directory = Path("cache/llama.cpp") / VERSION / package.removesuffix(".zip").removesuffix(".tar.gz")
+    directory = package_directory(package)
     executable = "llama-server.exe" if platform.system() == "Windows" else "llama-server"
     found = list(directory.rglob(executable))
     if found:
@@ -193,6 +210,8 @@ def server_path(gpu=True, backend="Auto"):
         if "-win-cuda-" in package:
             dependency = "cudart-llama-bin-win-" + package.split("-bin-win-", 1)[1]
             download_package(dependency, assets, temporary, extracted)
+        elif "-ubuntu-cuda-" in package:
+            download_package("cudart-" + package, assets, temporary, extracted)
         if not list(extracted.rglob(executable)):
             raise RuntimeError("The downloaded package has no llama-server executable.")
         extracted.rename(directory)

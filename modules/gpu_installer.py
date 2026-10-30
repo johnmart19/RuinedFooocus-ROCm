@@ -110,6 +110,10 @@ def xllamacpp_index(torch_platform, os_platform, version=None):
             "rocm10.0": "vulkan", "rocm10.1": "vulkan",  # Keep incompatible ROCm 7.x LLM libraries out.
             "vulkan": "vulkan", "directml": "vulkan",
         }.get(torch_platform)
+        # Other GPU runtimes (Intel XPU, older ROCm/CUDA) still have Vulkan drivers;
+        # the PyPI build is CPU-only there. CPU and macOS (Metal) keep PyPI.
+        if backend is None and torch_platform.startswith(("cu", "rocm", "xpu")):
+            backend = "vulkan"
     root = "https://xorbitsai.github.io/xllamacpp/whl"
     if version and backend:
         from modules.cuda_selection import wheel_available
@@ -123,6 +127,10 @@ def xllamacpp_index(torch_platform, os_platform, version=None):
 
 
 def has_cuda_xllamacpp():
+    return has_xllamacpp_device("CUDA")
+
+
+def has_xllamacpp_device(prefix):
     # Check the loaded backend, not just the shared distribution version.
     try:
         result = subprocess.run([sys.executable, "-c",
@@ -132,9 +140,9 @@ def has_cuda_xllamacpp():
             "if sys.platform == 'linux':\n"
             "    import torch\n"
             "import xllamacpp as x\n"
-            "print('RF_CUDA=' + str(int(any(d['name'].startswith('CUDA') for d in x.get_device_info()))))"],
+            f"print('RF_DEVICE=' + str(int(any(d['name'].startswith({prefix!r}) for d in x.get_device_info()))))"],
             capture_output=True, text=True, timeout=30)
-        return result.returncode == 0 and "RF_CUDA=1" in result.stdout.splitlines()
+        return result.returncode == 0 and "RF_DEVICE=1" in result.stdout.splitlines()
     except (OSError, subprocess.TimeoutExpired):
         return False
 

@@ -9,7 +9,7 @@ from modules.rocm_installer import ROCM_PLATFORM, automatic_rocm_plan, install_r
 from modules.runtime_support import inspect_installed_rocm, inspect_installed_cuda, inspect_installed_cpu, installed_cuda_platform, select_torch_platform
 from modules.gpu_installer import (
     preserve_installed_rocm, preserve_installed_cuda, installed_torch_constraints, torch_constraints, torch_install_commands,
-    xllamacpp_index, has_vulkan_xllamacpp, has_cuda_xllamacpp,
+    xllamacpp_index, has_vulkan_xllamacpp, has_cuda_xllamacpp, has_xllamacpp_device,
     xllamacpp_backend_matches, record_xllamacpp_backend,
 )
 from modules.comfy_compat import configure_device_environment, configure_torch_allocator
@@ -218,19 +218,24 @@ def prepare_environment(offline=False):
             wrong_backend = (not xllamacpp_backend_matches(index)
                              or needs_vulkan and not has_vulkan_xllamacpp()
                              or needs_cuda and not has_cuda_xllamacpp())
-            if REINSTALL_ALL or not is_installed(xlc_version) or wrong_backend:
+            installed_before = is_installed(xlc_version)
+            if REINSTALL_ALL or not installed_before or wrong_backend:
                 with torch_constraints(installed_torch) as constraints:
                     run_pip(
                         f'install {xlc_version} --index-url {index} --only-binary=xllamacpp{constraints}',
                         "XLlamacpp",
                     )
-                    if REINSTALL_ALL or wrong_backend:
+                    # pip keeps an installed wheel of the same version from another backend index.
+                    if REINSTALL_ALL or wrong_backend and installed_before:
                         run_pip(f'install --force-reinstall --no-deps {xlc_version} --index-url {index} --only-binary=xllamacpp', "reinstall XLlamacpp backend")
                 if needs_cuda and not has_cuda_xllamacpp():
                     raise RuntimeError("xllamacpp CUDA installed but no CUDA device is available. Check the NVIDIA driver, or use native llama.cpp with Vulkan.")
                 if needs_vulkan and not has_vulkan_xllamacpp():
                     raise RuntimeError("xllamacpp Vulkan installed but its Vulkan libraries are missing.")
                 record_xllamacpp_backend(index)
+                if needs_vulkan and not has_xllamacpp_device("Vulkan"):
+                    print("NOTE: xllamacpp found no Vulkan GPU (common in WSL) and will run on CPU. "
+                          "The default native llama.cpp runtime selects its own GPU backend (ROCm/CUDA).")
         except Exception as e:
             if REINSTALL_ALL:
                 raise  # Keep the request pending when a requested reinstall fails.
