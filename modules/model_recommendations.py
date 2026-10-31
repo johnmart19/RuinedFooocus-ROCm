@@ -22,6 +22,7 @@ FAMILY_PRESETS = {
     "Flux.1 D": "FLUX.1 dev", "Flux.1 S": "FLUX.1 schnell",
     "QwenImage": "Qwen Image", "Qwen": "Qwen Image", "Qwen-Image": "Qwen Image",
     "SD 3.5": "SD3.5", "SD 3.5 Large": "SD3.5",
+    "MageFlow": "Mage Flow",
 }
 
 

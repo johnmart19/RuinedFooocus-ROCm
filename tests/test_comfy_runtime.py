@@ -242,6 +242,17 @@ class DynamicMemoryTests(unittest.TestCase):
                 setattr(self.args, key, False)
         self.control.init.assert_not_called()
 
+    def test_activation_sets_controller_log_level_like_native_startup(self):
+        self.modules["comfy.cli_args"].get_console_log_level = lambda outputs: outputs[0][0] if outputs else "INFO"
+        for verbose, setter in (([], "set_log_info"), ([("WARNING", None)], "set_log_warning"),
+                                ([("DETAIL", None)], "set_log_info")):  # DETAIL falls back when unsupported
+            with self.subTest(verbose=verbose):
+                for name in ("set_log_info", "set_log_warning"):
+                    setattr(self.control, name, Mock())
+                self.args.verbose = verbose
+                self.assertTrue(initialize_comfy_memory())
+                getattr(self.control, setter).assert_called_once_with()
+
     def test_device_failure_retains_legacy(self):
         for outcome in (False, RuntimeError("driver unavailable")):
             with self.subTest(outcome=outcome):

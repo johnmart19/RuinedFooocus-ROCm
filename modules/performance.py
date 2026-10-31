@@ -63,7 +63,6 @@ class PerformanceSettings:
     def get_perf_options(self, name, checkpoint=None, family=None):
         if name in (self.MODEL_PERFORMANCE, self.LEGACY_MODEL_PERFORMANCE, "Model defaults") and checkpoint:
             from comfy.samplers import KSampler
-            from modules.model_recommendations import FAMILY_PRESETS
             metadata = self.model_recommendations.metadata(checkpoint)
             family = family or metadata.get("baseModel", "Unknown")
             from modules.video_settings import VIDEO_FPS, is_ltx25_distilled
@@ -72,12 +71,28 @@ class PerformanceSettings:
                            if family in options.get("video_models", [])
                            and (title != "LTX 2.5 Distilled" or is_ltx25_distilled(family, checkpoint))]
                 return self.default_settings | (presets[0] if presets else {})
-            fallback = self.performance_options.get(FAMILY_PRESETS.get(family, family), {})
+            preset = self.family_preset(family, checkpoint)
+            fallback = self.performance_options.get(preset, {})
+            # API and queued jobs may use a checkpoint never opened in the UI. Fetch its
+            # published recipe once (cached, offline-aware); failures keep cached settings.
+            try:
+                self.model_recommendations.refresh(checkpoint, KSampler.SAMPLERS, KSampler.SCHEDULERS)
+            except Exception as error:
+                print(f"Model recommendation lookup failed: {error}")
             recipe, _ = self.model_recommendations.recipe(checkpoint, KSampler.SAMPLERS, KSampler.SCHEDULERS)
             return self.default_settings | fallback | recipe
         # Stale/deleted names must return usable settings, never a string.
         options = self.performance_options.get(name, self.legacy_options.get(name, {}))
         return self.default_settings | options
+
+    def family_preset(self, family, checkpoint):
+        from modules.model_recommendations import FAMILY_PRESETS
+        preset = FAMILY_PRESETS.get(family, family)
+        # Distillation is not visible in tensor shapes; upstream names turbo weights.
+        name = str(checkpoint or "").replace("\\", "/").rsplit("/", 1)[-1].lower()
+        if "turbo" in name and f"{preset} Turbo" in self.performance_options:
+            return f"{preset} Turbo"
+        return preset
 
     def apply(self, gen_data, family=None):
         result = gen_data.copy()

@@ -40,6 +40,50 @@ class RecommendationTests(unittest.TestCase):
             self.assertEqual((values["custom_steps"], values["cfg"], values["sampler_name"], values["scheduler"]),
                              (50, 3, "er_sde", "simple"))
 
+    def _performance(self, root):
+        from modules.performance import PerformanceSettings
+        performance = PerformanceSettings.__new__(PerformanceSettings)
+        performance.performance_options = json.loads(
+            PerformanceSettings.DEFAULT_PERFORMANCE_FILE.read_text(encoding="utf-8"))
+        performance.model_recommendations = ModelRecommendations(root, root / "settings.json")
+        return performance
+
+    def test_distilled_families_use_native_template_fallbacks(self):
+        registry = SimpleNamespace(KSampler=SimpleNamespace(SAMPLERS=["euler", "dpmpp_2m_sde_gpu"],
+                                                            SCHEDULERS=["simple", "karras"]))
+        cases = [("Krea 2", "desire_krea2.safetensors", (8, 1)),
+                 ("MageFlow", "mage_flow.safetensors", (30, 5)),
+                 ("MageFlow", "mage_flow_edit_turbo_int8.safetensors", (4, 1))]
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            performance = self._performance(root)
+            for family, checkpoint, expected in cases:
+                with self.subTest(checkpoint=checkpoint):
+                    (root / (Path(checkpoint).stem + ".json")).write_text(
+                        json.dumps({"baseModel": family}), encoding="utf-8")
+                    with patch.dict(sys.modules, {"comfy.samplers": registry}):
+                        values = performance.get_perf_options("Model Defaults", checkpoint)
+                    self.assertEqual((values["custom_steps"], values["cfg"], values["sampler_name"],
+                                      values["scheduler"]), (*expected, "euler", "simple"))
+
+    def test_generation_fetches_published_recipe_once_without_ui(self):
+        registry = SimpleNamespace(KSampler=SimpleNamespace(SAMPLERS=SAMPLERS, SCHEDULERS=SCHEDULERS))
+        version = {"id": 7, "modelId": 3, "baseModel": "Krea 2", "images": examples(4)}
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / "model.json").write_text(json.dumps({"id": 7, "modelId": 3, "baseModel": "Krea 2"}),
+                                             encoding="utf-8")
+            performance = self._performance(root)
+            with patch.dict(sys.modules, {"comfy.samplers": registry}), patch(
+                    "modules.model_sources.civitai_metadata",
+                    side_effect=lambda path: version if path == "model-versions/7" else None) as fetch:
+                first = performance.get_perf_options("Model Defaults", "model.safetensors")
+                calls = fetch.call_count
+                performance.get_perf_options("Model Defaults", "model.safetensors")
+            self.assertEqual((first["custom_steps"], first["cfg"], first["sampler_name"]), (8, 1, "euler"))
+            self.assertGreater(calls, 0)
+            self.assertEqual(fetch.call_count, calls)  # Cached afterwards.
+
     def test_majority_and_conflicting_fields(self):
         images = examples(10)
         for image in images[-3:]:

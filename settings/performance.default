@@ -43,6 +43,30 @@
     "clip_skip": 1,
     "recommended_resolutions": "1328x1328, 1664x928, 928x1664"
   },
+  "Krea 2": {
+    "custom_steps": 8,
+    "cfg": 1,
+    "sampler_name": "euler",
+    "scheduler": "simple",
+    "clip_skip": 1,
+    "recommended_resolutions": "1024x1024; native Krea-2 Turbo template fallback, checkpoint recommendations take priority"
+  },
+  "Mage Flow": {
+    "custom_steps": 30,
+    "cfg": 5,
+    "sampler_name": "euler",
+    "scheduler": "simple",
+    "clip_skip": 1,
+    "recommended_resolutions": "1024x1024; native Mage-Flow template fallback, checkpoint recommendations take priority"
+  },
+  "Mage Flow Turbo": {
+    "custom_steps": 4,
+    "cfg": 1,
+    "sampler_name": "euler",
+    "scheduler": "simple",
+    "clip_skip": 1,
+    "recommended_resolutions": "1024x1024; native Mage-Flow Turbo template, for checkpoints named turbo"
+  },
   "Z-Image Turbo": {
     "custom_steps": 8,
     "cfg": 1,

@@ -176,12 +176,24 @@ def initialize_comfy_memory():
     if not initialized:
         logging.warning("DynamicVRAM devices unavailable; using legacy model loading.")
         return False
+    set_aimdo_log_level(control, getattr(args, "verbose", []))
     patcher.CoreModelPatcher = patcher.ModelPatcherDynamic
     memory.aimdo_enabled = True
     register_aimdo_log_shutdown(control, platform.system(), management.is_amd())
     logging.info("DynamicVRAM support detected and enabled")
     return True
 
+
+def set_aimdo_log_level(control, verbose):
+    """Match the controller's native log level to the backend console level, as native startup does."""
+    import comfy.cli_args
+    levels = getattr(comfy.cli_args, "get_console_log_level", lambda outputs: "INFO")
+    setter = {"DEBUG": "set_log_debug", "DETAIL": "set_log_detail", "CRITICAL": "set_log_critical",
+              "ERROR": "set_log_error", "WARNING": "set_log_warning"}.get(levels(verbose), "set_log_info")
+    # Older controllers lack DETAIL; native startup falls back to INFO as well.
+    setter = getattr(control, setter, None) or getattr(control, "set_log_info", None)
+    if setter is not None:
+        setter()
 
 
 def register_aimdo_log_shutdown(control, os_platform, is_amd):
