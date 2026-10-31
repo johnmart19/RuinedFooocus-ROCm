@@ -90,7 +90,12 @@ def models():
         base = shared.models.get_model_base(shared.models.get_models_by_path("checkpoints", path))
         kind = "video" if base in VIDEO_FPS else "image"
         result[kind + "/" + name] = {"path": str(path), "name": name, "kind": kind, "family": base}
-    return result
+    # IDs are the same on every OS; "name" keeps the native subfolder path for loading.
+    return {model_id(key): info for key, info in result.items()}
+
+
+def model_id(model):
+    return model.replace("\\", "/")
 
 
 def capabilities():
@@ -121,6 +126,7 @@ def resolve_model(model, kind):
         model = kind + "/" + (Path(name).name if kind == "chat" else name)
     elif not model.startswith(kind + "/"):
         model = kind + "/" + model
+    model = model_id(model)  # Accept IDs written with Windows separators too.
     if model not in catalogue or catalogue[model]["kind"] != kind:
         raise ValueError(f"Unknown local {kind} model. Choose an ID from /v1/models.")
     return model, catalogue[model]

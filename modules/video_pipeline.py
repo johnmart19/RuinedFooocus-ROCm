@@ -30,7 +30,7 @@ from molbal_comfyui_gguf.nodes import gguf_sd_loader as load_gguf_sd, DualCLIPLo
 from nodes import CLIPTextEncode, VAEDecodeTiled
 
 from comfy_extras.nodes_custom_sampler import Noise_RandomNoise, BasicScheduler, KSamplerSelect, BasicGuider, CFGGuider
-from comfy_extras.nodes_lt import EmptyLTXVLatentVideo, LTXVImgToVideo, LTXVConditioning, LTXVScheduler, LTXVConcatAVLatent, LTXVSeparateAVLatent
+from comfy_extras.nodes_lt import EmptyLTXVLatentVideo, LTXVImgToVideo, LTXVConditioning, LTXVScheduler, LTXVConcatAVLatent, LTXVSeparateAVLatent, LTXVImgToVideoInplace, LTXVPreprocess
 from comfy_extras.nodes_lt_audio import LTXVEmptyLatentAudio
 from comfy_extras.nodes_minimax_h3 import MiniMaxH3ImageToVideo
 from comfy_extras.nodes_audio import VAEDecodeAudio
@@ -475,7 +475,19 @@ class pipeline:
             )
 
             # MiniMax builds its own audiovisual latent and image conditioning below.
-            if gen_data["input_image"] is not None and self.model_info["unet_type"] != "MiniMaxH3":
+            condition_image = None
+            if gen_data["input_image"] is not None and self.model_info["unet_type"] != "MiniMaxH3" and two_stage:
+                # Native LTX-2.5 distilled template: a compressed first frame conditions
+                # stage 1 at 0.7 (leaving room for motion) and stage 2 at full strength.
+                image = torch.from_numpy(np.asarray(gen_data["input_image"], dtype=np.float32) / 255.0)[None]
+                condition_image = LTXVPreprocess.execute(image, 18)[0]
+                video_latent = EmptyLTXVLatentVideo().generate(
+                    width = stage_width, height = stage_height, length = frame_number, batch_size = 1)[0]
+                video_latent = LTXVImgToVideoInplace.execute(
+                    self.model_base_patched.vae, condition_image, video_latent, strength=0.7)[0]
+                positive = self.conditions["+"]["cache"]
+                negative = negative_conditioning
+            elif gen_data["input_image"] is not None and self.model_info["unet_type"] != "MiniMaxH3":
                 image = np.array(gen_data["input_image"]).astype(np.float32) / 255.0
                 image = torch.from_numpy(image)[None,]
                 (positive, negative, video_latent) = LTXVImgToVideo().generate(
@@ -666,7 +678,7 @@ class pipeline:
 
         if two_stage:
             latent = refine({**latent, "samples": samples}, guider, self.model_base_patched.vae,
-                            upscaler_path, gen_data, seed)
+                            upscaler_path, gen_data, seed, condition_image)
             samples = latent["samples"]
 
         if callback is not None:

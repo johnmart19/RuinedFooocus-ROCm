@@ -17,7 +17,7 @@ from modules.video_preview import video_callback
 UPSCALER = "ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors"
 
 
-def refine(latent, guider, vae, upscaler_path, gen_data, seed):
+def refine(latent, guider, vae, upscaler_path, gen_data, seed, image=None):
     worker.check_interrupt(gen_data)
     worker.add_result(gen_data["task_id"], "preview", (-1, "Upscaling video latents ...", None))
     # Native upscaler loading offloads diffusion weights only if required.
@@ -34,7 +34,8 @@ def refine(latent, guider, vae, upscaler_path, gen_data, seed):
         model_management.unload_model_and_clones(upscaler)
     worker.check_interrupt(gen_data)
     if gen_data["input_image"] is not None:
-        image = torch.from_numpy(np.asarray(gen_data["input_image"], dtype=np.float32) / 255.0)[None]
+        if image is None:
+            image = torch.from_numpy(np.asarray(gen_data["input_image"], dtype=np.float32) / 255.0)[None]
         video = LTXVImgToVideoInplace.execute(vae, image, video, strength=1.0)[0]
     latent = LTXVConcatAVLatent.execute(video, audio)[0] if audio is not None else video
     worker.check_interrupt(gen_data)

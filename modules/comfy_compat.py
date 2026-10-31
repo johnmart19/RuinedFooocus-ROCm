@@ -257,10 +257,38 @@ def configure_torch_allocator(torch_platform, os_platform, launch_args=None):
         )
 
 
+def configure_rocm_attention():
+    """Route ROCm attention with head dim > 256 to the math kernel.
+
+    Torch 2.14 + ROCm 10.1 on gfx11 dispatches Flash/efficient kernels for these
+    shapes, which then fail to launch (hipErrorProfilerNotInitialized). Gemma 4's
+    512-wide global attention (LTX 2.5's text encoder) hits this; CUDA already
+    falls back to math. Smaller heads keep the fast kernels.
+    """
+    import torch
+    import torch.nn.functional as functional
+
+    if not torch.version.hip or getattr(functional.scaled_dot_product_attention, "_rf_rocm_head_dim", False):
+        return False
+    from torch.nn.attention import sdpa_kernel, SDPBackend
+    original = functional.scaled_dot_product_attention
+
+    def scaled_dot_product_attention(query, key, value, *args, **kwargs):
+        if query.shape[-1] > 256 and query.is_cuda:
+            with sdpa_kernel(SDPBackend.MATH):
+                return original(query, key, value, *args, **kwargs)
+        return original(query, key, value, *args, **kwargs)
+
+    scaled_dot_product_attention._rf_rocm_head_dim = True
+    functional.scaled_dot_product_attention = scaled_dot_product_attention
+    return True
+
+
 def configure_torch_compatibility():
     import torch
     import typing
 
+    configure_rocm_attention()
     if not (2, 4) <= tuple(int(v) for v in torch.__version__.split(".")[:2]) <= (2, 6):
         return
     # Torch 2.4–2.6 understand typing.List but not list[T] in custom-op schemas.

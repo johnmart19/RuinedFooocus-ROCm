@@ -34,3 +34,21 @@ class ImageURLTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ModelIdTests(unittest.TestCase):
+    def test_subfolder_model_ids_are_portable_and_accept_windows_separators(self):
+        import sys
+        from unittest.mock import patch
+        from modules import api_runtime
+        native = r"LTX25\ltx-2.5.safetensors"
+        catalogue = {"video/LTX25/ltx-2.5.safetensors": {"name": native, "kind": "video"}}
+        llama = SimpleNamespace(DEFAULT_MODEL="chat.gguf")
+        with patch.object(api_runtime, "models", return_value=catalogue), \
+                patch.dict(sys.modules, {"shared": SimpleNamespace(), "modules.llama_models": llama}):
+            for requested in ("video/LTX25/ltx-2.5.safetensors", "video/" + native, native):
+                with self.subTest(requested=requested):
+                    model, selected = api_runtime.resolve_model(requested, "video")
+                    self.assertEqual(model, "video/LTX25/ltx-2.5.safetensors")
+                    self.assertEqual(selected["name"], native)
+        self.assertEqual(api_runtime.model_id(r"image/a\b\c.safetensors"), "image/a/b/c.safetensors")

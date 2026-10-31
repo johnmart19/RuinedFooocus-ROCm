@@ -265,6 +265,32 @@ class DynamicMemoryTests(unittest.TestCase):
                 self.assertIs(self.patcher.CoreModelPatcher, self.legacy)
 
 
+class RocmAttentionTests(unittest.TestCase):
+    def test_wide_heads_use_math_kernel_only_on_rocm(self):
+        import torch
+        import torch.nn.functional as functional
+        from torch.nn.attention import SDPBackend
+        backends, calls = [], []
+
+        def original(*args, **kwargs):  # A plain function: Mock attributes would look installed.
+            calls.append(kwargs)
+            backends.append(torch.backends.cuda.math_sdp_enabled() and not torch.backends.cuda.flash_sdp_enabled())
+        wide = types.SimpleNamespace(shape=(1, 16, 77, 512), is_cuda=True)
+        narrow = types.SimpleNamespace(shape=(1, 16, 77, 128), is_cuda=True)
+        with patch.object(functional, "scaled_dot_product_attention", original):
+            with patch.object(torch.version, "hip", None):
+                self.assertFalse(comfy_compat.configure_rocm_attention())
+                self.assertIs(functional.scaled_dot_product_attention, original)
+            with patch.object(torch.version, "hip", "7.16"):
+                self.assertTrue(comfy_compat.configure_rocm_attention())
+                self.assertFalse(comfy_compat.configure_rocm_attention())  # Installed once.
+                functional.scaled_dot_product_attention(wide, wide, wide, scale=1.0)
+                functional.scaled_dot_product_attention(narrow, narrow, narrow, scale=1.0)
+        self.assertEqual(backends, [True, False])
+        self.assertEqual(calls, [{"scale": 1.0}, {"scale": 1.0}])
+        self.assertEqual(SDPBackend.MATH.name, "MATH")
+
+
 class AimdoLogShutdownTests(unittest.TestCase):
     def setUp(self):
         import ctypes

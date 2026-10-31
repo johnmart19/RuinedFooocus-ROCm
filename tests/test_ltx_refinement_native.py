@@ -33,6 +33,23 @@ class NativeRefinementTests(unittest.TestCase):
         torch.testing.assert_close(args[3], torch.tensor([0.85, 0.7250, 0.4219, 0.0]))
         self.assertEqual(guider.sample.call_args.kwargs["denoise_mask"], "mask")
 
+    def test_image_conditioning_matches_official_two_stage_workflow(self):
+        # Native template: LTXVPreprocess(18) feeds Inplace at 0.7 (stage 1) and 1.0 (stage 2).
+        root = Path(__file__).resolve().parents[1]
+        calls = {}
+        for name in ("modules/video_pipeline.py", "modules/ltx_refinement.py"):
+            for node in ast.walk(ast.parse((root / name).read_text(encoding="utf-8"))):
+                if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "execute":
+                    owner = ast.unparse(node.func.value)
+                    if owner in ("LTXVPreprocess", "LTXVImgToVideoInplace"):
+                        calls.setdefault(owner, []).append(node)
+        self.assertEqual([ast.literal_eval(call.args[1]) for call in calls["LTXVPreprocess"]], [18])
+        strengths = sorted(ast.literal_eval(keyword.value) for call in calls["LTXVImgToVideoInplace"]
+                           for keyword in call.keywords if keyword.arg == "strength")
+        self.assertEqual(strengths, [0.7, 1.0])
+        source = (root / "modules/video_pipeline.py").read_text(encoding="utf-8")
+        self.assertIn("upscaler_path, gen_data, seed, condition_image)", source)
+
 
 if __name__ == "__main__":
     unittest.main()
