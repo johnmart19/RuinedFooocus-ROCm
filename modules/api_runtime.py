@@ -105,7 +105,7 @@ def capabilities():
     from modules.sdxl_styles import load_styles
     from modules.image_guidance import FIELD_SCHEMA, capabilities as image_guidance_capabilities
     return {"samplers": list(KSampler.SAMPLERS), "schedulers": list(KSampler.SCHEDULERS),
-            "loras": shared.models.get_names("loras"),
+            "loras": [model_id(name) for name in shared.models.get_names("loras")],
             "styles": list(load_styles()), "image_guidance_fields": FIELD_SCHEMA,
             "performance_presets": shared.performance_settings.performance_options,
             "models": {name: {"type": info["kind"], **({
@@ -347,12 +347,13 @@ def _image_operation(payload, selected, defaults=None):
         input_image = ImageOps.fit(input_image, (width, height), Image.Resampling.LANCZOS)
     loras = defaults.get("loras", [])
     if payload.get("loras") is not None:
-        known_loras = shared.models.get_names("loras")
+        known_loras = {model_id(name): name for name in shared.models.get_names("loras")}
         loras = []
         for lora in payload["loras"]:
-            if lora["name"] not in known_loras:
+            name = known_loras.get(model_id(lora["name"]))
+            if name is None:
                 raise ValueError("Unknown local LoRA. Choose a name from /v1/capabilities.")
-            loras.append([lora["name"], f"{lora['strength']} - {lora['name']}"])
+            loras.append([name, f"{lora['strength']} - {name}"])
     if family in VIDEO_FPS:
         if payload.get("controlnet"):
             raise ValueError("Video uses input_image as the first frame; ControlNet is only for images.")

@@ -54,7 +54,7 @@ class pipeline:
                 print("TODO...")
 
             case "add performance":
-                new_perf = shared.performance_settings.default_settings
+                new_perf = dict(shared.performance_settings.default_settings)  # Never edit shared defaults.
                 new_perf['name'] = "Oops! Forgot to add a name." # Have a default name
 
                 metadata = None
