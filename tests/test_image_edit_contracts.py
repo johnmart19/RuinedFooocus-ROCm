@@ -32,7 +32,8 @@ class ImageEditTests(unittest.TestCase):
         process = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == "process")
         branch = next(n for n in process.body if isinstance(n, ast.If) and ast.unparse(n.test) == "image_edit and input_images > 0")
         function = ast.parse("def encode(self): pass").body[0]
-        function.body = ast.parse("input_images = 1; edit_latent = None").body + branch.body + ast.parse("return edit_latent, img2img_mode, input_images").body
+        # input_image is a local of process(); the edit branch may rebind it.
+        function.body = ast.parse("input_images = 1; edit_latent = None; input_image = INPUT_IMAGE").body + branch.body + ast.parse("return edit_latent, img2img_mode, input_images").body
         native_latent = {"samples": torch.zeros(1, 128, 24, 32)}
         mage = Mock()
         mage.execute.return_value = SimpleNamespace(result=("positive", "negative", native_latent))
@@ -49,10 +50,13 @@ class ImageEditTests(unittest.TestCase):
                          TextEncodeQwenImageEdit=lambda: qwen,
                          TextEncodeMOSSImageEdit=lambda: moss, np=np, torch=torch,
                          positive_prompt="edit", negative_prompt="avoid", moss_edit_format=moss_format, moss_edit_strength=1.5,
-                         input_image=torch.zeros(1, 48, 64, 3), edit_latent=None, img2img_mode=False,
+                         INPUT_IMAGE=torch.zeros(1, 48, 64, 3), edit_latent=None, img2img_mode=False,
                          input_images=1, gen_data={"input_image": image, "width": 512, "height": 384})
         namespace.update(additional_references=references or [], reference_image_map=reference_image_map,
                          reference_tensor=lambda image, *size: torch.zeros(1, image.height, image.width, 3))
+        helper = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "edit_canvas")
+        exec(compile(ast.Module(body=[helper], type_ignores=[]), "edit_canvas", "exec"), namespace)
+        self.gen_data = namespace["gen_data"]
         exec(compile(ast.fix_missing_locations(ast.Module(body=[function], type_ignores=[])), "edit_route", "exec"), namespace)
         result = namespace["encode"](owner)
         return result, mage, qwen, moss, native_latent
@@ -109,6 +113,9 @@ class ImageEditTests(unittest.TestCase):
         result, _, qwen, _, _ = self.encode("QwenImage")
         self.assertEqual(result, (None, False, 0))
         self.assertEqual(qwen.execute.call_count, 2)
+        # The 64x48 reference sets the canvas instead of the requested 512x384.
+        self.assertEqual((self.gen_data["width"], self.gen_data["height"]), (64, 48))
+        self.assertEqual(qwen.execute.call_args.kwargs["image"].shape, (1, 48, 64, 3))
 
     def test_native_mage_and_moss_receive_additional_images_without_sampling(self):
         reference = Image.new('RGB', (32, 24))
