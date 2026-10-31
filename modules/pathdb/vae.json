@@ -160,7 +160,7 @@
         "filename": "ltx-2.5-audio-vae-bf16.safetensors"
     },
     "vae/ltx-2.5-video-vae-bf16.safetensors": {
-        "url": "https://huggingface.co/Lightricks/LTX-2.5/resolve/main/vae/ltx-2.5-video-vae-conv-bf16.safetensors",
+        "url": "https://huggingface.co/Lightricks/LTX-2.5/resolve/main/vae/ltx-2.5-video-vae-bf16.safetensors",
         "path": "path_vae",
         "filename": "ltx-2.5-video-vae-bf16.safetensors"
     },
