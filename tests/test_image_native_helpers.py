@@ -125,3 +125,22 @@ class NativeImageHelperTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class EditCanvasTests(unittest.TestCase):
+    def test_edit_canvas_keeps_reference_aspect_on_latent_grid(self):
+        import torch
+        import ast
+        from pathlib import Path
+        source = Path(__file__).resolve().parents[1] / "modules/image_pipeline.py"
+        tree = ast.parse(source.read_text(encoding="utf-8"))
+        node = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "edit_canvas")
+        scope = {}
+        exec(compile(ast.Module(body=[node], type_ignores=[]), str(source), "exec"), scope)
+        pixels = torch.arange(1 * 1017 * 1023 * 3, dtype=torch.float32).reshape(1, 1017, 1023, 3)
+        cropped, width, height = scope["edit_canvas"](pixels)
+        self.assertEqual((width, height), (1008, 1008))
+        self.assertEqual(tuple(cropped.shape), (1, 1008, 1008, 3))
+        torch.testing.assert_close(cropped, pixels[:, 4:1012, 7:1015])  # Centered crop.
+        _, width, height = scope["edit_canvas"](torch.zeros(1, 896, 1152, 3))
+        self.assertEqual((width, height), (1152, 896))

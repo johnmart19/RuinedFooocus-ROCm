@@ -78,6 +78,14 @@ def reference_tensor(image, width=None, height=None):
             megapixels=float(width) * float(height) / (1024 * 1024), resolution_steps=1)[0]
     return pixels
 
+
+def edit_canvas(pixels, multiple=16):
+    """Center-crop a scaled reference to latent-aligned size; return it with that size."""
+    height, width = pixels.shape[1], pixels.shape[2]
+    target_h, target_w = max(multiple, height // multiple * multiple), max(multiple, width // multiple * multiple)
+    top, left = (height - target_h) // 2, (width - target_w) // 2
+    return pixels[:, top:top + target_h, left:left + target_w], target_w, target_h
+
 class pipeline:
     pipeline_type = ["sdxl", "ssd", "sd3", "flux", "flux2", "lumina2"]
 
@@ -629,6 +637,11 @@ class pipeline:
             controlnet = None # Disable any other controlnet
             self.conditions = clean_prompt_cond_caches()
 
+            if self.xl_base_patched.unet.model.__class__.__name__ in ('MOSSImage', 'QwenImage'):
+                # Native edit graphs sample at the scaled reference's size (VAEEncode of
+                # the input). A different canvas aspect makes MOSS edits ignore the image.
+                input_image, gen_data["width"], gen_data["height"] = edit_canvas(input_image)
+
             match self.xl_base_patched.unet.model.__class__.__name__:
                 case 'Fibo2':
                     img = gen_data["input_image"].convert("RGB")
@@ -795,6 +808,9 @@ class pipeline:
             latent = VAEEncode().encode(
                 vae=self.xl_base_patched.vae, pixels=input_image
             )[0]
+            # The output keeps the encoded source size; record it for metadata/replay.
+            scale = self.xl_base_patched.vae.spacial_compression_decode()
+            gen_data["height"], gen_data["width"] = (int(side) * scale for side in latent["samples"].shape[-2:])
             force_full_denoise = False
             denoise = float(controlnet.get("denoise", controlnet.get("strength", 1)))
         else:

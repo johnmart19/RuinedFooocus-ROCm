@@ -292,8 +292,9 @@ def _process(gen_data):
                 "Negative": n_txt,
                 "steps": steps,
                 "cfg": gen_data["cfg"],
-                "width": width,
-                "height": height,
+                # Pipelines update the size when img2img/edits keep the source aspect.
+                "width": gen_data.get("width", width),
+                "height": gen_data.get("height", height),
                 "seed": abs(seed),
                 "sampler_name": gen_data["sampler_name"],
                 "scheduler": gen_data["scheduler"],
