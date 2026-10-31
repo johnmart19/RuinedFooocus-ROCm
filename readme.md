@@ -16,45 +16,47 @@ Don't waste another minute stuck in the past. The future is calling, and it's ti
 
 ### The future of art starts now!
 
-## Download
+## Install
+
+RuinedFooocus needs Python 3.11–3.14 (3.10 still works but is deprecated) and Git. The launchers create a
+`venv` folder, install the right PyTorch build for your GPU and start the web UI. The first start downloads
+several GB of packages and the default model
+[sd_xl_base_1.0_0.9vae.safetensors](https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/sd_xl_base_1.0_0.9vae.safetensors)
+into `models/checkpoints`. If you already have it, copy it there first.
 
 ### Windows
 
-You can directly download Fooocus with:
+    git clone https://github.com/johnmart19/RuinedFooocus-ROCm.git RuinedFooocus
+    cd RuinedFooocus
+    RuinedFooocus.bat
 
-**[>>> Click here to download <<<](https://github.com/runew0lf/RuinedFooocus/releases/download/Release-2.0.0/RuinedFooocus_main_2.0.0.win64.7z)**
+Set `PYTHON` to a python.exe, or activate a virtual environment, to use it instead of `venv`.
 
-## NOTE YOU WILL NEED TO EXTRACT USING THE LATEST [7ZIP](https://www.7-zip.org/download.html)
+### Linux and WSL
 
-After you download the file, please uncompress it, and then run the "run.bat".
+    git clone https://github.com/johnmart19/RuinedFooocus-ROCm.git RuinedFooocus
+    cd RuinedFooocus
+    ./RuinedFooocus.sh
 
-![image](https://github.com/lllyasviel/Fooocus/assets/19834515/c49269c4-c274-4893-b368-047c401cc58c)
+On Ubuntu install `python3-venv` and `git` first; set `PYTHON` to choose the interpreter that creates `venv`. Pass `--listen` (with `--auth user/password`) to open a LAN port.
 
-In the first time you launch the software, it will automatically download models:
+### GPU backends
 
-1. It will download [sd_xl_base_1.0_0.9vae.safetensors from here](https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/sd_xl_base_1.0_0.9vae.safetensors) as the file "Fooocus\models\checkpoints\sd_xl_base_1.0_0.9vae.safetensors".
+The launcher detects the GPU and installs a validated PyTorch bundle:
 
-If you already have these files, you can copy them to the above locations to speed up installation.
+| GPU | PyTorch | Notes |
+| --- | --- | --- |
+| NVIDIA Maxwell–Pascal | CUDA 12.6 / 12.4 | |
+| NVIDIA Turing and newer | CUDA 13.2 / 13.0 / 12.8 | Newest one your driver supports. `--cuda-nightly` installs CUDA 13.x nightlies |
+| AMD RX 5000/6000/7000/9000, Strix Halo (Windows, Linux, WSL), Instinct MI300 (Linux) | ROCm 10.1 | `--rocm10` reinstalls/repairs it |
+| Other AMD/Intel GPUs on Windows | DirectML | Python 3.10–3.12 only; or `--directml` |
+| No supported GPU | CPU | or `--cpu` |
+
+Set `TORCH_PLATFORM` (for example `cu128`, `rocm10.1`, `cpu`) to override detection. Chat models run on the
+native llama.cpp server, which picks Vulkan, ROCm or CUDA itself; change it under Settings > llama.cpp backend.
+See [help/README.md](help/README.md) to reinstall, switch or freeze PyTorch.
 
 Note that if you see **"MetadataIncompleteBuffer"**, then your model files are corrupted. Please download models again.
-
-### Linux
-
-The command lines are
-
-    git clone https://github.com/runew0lf/RuinedFooocus.git
-    cd RuinedFooocus
-    virtualenv venv
-    source venv/bin/activate
-    pip install -r requirements_versions.txt
-
-Then download the models: download [sd_xl_base_1.0_0.9vae.safetensors from here](https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/sd_xl_base_1.0_0.9vae.safetensors) as the file "Fooocus\models\checkpoints\sd_xl_base_1.0_0.9vae.safetensors", and download [sd_xl_refiner_1.0_0.9vae.safetensors from here](https://huggingface.co/stabilityai/stable-diffusion-xl-refiner-1.0/resolve/main/sd_xl_refiner_1.0_0.9vae.safetensors) as the file "Fooocus\models\checkpoints\sd_xl_refiner_1.0_0.9vae.safetensors". **Or let Fooocus automatically download the models** using the launcher:
-
-    python launch.py
-
-Or if you want to open a remote port, use
-
-    python launch.py --listen
 
 
 ## Ruined Edition Features
@@ -94,10 +96,10 @@ Or if you want to open a remote port, use
 33. Clip Interrogator, just drag your image onto the main image to generate the prompt
 34. Inpainting, Available in the `PowerUp` tab, simple check the box and it will either take a new image or the selected image in your gallery
 35. Evolve, takes your current generation and evolves it into different variations, best used with a fixed seed!
-36. Support --auth=username/password for rudimentary security (Forced when using --share)
+36. Support --auth=username/password (or RF_UI_AUTH) for login; required with --listen or --guest
 37. Automatically downloads your Lora triggerwords from civit and displays them for you
 38. Automatic Negative prompt, save yourself the heartache and hassle of writing negative prompts!
-39. If the file `reinstall` exists upgrade xformers and torch to 2.1.2 (to upgrade simply create a blank file called `reinstall`)
+39. Create a blank file called `reinstall` (all packages) or `reinstalltorch` (PyTorch only) to reinstall on the next start
 40. Support [LayerDiffuse](https://github.com/huchenlei/ComfyUI-layerdiffuse) PowerUp. (Removed in favor of RemBG)
 41. New model/LoRA select with support for animated thumbnails.
 42. SD3 Support, make sure to use `sd3_medium_incl_clips.safetensors` - Note: *If the pictures look "strange" change to euler and simple*

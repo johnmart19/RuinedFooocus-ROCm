@@ -13,4 +13,4 @@ rename 's/_pth/pth/' $RESULT/python*._pth
 echo "import site" >> $(ls $RESULT/python*.pth)
 curl -L -o $RESULT/get-pip.py https://bootstrap.pypa.io/get-pip.py
 (wine $RESULT/python.exe $RESULT/get-pip.py)
-(wine $RESULT/Scripts/pip.exe install wheel packaging pygit2 setuptools==80.9.0 cffi==2.0.0)
+(wine $RESULT/Scripts/pip.exe install wheel packaging pygit2 setuptools==84.2.1 cffi==2.1.1)
