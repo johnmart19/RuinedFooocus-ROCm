@@ -38,8 +38,8 @@
     </style>
     <head>
         <script type="module">
-            import { client } from "https://cdn.jsdelivr.net/npm/@gradio/client/dist/index.min.js";
-            const app = await client(window.location.origin);
+            import { Client } from "https://cdn.jsdelivr.net/npm/@gradio/client@2.7.1/dist/index.min.js";
+            const app = await Client.connect(window.location.origin);
             const displays = [document.getElementById('display1'),document.getElementById('display2')];
             var currentdisplay = 0;
             const updateperiod = 10000;
@@ -68,7 +68,7 @@
 
             async function showImage() {
                 if (images.length >= 1) {
-                    displays[currentdisplay].src = "/gradio_api/file/" + images[Math.floor(Math.random() * images.length)];
+                    displays[currentdisplay].src = images[Math.floor(Math.random() * images.length)];
                 }
                 setTimeout(showImage, updateperiod);
             }
@@ -80,7 +80,7 @@
     <body bgcolor=black>
         <div class="imgbox">
             <img id="display1">
-            <img id="display2" src="/gradio_api/file/html/logo.png">
+            <img id="display2" src="/gradio_api/file=html/logo.png">
         </div>
     </body>
 </html>

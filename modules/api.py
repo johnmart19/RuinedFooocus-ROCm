@@ -2,9 +2,9 @@ import time
 import gradio as gr
 from typing import Any
 import base64
-import re
 import numpy as np
 from pathlib import Path
+from urllib.parse import quote
 import shared
 from shared import (
     state,
@@ -15,6 +15,12 @@ from fastapi.responses import Response
 from io import BytesIO
 from PIL import Image, ImageOps
 
+def image_file_url(filename):
+    """Build a Gradio URL without Windows separators or browser dot segments."""
+    path = Path(filename).resolve().as_posix()
+    return shared.local_url.rstrip("/") + "/gradio_api/file=" + quote(path, safe="/:")
+
+
 # "secret" pi slideshow
 def get_last_image() -> str:
     """
@@ -22,9 +28,9 @@ def get_last_image() -> str:
     """
     global state
     if "last_image" in state:
-        return state["last_image"]
+        return Path(state["last_image"]).resolve().as_posix()
     else:
-        return "html/logo.png"
+        return Path("html/logo.png").resolve().as_posix()
 
 def add_api():
 
@@ -110,9 +116,7 @@ def add_api():
         files = search_pipeline.search(prompt)
         result = []
         for file in files:
-            file = Path(file)
-            url = shared.local_url + "gradio_api/file=" + re.sub(r'[^/]+/\.\./', '', str(file.relative_to(file.cwd())))
-            result.append(url)
+            result.append(image_file_url(file))
         return result
     gr.api(api_search, api_name="search")
 
