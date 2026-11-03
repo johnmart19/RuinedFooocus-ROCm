@@ -3,7 +3,7 @@ import sys
 import version
 import warnings
 from pathlib import Path
-import ssl
+from modules.comfy_compat import configure_device_environment, initialize_backend
 from tempfile import gettempdir
 from modules.shared_functions import broken_torch_platforms
 
@@ -11,9 +11,7 @@ os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
 os.environ["DO_NOT_TRACK"] = "1"
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 os.environ["CMAKE_POLICY_VERSION_MINIMUM"] = "3.5"
-os.environ["PYTORCH_ALLOC_CONF"] = "expandable_segments:True"
 
-ssl._create_default_https_context = ssl._create_unverified_context
 
 warnings.filterwarnings("ignore", category=FutureWarning, module="insightface")
 warnings.filterwarnings("ignore", category=FutureWarning, module="transformers")
@@ -49,24 +47,10 @@ git_repos = [
     {
         "name": "ComfyUI",
         "path": "ComfyUI",
-        "url": "https://github.com/comfyanonymous/ComfyUI",
-        "hash": "baa9c563c3c749ac85dead76bd09695684b2150b",
+        "url": "https://github.com/comfy-org/ComfyUI",
+        "hash": "fe298e4e20f1ff26d30e8639267bbd0b57811390",
         "add_path": "ComfyUI",
     },
-#    {
-#        "name": "Calcuis-GGUF",
-#        "path": "calcuis_gguf",
-#        "url": "https://github.com/calcuis/gguf",
-#        "hash": "34a4e030afea0137c5e781e07400bdbe00e9d524",
-#        "add_path": "",
-#    },
-#    {
-#        "name": "ComfyUI-GGUF",
-#        "path": "comfyui_gguf",
-#        "url": "https://github.com/city96/ComfyUI-GGUF",
-#        "hash": "6ea2651e7df66d7585f6ffee804b20e92fb38b8a",
-#        "add_path": "",
-#    },
     {
         "name": "molbal/ComfyUI-GGUF",
         "path": "molbal_comfyui_gguf",
@@ -236,9 +220,7 @@ REINSTALL_TORCH = False
 if os.path.exists("reinstalltorch"):
     REINSTALL_TORCH = True
 
-if args.gpu_device_id is not None:
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu_device_id)
-    print("Set device to:", args.gpu_device_id)
+configure_device_environment(args)
 
 offline = os.environ.get("RF_OFFLINE") == "1" or "--offline" in sys.argv or "--iINSTallLEDmYOwNPaCKaGeS" in sys.argv
 
@@ -262,6 +244,8 @@ try:
     clone_git_repos(offline)
 except:
     print(f"WARNING: Failed checking git-repos. Trying to start without update.")
+
+initialize_backend(args)
 
 if not offline:
     download_models()
