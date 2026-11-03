@@ -1,14 +1,16 @@
 import os
 import importlib
 import importlib.util
-import shutil
 import subprocess
 import sys
 import re
 import logging
 from pathlib import Path
 import importlib.metadata
+from tempfile import TemporaryDirectory
 import packaging.version
+from packaging.requirements import InvalidRequirement, Requirement
+from packaging.utils import canonicalize_name
 
 logging.getLogger("torch.distributed.nn").setLevel(logging.ERROR)  # sshh...
 logging.getLogger("xformers").addFilter(
@@ -44,6 +46,7 @@ def git_clone(url, dir, name, hash=None):
         remote.fetch()
         commit = repo.get(hash)
         repo.checkout_tree(commit, strategy=pygit2.GIT_CHECKOUT_FORCE)
+        repo.set_head(commit.id)
         print(f"{name} update check complete.")
     except Exception as e:
         print(f"Git clone failed for {name}: {str(e)}")
@@ -116,7 +119,10 @@ def run(
 
 
 def run_pip(command, desc=None, live=default_command_live):
-    index_url_line = f" --index-url {index_url}" if index_url != "" else ""
+    index_url_line = (
+        f" --index-url {index_url}"
+        if index_url and "--index-url" not in command else ""
+    )
     return run(
         f'"{python}" -m pip {command} --prefer-binary{index_url_line}',
         desc=f"Installing {desc}",
@@ -132,39 +138,62 @@ def pip_rm(pkgs, desc=None, live=default_command_live):
         live=live,
     )
 
-def requirements_met(requirements_file):
-    """
-    Does a simple parse of a requirements.txt file to determine if all rerqirements in it
-    are already installed. Returns True if so, False if not installed or parsing fails.
-    """
+def reinstall_requirements(requirements_file, constraints=""):
+    """Reinstall exact versions after dependency resolution, without replacing Torch."""
+    resolved = {}
+    for line in Path(requirements_file).read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith(("#", "--")):
+            continue
+        requirement = Requirement(line.split(" #", 1)[0])
+        if requirement.marker and not requirement.marker.evaluate():
+            continue
+        installed = importlib.metadata.version(requirement.name)
+        if not requirement.specifier.contains(installed, prereleases=True):
+            raise RuntimeError(f"Resolve {requirements_file} before reinstalling {requirement.name}.")
+        resolved[requirement.name] = installed
+    # --no-deps does not check dependency bounds. Reusing version ranges here
+    # could replace DirectML-compatible OpenCV/rembg/Tokenizers with newer builds.
+    with TemporaryDirectory(prefix="ruinedfooocus-reinstall-") as directory:
+        pinned = Path(directory) / "requirements.txt"
+        pinned.write_text("".join(f"{name}=={version}\n" for name, version in resolved.items()), encoding="utf-8")
+        run_pip(f'install --force-reinstall --no-deps -r "{pinned}"{constraints}', "resolved modules")
 
+
+def _requirement_met(requirement, checked):
+    installed = importlib.metadata.version(requirement.name)
+    if not requirement.specifier.contains(installed, prereleases=True):
+        return False
+    key = (canonicalize_name(requirement.name), frozenset(requirement.extras))
+    if key in checked:
+        return True
+    checked.add(key)
+    # Check requested extras as well as the base dependency closure. Merely
+    # finding gradio installed does not establish that gradio[mcp] is usable.
+    extras = {"", *requirement.extras}
+    for raw in importlib.metadata.requires(requirement.name) or []:
+        dependency = Requirement(raw)
+        if dependency.marker and not any(dependency.marker.evaluate({"extra": extra}) for extra in extras):
+            continue
+        if not _requirement_met(dependency, checked):
+            return False
+    return True
+
+
+def requirements_met(requirements_file):
+    """Check applicable PEP 508 requirements and their installed extra closure."""
+    checked = set()
     with open(requirements_file, "r", encoding="utf8") as file:
         for line in file:
-            if line.strip() == "" or line.startswith("--"):
+            line = line.strip()
+            if not line or line.startswith(("#", "--")):
                 continue
-
-            m = re.match(re_requirement, line)
-            if m is None:
-                return False
-
-            package = m.group(1).strip()
-            version_required = (m.group(2) or "").strip()
-
             try:
-                version_installed = re.sub(
-                    r"\+.*$",
-                    "",
-                    importlib.metadata.version(package)
-                )
-            except Exception:
+                requirement = Requirement(line.split(" #", 1)[0])
+                if requirement.marker and not requirement.marker.evaluate():
+                    continue
+                if not _requirement_met(requirement, checked):
+                    return False
+            except (InvalidRequirement, importlib.metadata.PackageNotFoundError, ValueError):
                 return False
-
-            if version_required == "":
-                continue
-
-            if packaging.version.parse(version_required) != packaging.version.parse(
-                version_installed
-            ):
-                return False
-
     return True
