@@ -8,24 +8,23 @@ python_embeded_dir="python_embeded"
 python_urls=(
   "3.13.13 x86_64|https://github.com/astral-sh/python-build-standalone/releases/download/20260602/cpython-3.13.13+20260602-x86_64-unknown-linux-gnu-pgo+lto-full.tar.zst"
 )
-python_modules="wheel packaging pygit2 setuptools==80.9.0"
+python_modules="wheel packaging pygit2 setuptools==84.2.1"
 ruinedfooocus_dir="RuinedFooocus"
 ruinedfooocus_repo="https://github.com/runew0lf/RuinedFooocus/"
 ruinedfooocus_branches=(
   "main (recommended)"
   "development"
 )
+# Explicit choices use the launcher's validated, pinned wheel bundles (modules/torch_setup.py).
 torch_options=(
-  "Auto ((Remove current Torch and let RF install its prefered version at startup)|auto"
-  "CUDA 12.6 (Older GTX gpus)|https://download.pytorch.org/whl/cu126/"
-  "CUDA 12.8 (GTX1660, RTX20xx and up)|https://download.pytorch.org/whl/cu128/"
-  "CUDA 13.0 (RTX20xx and up, DGX Spark)|https://download.pytorch.org/whl/cu130/"
-  "CUDA 13.2 (latest)|https://download.pytorch.org/whl/cu132/"
-  "CUDA 13.4 (nightly)|https://download.pytorch.org/whl/nightly/cu134/"
-  "RDNA 3 (RX 7000)|https://rocm.nightlies.amd.com/v2/gfx110X-all/"
-  "RDNA 3.5 (Strix halo/Ryzen AI Max+ 365)|https://rocm.nightlies.amd.com/v2/gfx1151/"
-  "RDNA 4 (RX 9000)|https://rocm.nightlies.amd.com/v2/gfx120x-all/"
-  "cpu|https://download.pytorch.org/whl/cpu"
+  "Auto (Remove current Torch and let RF install its prefered version at startup)|auto"
+  "CUDA 12.6 (GTX 900/1000 and newer)|cu126"
+  "CUDA 12.8 (GTX 1660, RTX 20xx and newer)|cu128"
+  "CUDA 13.0 (GTX 1660, RTX 20xx and newer, DGX Spark)|cu130"
+  "CUDA 13.2 (latest)|cu132"
+  "CUDA 13.4 (nightly)|cu134"
+  "AMD ROCm 10.1 (RX 5000/6000/7000/9000, Strix Halo, Instinct MI300; GPU auto-detected)|rocm"
+  "cpu|cpu"
   "Freeze current version|freeze"
   "Unfreeze (RF might update Torch automatically)|unfreeze"
 )
@@ -85,7 +84,7 @@ python_install() {
   clear
   header
   if [ -d "$python_embeded_dir" ]; then
-    echo "Sorry, you already have a $python_embedded_dir folder. To change python version you need to manually remove or rename the old ${python_embeded_dir}."
+    echo "Sorry, you already have a $python_embeded_dir folder. To change python version you need to manually remove or rename the old ${python_embeded_dir}."
 
     echo "Press enter to continue."
   else
@@ -118,7 +117,6 @@ git_clone() {
   header
   if [ -d "$ruinedfooocus_dir" ]; then
     echo "Sorry, you already have RuinedFooocus downloaded."
-    read
   else
     echo "Using branch ${ruinedfooocus_branches[$1]}"
     git clone -b "$(echo "${ruinedfooocus_branches[$1]}" | cut -d' ' -f1)" "$ruinedfooocus_repo"
@@ -143,7 +141,7 @@ ruinedfooocus_loop() {
 }
 
 use_torch() {
-  index_url=$(echo "${torch_options[$1]}" | cut -d'|' -f2)
+  torch_platform=$(echo "${torch_options[$1]}" | cut -d'|' -f2)
   if [ \! -d "$python_embeded_dir" ]; then
     echo "You need to install python first."
     read
@@ -156,7 +154,7 @@ use_torch() {
   fi
   clear
   header
-  case $index_url in
+  case $torch_platform in
     auto)
       rm -f $ruinedfooocus_dir/freezetorch
       $python_embeded_dir/bin/pip uninstall -y torch torchvision torchaudio
@@ -171,12 +169,15 @@ use_torch() {
       echo "Torch unfrozen"
       ;;
     *)
-      echo "Remove old version"
-      $python_embeded_dir/bin/pip uninstall -y torch torchvision torchaudio
-      echo "Install torch from $index_url"
-      $python_embeded_dir/bin/pip install --pre torch torchvision torchaudio --index-url $index_url
-      echo "Lock torch version"
-      touch $ruinedfooocus_dir/freezetorch
+      # The installer validates GPU, driver and wheels before replacing the working Torch.
+      echo "Install validated torch for $torch_platform"
+      if (cd "$ruinedfooocus_dir" && "../$python_embeded_dir/bin/python" -m pip install --quiet -r requirements_versions.txt \
+          && "../$python_embeded_dir/bin/python" -m modules.torch_setup "$torch_platform"); then
+        echo "Lock torch version"
+        touch $ruinedfooocus_dir/freezetorch
+      else
+        echo "Torch installation failed; the previous installation was kept where possible."
+      fi
       ;;
   esac
   echo;echo "Done... (Press enter)"

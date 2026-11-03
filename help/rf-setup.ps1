@@ -95,8 +95,8 @@ function Install-Python {
         wheel `
         packaging `
         pygit2 `
-        setuptools==80.9.0 `
-        cffi==2.0.0
+        setuptools==84.2.1 `
+        cffi==2.1.1
 
     Write-Host "Done..."
 }
@@ -104,12 +104,12 @@ function Loop-Python {
     do {
         Clear
         Status-Bar
-        $input = Get-MenuSelection @("3.13.13", "Back") "Select python version"
-        switch ($input) {
+        $choice = Get-MenuSelection @("3.13.13", "Back") "Select python version"
+        switch ($choice) {
             '1' { Install-Python "3.13.13"; Pause }
             '2' { return }
         }
-    } until ($input -eq "$MenuItems.Count")
+    } while ($true)
 }
 
 # Install RuinedFooocus
@@ -137,27 +137,39 @@ function Loop-RF {
     do {
         Clear
         Status-Bar
-        $input = Get-MenuSelection @("main (recommended)", "development", "Back") "Get RuinedFooocus"
-        switch ($input) {
+        $choice = Get-MenuSelection @("main (recommended)", "development", "Back") "Get RuinedFooocus"
+        switch ($choice) {
             '1' { Get-RF "main" }
             '2' { Get-RF "development" }
             '3' { return }
         }
-    } until ($input -eq "$MenuItems.Count")
+    } while ($true)
 }
 
 # Select torch
 function Torch-Reinstall {
     param(
-        [String]$IndexUrl = ""
+        [String]$Platform = ""
     )
-    Write-Host "Removing old torch install"
-    python_embeded\Scripts\pip.exe uninstall -y torch torchvision torchaudio
-    Write-Host "Installing new torch from $IndexUrl (This might take a while)"
-    python_embeded\Scripts\pip.exe install --pre torch torchvision torchaudio --index-url $IndexUrl
-    Write-Host "Lock Torch version"
-    New-Item -ItemType File -Path "RuinedFooocus\freezetorch" -Force | Out-Null
-    Write-Host "Done..."
+    # The launcher's installer validates the GPU, driver and pinned wheel bundle
+    # before replacing anything, so a wrong choice keeps the working Torch.
+    Write-Host "Installing validated PyTorch for $Platform (This might take a while)"
+    Push-Location "RuinedFooocus"
+    try {
+        & "..\python_embeded\python.exe" -m pip install --quiet -r requirements_versions.txt
+        if ($LASTEXITCODE -eq 0) { & "..\python_embeded\python.exe" -m modules.torch_setup $Platform }
+        $ok = $LASTEXITCODE -eq 0
+    } finally {
+        Pop-Location
+    }
+    if ($ok) {
+        Write-Host "Lock Torch version"
+        New-Item -ItemType File -Path "RuinedFooocus\freezetorch" -Force | Out-Null
+        Write-Host "Done..."
+    } else {
+        Write-Host "Torch installation failed; the previous installation was kept where possible."
+    }
+    Pause
 }
 function Loop-Torch {
     if (-not (Test-Path -Path "python_embeded")) {
@@ -170,25 +182,23 @@ function Loop-Torch {
         Pause
         return
     }
-    do {
+    while ($true) {
         Clear
         Status-Bar
-        $input = Get-MenuSelection @(
+        $choice = Get-MenuSelection @(
             "Auto (Remove current Torch and let RF install its prefered version at startup)",
-            "CUDA 12.6 (Older GTX gpus)",
-            "CUDA 12.8 (GTX1660, RTX20xx and up)",
-            "CUDA 13.0 (RTX20xx and up, DGX Spark)",
+            "CUDA 12.6 (GTX 900/1000 and newer)",
+            "CUDA 12.8 (GTX 1660, RTX 20xx and newer)",
+            "CUDA 13.0 (GTX 1660, RTX 20xx and newer, DGX Spark)",
             "CUDA 13.2 (latest)",
             "CUDA 13.4 (nightly)",
-            "RDNA 3 (RX 7000)",
-            "RDNA 3.5 (Strix halo/Ryzen AI Max+ 365)",
-            "RDNA 4 (RX 9000)",
+            "AMD ROCm 10.1 (RX 5000/6000/7000/9000, Strix Halo; GPU auto-detected)",
             "cpu",
             "freeze current torch version",
             "unfreeze (RF might update Torch automatically)",
             "Back"
         ) "Select Torch version"
-        switch ($input) {
+        switch ($choice) {
             '1' {
                 Write-Host "Removing old torch install"
                 python_embeded\Scripts\pip.exe uninstall -y torch torchvision torchaudio
@@ -198,30 +208,28 @@ function Loop-Torch {
                 Write-Host "Torch unfrozen"
                 Pause
             }
-            '2' { Torch-Reinstall "https://download.pytorch.org/whl/cu126/" }
-            '3' { Torch-Reinstall "https://download.pytorch.org/whl/cu128/" }
-            '4' { Torch-Reinstall "https://download.pytorch.org/whl/cu130/" }
-            '5' { Torch-Reinstall "https://download.pytorch.org/whl/cu132/" }
-            '6' { Torch-Reinstall "https://download.pytorch.org/whl/nightly/cu134/" }
-            '7' { Torch-Reinstall "https://rocm.nightlies.amd.com/v2/gfx110X-all/" }
-            '8' { Torch-Reinstall "https://rocm.nightlies.amd.com/v2/gfx1151/" }
-            '9' { Torch-Reinstall "https://rocm.nightlies.amd.com/v2/gfx120x-all/" }
-            '10' { Torch-Reinstall "https://download.pytorch.org/whl/cpu" }
-            '11' {
+            '2' { Torch-Reinstall "cu126" }
+            '3' { Torch-Reinstall "cu128" }
+            '4' { Torch-Reinstall "cu130" }
+            '5' { Torch-Reinstall "cu132" }
+            '6' { Torch-Reinstall "cu134" }
+            '7' { Torch-Reinstall "rocm" }
+            '8' { Torch-Reinstall "cpu" }
+            '9' {
                 New-Item -ItemType File -Path "RuinedFooocus\freezetorch" -Force | Out-Null
                 Write-Host "Torch frozen"
                 Pause
             }
-            '11' {
+            '10' {
                 if (Test-Path -Path "RuinedFooocus\freezetorch") {
                     Remove-Item -Path "RuinedFooocus\freezetorch"
                 }
                 Write-Host "Torch unfrozen"
                 Pause
             }
-            '12' { return }
+            '11' { return }
         }
-    } until ($input -eq "$MenuItems.Count")
+    }
 }
 
 # Create run.bat script
@@ -256,13 +264,13 @@ function Loop-Ops {
     do {
         Clear
         Status-Bar
-        $input = Get-MenuSelection @(
+        $choice = Get-MenuSelection @(
             "Fix broken python modules",
             "Trigger reinstall of all python modules next start",
             "Trigger reinstall of Torch next start (will set selected version to Auto)",
             "Back"
         ) "Operations"
-        switch ($input) {
+        switch ($choice) {
             '1' {
                 python_embeded\Scripts\pip.exe install --force-reinstall --no-cache-dir -r RuinedFooocus\requirements_versions.txt
                 python_embeded\Scripts\pip.exe install --force-reinstall --no-cache-dir -r RuinedFooocus\pip\modules.txt
@@ -286,7 +294,7 @@ function Loop-Ops {
             }
             '4' { return }
         }
-    } until ($input -eq "$MenuItems.Count")
+    } while ($true)
 }
 
 # Start RuinedFooocus
@@ -310,7 +318,7 @@ function Start-RF {
 do {
     Clear
     Status-Bar
-    $input = Get-MenuSelection @(
+    $choice = Get-MenuSelection @(
         "Select python",
         "Install RuinedFooocus",
         "Select Torch version",
@@ -319,7 +327,7 @@ do {
         "Start RuinedFooocus",
         "Exit"
     )
-    switch ($input) {
+    switch ($choice) {
         '1' { Loop-Python }
         '2' { Loop-RF }
         '3' { Loop-Torch }
@@ -328,4 +336,4 @@ do {
         '6' { Start-RF }
         '7' { return }
     }
-} until ($input -eq "$MenuItems.Count")
+} while ($true)
