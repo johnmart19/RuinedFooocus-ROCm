@@ -24,16 +24,7 @@ class pipeline:
         self.model_hash = name
         return
 
-    def load_keywords(self, lora):
-        return ""
-
     def load_loras(self, loras):
-        return
-
-    def refresh_controlnet(self, name=None):
-        return
-
-    def clean_prompt_cond_caches(self):
         return
 
     def process(
@@ -63,7 +54,7 @@ class pipeline:
                 print("TODO...")
 
             case "add performance":
-                new_perf = shared.performance_settings.default_settings
+                new_perf = dict(shared.performance_settings.default_settings)  # Never edit shared defaults.
                 new_perf['name'] = "Oops! Forgot to add a name." # Have a default name
 
                 metadata = None

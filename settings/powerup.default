@@ -15,11 +15,15 @@
         "start": 0.0,
         "stop": 0.99
     },
-    "Depth (low)": {"type": "depth", "strength": 0.5, "start": 0.0, "stop": 0.5},
-    "Depth (high)": {"type": "depth", "strength": 1.0, "start": 0.0, "stop": 0.99},
+    "Depth (low)": {"type": "depth", "strength": 0.5, "start": 0.0, "stop": 0.5, "depth_preprocess": "auto"},
+    "Depth (high)": {"type": "depth", "strength": 1.0, "start": 0.0, "stop": 0.99, "depth_preprocess": "auto"},
     "Recolour": {"type": "recolour", "strength": 1.0, "start": 0.0, "stop": 1.0},
     "Sketch": {"type": "sketch", "strength": 0.9, "start": 0.0, "stop": 1.0},
-    "Img2Img": {"type": "img2img", "start": 0.06, "denoise": 0.64},
+    "Img2Img": {"type": "img2img", "start": 0.06, "denoise": 0.25},
     "Upscale": {"type": "upscale", "upscaler": "4x-UltraSharp.pth"},
+    "Upscale 2x (general)": {"type": "upscale", "upscaler": "RealESRGAN_x2plus.pth"},
+    "Upscale 4x (general)": {"type": "upscale", "upscaler": "RealESRGAN_x4plus.pth"},
+    "Upscale 4x (anime)": {"type": "upscale", "upscaler": "RealESRGAN_x4plus_anime_6B.pth"},
+    "Restore cropped face": {"type": "upscale", "upscaler": "faceswap/GFPGANv1.4.pth"},
     "RemBG": {"type": "rembg"}
 }

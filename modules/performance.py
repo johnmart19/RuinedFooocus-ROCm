@@ -91,6 +91,9 @@ class PerformanceSettings:
     def family_preset(self, family, checkpoint):
         from modules.model_recommendations import FAMILY_PRESETS
         preset = FAMILY_PRESETS.get(family, family)
+        if preset == 'HiDream O1':
+            from modules.image_sampling import hidream_o1_dev
+            return 'HiDream O1 Dev' if hidream_o1_dev(checkpoint) else preset
         # Upstream filenames distinguish edit and turbo sampling recipes.
         name = str(checkpoint or "").replace("\\", "/").rsplit("/", 1)[-1].lower()
         if preset == "Qwen Image" and "edit" in name and "Qwen Image Edit" in self.performance_options:

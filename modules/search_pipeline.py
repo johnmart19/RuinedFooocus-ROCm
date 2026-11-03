@@ -123,22 +123,7 @@ class pipeline:
         # We're not doing models here
         return
 
-    def load_keywords(self, lora):
-        filename = lora.replace(".safetensors", ".txt")
-        try:
-            with open(filename, "r") as file:
-                data = file.read()
-            return data
-        except FileNotFoundError:
-            return " "
-
     def load_loras(self, loras):
-        return
-
-    def refresh_controlnet(self, name=None):
-        return
-
-    def clean_prompt_cond_caches(self):
         return
 
 

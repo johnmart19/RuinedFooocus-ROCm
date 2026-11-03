@@ -1,3 +1,4 @@
+import comfy.model_management as model_management
 import threading
 import gc
 import torch
@@ -492,3 +493,10 @@ def task_result(task_id):
 
 
 threading.Thread(target=worker, daemon=True).start()
+
+
+def check_interrupt(gen_data):
+    job = gen_data.get("_api_job")
+    if interrupt_ruined_processing or (job is not None and job.cancelled.is_set()):
+        raise model_management.InterruptProcessingException()
+    model_management.throw_exception_if_processing_interrupted()

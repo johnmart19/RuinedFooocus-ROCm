@@ -9,11 +9,6 @@ class pipeline:
 
     model_hash = ""
 
-    # Optional function
-    def parse_gen_data(self, gen_data):
-        gen_data["ruinedfooocus_was_here"] = True
-        return gen_data
-
     def load_base_model(self, name, hash=None):
         # Check if model is already loaded
         if self.model_hash == name:
@@ -22,22 +17,7 @@ class pipeline:
         self.model_hash = name
         return
 
-    def load_keywords(self, lora):
-        filename = lora.replace(".safetensors", ".txt")
-        try:
-            with open(filename, "r") as file:
-                data = file.read()
-            return data
-        except FileNotFoundError:
-            return " "
-
     def load_loras(self, loras):
-        return
-
-    def refresh_controlnet(self, name=None):
-        return
-
-    def clean_prompt_cond_caches(self):
         return
 
     def process(

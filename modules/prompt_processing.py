@@ -1,9 +1,8 @@
 import os
 import re
 import random
-import json
 
-from modules.sdxl_styles import apply_style, allstyles
+from modules.sdxl_styles import apply_style
 from random_prompt.build_dynamic_prompt import (
     build_dynamic_prompt,
     build_dynamic_negative,
@@ -12,31 +11,51 @@ from shared import path_manager
 
 
 def process_metadata(gen_data):
-    try:
-        if isinstance(gen_data["prompt"], dict):
-            meta = gen_data["prompt"]
-        else:
-            meta = json.loads(gen_data["prompt"])
-        meta = dict((k.lower(), v) for k, v in meta.items())
-    except:
-        meta = {}
-        pass
-
-    if "prompt" in meta:
-        gen_data.update(meta)
+    from modules.image_metadata import read_metadata, render_values
+    meta = read_metadata(gen_data['prompt'])
+    if meta is not None:
+        if not isinstance(meta['prompt'], str):
+            raise ValueError('Image metadata needs a text prompt.')
+        from modules.image_guidance import restore_guidance_metadata
+        from shared import models
+        checkpoint = meta.get('base_model_name', gen_data.get('base_model_name'))
+        family = 'Unknown'
+        if checkpoint:
+            info = models.get_models_by_path('checkpoints', checkpoint, fetch=False)
+            family = models.get_model_base(info)
+            path = models.get_file('checkpoints', checkpoint)
+            if path:
+                family = models.detect_checkpoint_base(path) or family
+        restored = restore_guidance_metadata(meta, family=family)
+        gen_data.update(render_values(meta))
+        gen_data['_metadata_prompt'] = True
+        # Canonical validated flat/grouped guidance takes precedence. This also
+        # restores the recorded effective Auto shift instead of a later default.
+        gen_data.update(restored)
         gen_data["style_selection"] = []
+        gen_data["performance_selection"] = "Own settings"
+        if meta.get("width") and meta.get("height"):
+            gen_data["width"] = gen_data["custom_width"] = meta.get("generation_width", meta["width"])
+            gen_data["height"] = gen_data["custom_height"] = meta.get("generation_height", meta["height"])
+            gen_data["aspect_ratios_selection"] = "Custom..."
+        gen_data["automatic_upscale"] = meta.get("automatic_upscale", "Off")
+        gen_data["automatic_upscale_target"] = "Generated image"
 
-    if "steps" in meta:
+    if meta is not None and "steps" in meta:
         gen_data["custom_steps"] = int(meta["steps"])
     return gen_data
 
 
 def get_promptlist(gen_data):
+    from modules.image_metadata import read_metadata
+    if gen_data.get('_metadata_prompt') or read_metadata(gen_data['prompt']) is not None:
+        return [gen_data['prompt']]
     return gen_data["prompt"].split("---")
 
 
-def process_wildcards(wildcard_text, directory=path_manager.paths.get("path_wildcards", ["wildcards"])):
-    # removed regex method
+def process_wildcards(wildcard_text, directory=None):
+    if directory is None:
+        directory = path_manager.paths.get("path_wildcards", ["wildcards"])
     placeholders = []
     splitup = wildcard_text.split("__")
     for i in range(len(splitup)):
@@ -45,9 +64,9 @@ def process_wildcards(wildcard_text, directory=path_manager.paths.get("path_wild
 
     placeholder_choices = {}  # Store random choices for each placeholder
     official_directory = "wildcards_official"
-    directories = []
-    directories += directory
-    directories.append(official_directory)
+    directories = list(directory)
+    if official_directory not in directories:
+        directories.append(official_directory)
 
     for placeholder in placeholders:
         # Skip onebuttonprompt wildcards for now; handled below
@@ -231,8 +250,25 @@ def process_wildcards(wildcard_text, directory=path_manager.paths.get("path_wild
     return wildcard_text
 
 
-def process_prompt(style, prompt, negative, gen_data=[]):
-    if "obp_assume_direct_control" in gen_data and gen_data["obp_assume_direct_control"]:
+def use_random_prompt(gen_data, prompt):
+    from modules.image_metadata import read_metadata
+    if gen_data.get('_metadata_prompt') or read_metadata(prompt) is not None:
+        return False
+    if "obp_assume_direct_control" not in gen_data:
+        return False
+    # An empty image-conditioned prompt is intentional, not a request for OBP.
+    image_conditioned = ("input_image" in gen_data and gen_data["input_image"] is not None) or (
+        "inpaint_toggle" in gen_data and gen_data["inpaint_toggle"]
+    )
+    if image_conditioned:
+        return gen_data.get("obp_image_prompt", False)
+    return gen_data["obp_assume_direct_control"] or not prompt.strip()
+
+
+def process_prompt(style, prompt, negative, gen_data=None):
+    if gen_data is None:
+        gen_data = {}
+    if use_random_prompt(gen_data, prompt):
         prompt = build_dynamic_prompt(
             insanitylevel=gen_data["obp_insanitylevel"],
             forcesubject=gen_data["obp_subject"],
@@ -258,7 +294,9 @@ def process_prompt(style, prompt, negative, gen_data=[]):
 
     # styles
     pattern = re.compile(r"<style:([^>]+)>")
-    styles = [] if style is None else style.copy()
+    # Dropdown selections are staged for "Send Style to prompt". Generation
+    # must not invisibly apply them again, including saved/default selections.
+    styles = (style or []).copy() if "task_type" in gen_data and gen_data["task_type"] == "tool_call" else []
     for match in re.finditer(pattern, prompt):
         styles += [f"Style: {match.group(1)}"]
     prompt = re.sub(pattern, "", prompt)
