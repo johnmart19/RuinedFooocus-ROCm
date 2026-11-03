@@ -1,13 +1,10 @@
 import modules.async_worker as worker
+from argparser import args
+from modules.onnx_runtime import new_session
+from modules.controlnet import get_settings
 
-import os
-import cv2
-import imageio
-import numpy as np
 import rembg
-import torch
 import PIL.Image
-from PIL import Image
 from typing import Any
 
 
@@ -17,14 +14,22 @@ class pipeline:
         image: PIL.Image.Image,
         rembg_session: Any = None,
         force: bool = False,
+        check_cancelled=None,
         **rembg_kwargs,
     ) -> PIL.Image.Image:
-        do_remove = True
-        if image.mode == "RGBA" and image.getextrema()[3][0] < 255:
-            do_remove = False
-        do_remove = do_remove or force
+        do_remove = force or not (image.has_transparency_data and image.convert('RGBA').getextrema()[3][0] < 255)
         if do_remove:
-            image = rembg.remove(image, session=rembg_session, **rembg_kwargs)
+            if rembg_session is None:
+                if getattr(self, '_rembg_session', None) is None:
+                    self._rembg_session = new_session(cpu=args.cpu)
+                rembg_session = self._rembg_session
+            if hasattr(rembg_session, 'check_cancelled'):
+                rembg_session.check_cancelled = check_cancelled
+            try:
+                image = rembg.remove(image, session=rembg_session, **rembg_kwargs)
+            finally:
+                if hasattr(rembg_session, 'check_cancelled'):
+                    rembg_session.check_cancelled = None
         return image
 
     pipeline_type = ["rembg"]
@@ -35,21 +40,14 @@ class pipeline:
         gen_data["original_image_number"] = gen_data["image_number"]
         gen_data["image_number"] = 1
         gen_data["show_preview"] = False
+        if gen_data.get('input_image') is not None:
+            gen_data['width'], gen_data['height'] = gen_data['input_image'].size
         return gen_data
 
     def load_base_model(self, name, hash=None):
         return
 
-    def load_keywords(self, lora):
-        return " "
-
     def load_loras(self, loras):
-        return
-
-    def refresh_controlnet(self, name=None):
-        return
-
-    def clean_prompt_cond_caches(self):
         return
 
     def process(
@@ -57,6 +55,14 @@ class pipeline:
         gen_data=None,
         callback=None,
     ):
+        image = gen_data.get('input_image')
+        if image is None:
+            raise ValueError('Add an image in Image tools to remove its background.')
+        worker.check_interrupt(gen_data)
+        options = get_settings(gen_data)
+        force = options.get('force', False)
+        if gen_data.get('controlnet') is None:
+            force = gen_data.get('rembg_force', force)
 
         worker.add_result(
             gen_data["task_id"],
@@ -64,12 +70,9 @@ class pipeline:
             (-1, f"Removing background ...", None)
         )
 
-        if gen_data["input_image"] is None:
-            print(f"ERROR: Could not find input image.")
-            return ["html/error.png"]
-
-        rembg_session = rembg.new_session()
-        image = self.remove_background(gen_data["input_image"], rembg_session)
+        image = self.remove_background(image, force=force,
+                                       check_cancelled=lambda: worker.check_interrupt(gen_data))
+        worker.check_interrupt(gen_data)
 
         # Return finished image to preview
         if callback is not None:
