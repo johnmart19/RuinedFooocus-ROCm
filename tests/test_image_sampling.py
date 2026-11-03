@@ -117,7 +117,7 @@ class NativeSamplingTests(unittest.TestCase):
             scope=dict(sampler_name=sampler,guidance={},architecture='HiDreamO1',checkpoint='o1_dev',
                 sampling_model=object(),noise='noise',gen_data=data,cfg=1,scheduler='normal',
                 positive_cond=['positive'],negative_conditioning=['negative'],latent_image='latent',denoise=.25,
-                force_full_denoise=False,noise_mask='mask',callback_function='callback',seed=42,
+                noise_mask='mask',callback_function='callback',seed=42,
                 comfy=SimpleNamespace(sample=SimpleNamespace(sample=normal),utils=SimpleNamespace(PROGRESS_BAR_ENABLED=True)))
             with patch('modules.image_sampling.sample_lcm',lcm):
                 exec(compile(ast.Module(body=[branch],type_ignores=[]),'sampling_route','exec'),scope)

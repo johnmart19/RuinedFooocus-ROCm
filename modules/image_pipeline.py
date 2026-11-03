@@ -284,7 +284,7 @@ class pipeline:
 
         filename = str(filename)
         if Path(filename).suffix.lower() == ".gguf" or unet_only:
-            with torch.torch.inference_mode():
+            with torch.inference_mode():
                 try:
                     unet = load_diffusion_model(filename, input_unet)
 
@@ -762,7 +762,6 @@ class pipeline:
         if edit_latent is not None and not img2img_mode:
             # Native edit references and target must share the encoder's size.
             latent = edit_latent
-            force_full_denoise = False
             denoise = None
         elif img2img_mode:
             # Ordinary batches always start from the supplied reference. Explicit
@@ -780,7 +779,6 @@ class pipeline:
             # The output keeps the encoded source size; record it for metadata/replay.
             scale = self.xl_base_patched.vae.spacial_compression_decode()
             gen_data["height"], gen_data["width"] = (int(side) * scale for side in latent["samples"].shape[-2:])
-            force_full_denoise = False
             denoise = float(controlnet.get("denoise", controlnet.get("strength", 1)))
         else:
             # Get the correct of latent image to start with
@@ -813,7 +811,6 @@ class pipeline:
                     latent = EmptyLatentImage().generate(
                         width=gen_data["width"], height=gen_data["height"], batch_size=1
                     )[0]
-            force_full_denoise = False
             denoise = None
 
         if gen_data.get('inpaint_toggle'):
@@ -880,8 +877,6 @@ class pipeline:
                 "preview",
                 (-1, f"Prepare models ...", None)
             )
-
-        if callback is not None:
             worker.add_result(
                 gen_data["task_id"],
                 "preview",
@@ -906,7 +901,7 @@ class pipeline:
                 positive=positive_cond, negative=negative_conditioning,
                 latent_image=latent_image, denoise=denoise,
                 start_step=0, last_step=gen_data["steps"],
-                force_full_denoise=force_full_denoise, noise_mask=noise_mask,
+                noise_mask=noise_mask,
                 callback=callback_function,
                 disable_pbar=not comfy.utils.PROGRESS_BAR_ENABLED, seed=seed,
             )
