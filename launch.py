@@ -42,7 +42,6 @@ from modules.launch_util import (
     run,
     python,
     run_pip,
-    pip_rm,
     repo_dir,
     requirements_met,
     reinstall_requirements,

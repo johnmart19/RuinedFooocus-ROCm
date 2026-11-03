@@ -130,14 +130,6 @@ def run_pip(command, desc=None, live=default_command_live):
         live=live,
     )
 
-def pip_rm(pkgs, desc=None, live=default_command_live):
-    return run(
-        f'"{python}" -m pip uninstall -y {pkgs}',
-        desc=f"Uninstalling {desc}",
-        errdesc=f"Couldn't uninstall {desc}",
-        live=live,
-    )
-
 def reinstall_requirements(requirements_file, constraints=""):
     """Reinstall exact versions after dependency resolution, without replacing Torch."""
     resolved = {}
