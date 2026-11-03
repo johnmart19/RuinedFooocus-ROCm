@@ -62,11 +62,6 @@ def attach_latest_image(chat, history):
                         return
 
 
-def projector_choices(path_manager):
-    return ["Auto", "None"] + [name for name in path_manager.get_folder_list("vision")
-        if Path(name).name.lower().startswith("mmproj")]
-
-
 def projector_path(settings, model=None, progress=None):
     value = (settings.get("llama_mmproj") or "Auto").strip()
     if value == "None":

@@ -22,7 +22,6 @@ state = {
     "ctrls_obj": [],
     "setting_name": [],
     "setting_obj": [],
-    "cfg_items_name": [],
     "cfg_items_obj": [],
     "pipeline": None,
     "last_config": 0.0,
@@ -47,7 +46,6 @@ def add_ctrl(name, obj, configurable=False):
     state["ctrls_name"] += [name]
     state["ctrls_obj"] += [obj]
     if configurable:
-        state["cfg_items_name"] += [name]
         state["cfg_items_obj"] += [obj]
 
 def get_ctrl(name):
@@ -56,7 +54,3 @@ def get_ctrl(name):
 def add_setting(name, obj):
     state["setting_name"] += [name]
     state["setting_obj"] += [obj]
-
-def add_cfg_item(name, obj):
-    state["cfg_items_name"] += [name]
-    state["cfg_items_obj"] += [obj]

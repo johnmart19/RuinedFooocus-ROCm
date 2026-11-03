@@ -201,22 +201,6 @@ class PathManager:
         )
 
 
-    def get_diffusers_filenames(self, folder_path, cache=None, isLora=False):
-        folder_path = Path(folder_path)
-        if not folder_path.is_dir():
-            raise ValueError(f"{folder_path} is not a valid directory.")
-        filenames = []
-        for path in folder_path.glob("*/*"):
-            filenames.append(f"🤗:{path.relative_to(folder_path)}")
-        return sorted(
-            filenames,
-            key=lambda x: (
-                f"0{x.casefold()}"
-                if not str(Path(x).parent) == "."
-                else f"1{x.casefold()}"
-            ),
-        )
-
     def get_file_path(self, file_key, default=None, progress=None):
         """
         Get the path for a file, downloading it if it doesn't exist.
@@ -321,6 +305,3 @@ class PathManager:
                 temporary.unlink(missing_ok=True)
 
         print(f"Downloaded {file_info['filename']} to {file_path}")
-
-    def find_lcm_lora(self):
-        return self.get_file_path("lcm_lora")

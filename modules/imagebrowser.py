@@ -386,20 +386,6 @@ class ImageBrowser:
                 gr.update(value=f"Error getting metadata: {e}"),
             )
 
-    def copy_metadata(self, metadata: dict) -> str:
-        try:
-            if "prompt" in [k.lower() for k in metadata.keys()]:
-                prompt = json.dumps(metadata, indent=4)
-                prompt = prompt.replace("\\n", "\n")
-                gr.Info("Metadata copied to Prompt in Main tab")
-                return gr.update(value=prompt)
-            else:
-                return gr.update()
-        except Exception as e:
-            print(f"ERROR: copy_metadata: {e}")
-            gr.Error("Something went wrong trying to parse Metadata")
-            return gr.update()
-
     def search_metadata(self, search_term: str) -> Tuple[List[str], str]:
         self.filter = search_term
         images = self.load_images(1)[0]

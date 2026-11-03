@@ -147,8 +147,5 @@ class Server:
                         raise RuntimeError(str(chunk["error"]))
                     callback(chunk)
 
-    def handle_completions(self, data):
-        return self._request("/v1/completions", data)
-
     def handle_chat_completions(self, data, callback=None):
         return self._request("/v1/chat/completions", data, callback)

@@ -70,9 +70,6 @@ class ResolutionSettings:
 
         return self.load_resolutions()
 
-    def get_base_aspect_ratios(self, name):
-        return self.base_ratios[name]
-
     def choices_for_model(self, family):
         from modules.video_settings import VIDEO_FPS
         video = family in VIDEO_FPS
