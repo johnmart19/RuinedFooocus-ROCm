@@ -1,23 +1,34 @@
 import gradio as gr
-from shared import tokenizer
+from functools import lru_cache
+import os
 import random
 import re
 from random_prompt.build_dynamic_prompt import createpromptvariant
 
 
+@lru_cache(maxsize=1)
+def evolve_tokenizer(offline):
+    from transformers import CLIPTokenizer
+    return CLIPTokenizer.from_pretrained('openai/clip-vit-large-patch14', local_files_only=offline)
+
+
 def add_evolve_tab(prompt, image_number, run_event):
     def tokenize_and_randomize(prompt, strength):
-        all_tokens = list(tokenizer.get_vocab().keys())
+        from argparser import args
+        try:
+            tokenizer = evolve_tokenizer(args.offline or os.environ.get('RF_OFFLINE') == '1')
+        except OSError as error:
+            raise gr.Error("Token evolution requires the tokenizer. Connect once to download it, or use Words or OBP Variant mode.") from error
+        special_tokens = set(tokenizer.all_special_tokens)
+        all_tokens = [token for token in tokenizer.get_vocab() if token not in special_tokens]
         tokens = tokenizer.tokenize(prompt)
         res = []
         for token in tokens:
-            if random.random() < float(strength / 100.0):
-                res += [
-                    all_tokens[random.randint(0, len(all_tokens) - 3)]
-                ]  # Skip <|startoftext> & <|endoftext|>
+            if all_tokens and random.random() < float(strength / 100.0):
+                res.append(random.choice(all_tokens))
             else:
                 res += [token]
-        return tokenizer.convert_tokens_to_string(res).strip().replace('</w>', ' ')
+        return tokenizer.convert_tokens_to_string(res).replace('</w>', ' ').strip()
 
     def randomize_words(prompt, strength):
         with open("wildcards_official/words.txt", "r", encoding="utf-8") as f:
@@ -81,14 +92,14 @@ def add_evolve_tab(prompt, image_number, run_event):
 
         return result
 
-    with gr.Accordion(label="Evolve", open=False):
+    with gr.Accordion(label="Evolve", open=False, elem_id="evolve-controls"):
         evolve_btn = {}
         for x in range(0, 3):
-            with gr.Row():
+            with gr.Row(elem_classes="evolve-grid-row"):
                 for y in range(1, 4):
                     evolve_btn[3 * x + y] = gr.Button(
                         value=str(3 * x + y),
-                        min_width=1,
+                        min_width=44,
                     )
 
         with gr.Group():
