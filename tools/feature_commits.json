@@ -1,0 +1,277 @@
+{
+  "base": "cd7abb27064155f62dea002f745a8ce1b040c990",
+  "features": [
+    {
+      "id": "launchers",
+      "subject": "Add portable Windows and Linux launchers",
+      "requires": [],
+      "tests": []
+    },
+    {
+      "id": "styles",
+      "subject": "Respect requested anime medium in styles and prompt templates",
+      "requires": [],
+      "tests": []
+    },
+    {
+      "id": "config",
+      "subject": "Make configuration writes atomic and model downloads reliable",
+      "requires": [],
+      "tests": []
+    },
+    {
+      "id": "bootstrap-installer",
+      "subject": "Cache and validate bootstrap and application dependencies",
+      "requires": [
+        "config"
+      ],
+      "tests": [
+        "test_dependency_requirements.py"
+      ]
+    },
+    {
+      "id": "runtime",
+      "subject": "Configure portable device selection and native ComfyUI optimizations",
+      "requires": [
+        "bootstrap-installer"
+      ],
+      "tests": [
+        "test_comfy_runtime.py",
+        "test_cpu_startup.py",
+        "test_runtime_support.py"
+      ]
+    },
+    {
+      "id": "gpu-installer",
+      "subject": "Install validated PyTorch CPU and CUDA bundles",
+      "requires": [
+        "runtime"
+      ],
+      "tests": [
+        "test_installer_gpu.py"
+      ]
+    },
+    {
+      "id": "rocm-installer",
+      "subject": "Install matched AMD ROCm bundles and validate native operators",
+      "requires": [],
+      "tests": [
+        "test_installer_rocm.py"
+      ]
+    },
+    {
+      "id": "llama-installer",
+      "subject": "Install isolated native llama.cpp runtimes",
+      "requires": [
+        "runtime"
+      ],
+      "tests": [
+        "test_installer_llama.py"
+      ]
+    },
+    {
+      "id": "onnx-installer",
+      "subject": "Install an isolated optional Windows GPU ONNX runtime",
+      "requires": [],
+      "tests": [
+        "test_onnx_installer.py"
+      ]
+    },
+    {
+      "id": "installer-tools",
+      "subject": "Use validated bundles in standalone setup helpers",
+      "requires": [
+        "gpu-installer",
+        "rocm-installer"
+      ],
+      "tests": [
+        "test_installer_tools.py"
+      ]
+    },
+    {
+      "id": "models",
+      "subject": "Resolve checkpoint identity and automatic model recommendations",
+      "requires": [
+        "config"
+      ],
+      "tests": [
+        "test_model_headers.py",
+        "test_model_recommendations.py"
+      ]
+    },
+    {
+      "id": "images",
+      "subject": "Use native image workflows with faithful source geometry and sampling",
+      "requires": [
+        "models",
+        "runtime"
+      ],
+      "tests": [
+        "test_hashbang_pipeline.py",
+        "test_image_controlnet_switch.py",
+        "test_image_edit_contracts.py",
+        "test_image_hidream_i1.py",
+        "test_image_inpaint_geometry.py",
+        "test_image_native_helpers.py",
+        "test_image_shift_defaults.py",
+        "test_model_cache.py",
+        "test_qwen_attention_policy.py",
+        "test_sequence_prefill.py"
+      ]
+    },
+    {
+      "id": "video",
+      "subject": "Align retained video pipelines with native backend contracts",
+      "requires": [
+        "images"
+      ],
+      "tests": [
+        "test_hunyuan_i2v_conditioning.py",
+        "test_ltx_performance_defaults.py",
+        "test_ltx_refinement_native.py",
+        "test_native_video_reference.py",
+        "test_video_app_observers.py",
+        "test_video_boundaries.py"
+      ],
+      "skip_tests": true
+    },
+    {
+      "id": "chat",
+      "subject": "Add native local chat, vision and browser Python tools",
+      "requires": [
+        "images",
+        "llama-installer",
+        "styles"
+      ],
+      "tests": [
+        "test_browser_python.py",
+        "test_image_cleanup.py"
+      ]
+    },
+    {
+      "id": "image-feeds",
+      "subject": "Normalize image feed URLs and pin the browser client",
+      "requires": [],
+      "tests": [
+        "test_api_image_urls.py"
+      ]
+    },
+    {
+      "id": "api",
+      "subject": "Serialize local AI APIs and preserve image request boundaries",
+      "requires": [
+        "chat",
+        "image-feeds"
+      ],
+      "tests": [
+        "test_api_live_contracts.py",
+        "test_chat_boundaries.py",
+        "test_image_geometry.py",
+        "test_image_guidance.py",
+        "test_image_guidance_options.py",
+        "test_image_sampling.py",
+        "test_prompt_lengths.py",
+        "test_task_errors.py",
+        "test_vae_decode.py"
+      ]
+    },
+    {
+      "id": "caption",
+      "subject": "Accelerate image captioning with portable device selection",
+      "requires": [
+        "api",
+        "bootstrap-installer"
+      ],
+      "tests": [
+        "test_caption_runtime.py"
+      ]
+    },
+    {
+      "id": "background",
+      "subject": "Reuse isolated background-removal sessions with CPU recovery",
+      "requires": [
+        "api",
+        "onnx-installer"
+      ],
+      "tests": [
+        "test_onnx_runtime.py"
+      ]
+    },
+    {
+      "id": "startup",
+      "subject": "Activate installed runtimes and authenticated application startup",
+      "requires": [
+        "api",
+        "gpu-installer",
+        "rocm-installer",
+        "bootstrap-installer"
+      ],
+      "tests": []
+    },
+    {
+      "id": "checkpoint-tools",
+      "subject": "Inspect and convert checkpoints non-destructively",
+      "requires": [],
+      "tests": []
+    },
+    {
+      "id": "gallery",
+      "subject": "Refresh and replay image gallery metadata",
+      "requires": [
+        "models"
+      ],
+      "tests": []
+    },
+    {
+      "id": "ui",
+      "subject": "Expose image and local AI workflows in a responsive configurable UI",
+      "requires": [
+        "startup",
+        "gallery",
+        "checkpoint-tools",
+        "caption",
+        "background"
+      ],
+      "tests": [
+        "test_image_components.py",
+        "test_image_compute.py",
+        "test_image_depth.py",
+        "test_image_guidance_ui.py",
+        "test_image_hidream_options.py",
+        "test_image_hidream_references.py",
+        "test_image_input_transport.py",
+        "test_image_metadata_boundary.py",
+        "test_image_rembg_options.py",
+        "test_image_sampling_replay.py",
+        "test_image_settings.py",
+        "test_image_tool_registry.py",
+        "test_image_ui_audit.py",
+        "test_image_upscale_metadata.py",
+        "test_image_workflow_modes.py",
+        "test_metadata_guidance_replay.py",
+        "test_powerup_family_controls.py",
+        "test_preset_image_guidance.py",
+        "test_rembg_runtime.py",
+        "test_ui_workflows.py",
+        "test_upscale_transparency.py"
+      ]
+    },
+    {
+      "id": "validation",
+      "subject": "Add reproducible CPU checks and standalone feature validation",
+      "requires": [
+        "ui",
+        "video",
+        "installer-tools"
+      ],
+      "tests": [
+        "test_feature_cherry_pick_manifest.py",
+        "test_feature_validation_summary.py",
+        "test_qwen_state_controls.py",
+        "test_validation_asset_download.py",
+        "test_validation_runner.py",
+        "test_workflow_comparison.py"
+      ]
+    }
+  ]
+}

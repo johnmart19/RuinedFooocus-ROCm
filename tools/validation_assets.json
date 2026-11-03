@@ -1,0 +1,173 @@
+{
+  "provenance": "Pinned public Hugging Face metadata collected for live validation on 2026-10-25: initial edit-control-assets.json/video-assets.json plus I2V checkpoints and vision encoders queried from their exact repository metadata. Revisions and LFS SHA256 identify exact files. Existing text encoders and VAEs are separate prerequisites.",
+  "assets": [
+    {
+      "repo": "stabilityai/control-lora",
+      "revision": "75590eb0e7868d3d0f1581b5126d487b33c7fdb4",
+      "file": "control-LoRAs-rank128/control-lora-canny-rank128.safetensors",
+      "destination": "models/controlnet/control-lora-canny-rank128.safetensors",
+      "bytes": 395733680,
+      "sha256": "56389dbb245ca44de91d662529bd4298abc55ce2318f60bc19454fb72ff68247"
+    },
+    {
+      "repo": "stabilityai/control-lora",
+      "revision": "75590eb0e7868d3d0f1581b5126d487b33c7fdb4",
+      "file": "control-LoRAs-rank128/control-lora-depth-rank128.safetensors",
+      "destination": "models/controlnet/control-lora-depth-rank128.safetensors",
+      "bytes": 395729267,
+      "sha256": "37e391757e6c0042faa3795174acbe11a31992252058cfb8bbaccf11073567b4"
+    },
+    {
+      "repo": "stabilityai/control-lora",
+      "revision": "75590eb0e7868d3d0f1581b5126d487b33c7fdb4",
+      "file": "control-LoRAs-rank128/control-lora-recolor-rank128.safetensors",
+      "destination": "models/controlnet/control-lora-recolor-rank128.safetensors",
+      "bytes": 395730106,
+      "sha256": "d6c01d588550d41ab47ff2534ae135441ed8e614b72b316787e8b7916ce08e61"
+    },
+    {
+      "repo": "stabilityai/control-lora",
+      "revision": "75590eb0e7868d3d0f1581b5126d487b33c7fdb4",
+      "file": "control-LoRAs-rank128/control-lora-sketch-rank128-metadata.safetensors",
+      "destination": "models/controlnet/control-lora-sketch-rank128-metadata.safetensors",
+      "bytes": 395738399,
+      "sha256": "679c616807aec73c47bb7281a24a76ddfe52fa5b5d68532f542ab813347b2eae"
+    },
+    {
+      "repo": "Comfy-Org/Mage-Flow",
+      "revision": "6ff68fbf3c667325e961d551691b246791d5eec0",
+      "file": "diffusion_models/mage_flow_edit_turbo_int8_convrot.safetensors",
+      "destination": "models/checkpoints/mage_flow_edit_turbo_int8_convrot.safetensors",
+      "bytes": 4159146840,
+      "sha256": "345dd8a3376306624912dc46e1db18a6457d692053afe21c9822ed6719f79937"
+    },
+    {
+      "repo": "PedroMarinhoDev/Moss-Image-Edit-ComfyUI",
+      "revision": "a0e1af10e651d299e63c746eec65e14dcc96d249",
+      "file": "moss_image_edit_lora_bf16.safetensors",
+      "destination": "models/loras/moss_image_edit_lora_bf16.safetensors",
+      "bytes": 297419000,
+      "sha256": "f4bf2905dd40ae490ffda37d6be717f3361a4a723225cf0bf1f3b941eb03315d"
+    },
+    {
+      "repo": "akhaliq/MOSS-Image-Edit-HQ",
+      "revision": "7e1e9a1787b253c471ff30128a7ba838911d1911",
+      "file": "weights/armV2-lo/armV2-lo.safetensors",
+      "destination": "models/loras/armV2-lo.safetensors",
+      "bytes": 495514936,
+      "sha256": "82d6f14e6626f54e889515a64f12ad0e16a6df0d07ab2528ced174196b54310f"
+    },
+    {
+      "repo": "Comfy-Org/Qwen-Image-Edit",
+      "revision": "f68ace85e60b4a02a323e394253731947657b7d2",
+      "file": "split_files/diffusion_models/qwen_image_edit_fp8_e4m3fn.safetensors",
+      "destination": "models/checkpoints/qwen_image_edit_fp8_e4m3fn.safetensors",
+      "bytes": 20430635136,
+      "sha256": "393c6743d1de2e9031b5197027b36116f2096958ccc0223526d34e1860266021"
+    },
+    {
+      "repo": "Lightricks/LTX-Video",
+      "revision": "8984fa25007f376c1a299016d0957a37a2f797bb",
+      "file": "ltxv-2b-0.9.6-dev-04-25.safetensors",
+      "destination": "models/checkpoints/LTXV/ltxv-2b-0.9.6-dev-04-25.safetensors",
+      "bytes": 6340743924,
+      "sha256": "e6fb3fe995e23c1f2457bc26c554789a8d74718c17f1853baab33939bd8dfb56"
+    },
+    {
+      "repo": "Comfy-Org/Wan-2.1",
+      "revision": "123acf1cc74bccbb9bfff8ac1ee72edc08c2341d",
+      "file": "split_files/diffusion_models/wan2.1_t2v_1.3B_bf16.safetensors",
+      "destination": "models/checkpoints/Wan/wan2.1_t2v_1.3B_bf16.safetensors",
+      "bytes": 2838104528,
+      "sha256": "6f999b0d6cb9a72b3d98ac386ed96f57f8cecae13994a69232514ea4974ad5fd"
+    },
+    {
+      "repo": "Comfy-Org/Wan-2.2",
+      "revision": "ee6f4a40737a995bf5818954cfce6d59443b0f04",
+      "file": "split_files/diffusion_models/wan2.2_ti2v_5B_fp16.safetensors",
+      "destination": "models/checkpoints/Wan/wan2.2_ti2v_5B_fp16.safetensors",
+      "bytes": 9999658848,
+      "sha256": "456f901338bd9eadbded3828b819109a9b68e8a525ca5cf8d0049a69fcfeca1e"
+    },
+    {
+      "repo": "city96/HunyuanVideo-gguf",
+      "revision": "6869e07d25cffdff09f7c10a79887ac24217b67b",
+      "file": "hunyuan-video-t2v-720p-Q4_K_M.gguf",
+      "destination": "models/checkpoints/Hunyuan/hunyuan-video-t2v-720p-Q4_K_M.gguf",
+      "bytes": 7883680512,
+      "sha256": "ef5c2bb989fce20ab39341db98adfbb3d072d9dc709b02391603755d433c1446"
+    },
+    {
+      "repo": "unsloth/LTX-2-GGUF",
+      "revision": "f6212950c786257ed92509ff725d025d323bb4b8",
+      "file": "ltx-2-19b-dev-Q4_K_M.gguf",
+      "destination": "models/checkpoints/LTX2/ltx-2-19b-dev-Q4_K_M.gguf",
+      "bytes": 12840118752,
+      "sha256": "e3332ee9e6e1a84b7cb5a558a3ebd63891487a7ce285a284ee9d1c48d41463d7"
+    },
+    {
+      "repo": "unsloth/LTX-2.3-GGUF",
+      "revision": "96e8ed4925ead3db9ff4d0084f165ef6a74f28d0",
+      "file": "ltx-2.3-22b-dev-Q4_K_M.gguf",
+      "destination": "models/checkpoints/LTX23/ltx-2.3-22b-dev-Q4_K_M.gguf",
+      "bytes": 14326856736,
+      "sha256": "e053e3d7827f3a69ecd00e55395d3a8f8616ab10d3a394e8d2b65ae204d490e0"
+    },
+    {
+      "repo": "Lightricks/LTX-2.5",
+      "revision": "49b093a39c19169a8a81721dcc541e07e945232f",
+      "file": "diffusion_models/ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors",
+      "destination": "models/checkpoints/LTX25/ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors",
+      "bytes": 21504034224,
+      "sha256": "c4279eeff115cbeaca494bd2183e7d768c38fe85a184dc6afbb7159157c44334"
+    },
+    {
+      "repo": "molbal/MiniMax-H3-GGUF",
+      "revision": "b45874371c61c49bf04096602f5527aac71b360b",
+      "file": "minimax_h3_fl2va_pruned_fp8_U16G.gguf",
+      "destination": "models/checkpoints/MiniMaxH3/minimax_h3_fl2va_pruned_fp8_U16G.gguf",
+      "bytes": 15027417664,
+      "sha256": "424ed56bd4ce71ecf9cfdabb74428970bdd1359f5f5e128e6ea66d529ad1301b"
+    },
+    {
+      "repo": "city96/Wan2.1-I2V-14B-480P-gguf",
+      "revision": "b4b6b3b3f0f64975fb33b1d5d1a46ca24e065f03",
+      "file": "wan2.1-i2v-14b-480p-Q4_K_M.gguf",
+      "destination": "models/checkpoints/Wan/wan2.1-i2v-14b-480p-Q4_K_M.gguf",
+      "bytes": 11341184384,
+      "sha256": "d91f7139acadb42ea05cdf97b311e5099f714f11fbe4d90916500e2f53cbba82"
+    },
+    {
+      "repo": "city96/HunyuanVideo-I2V-gguf",
+      "revision": "820c6e6c020c06b8f257443be74437dde24b1fb6",
+      "file": "hunyuan-video-i2v-720p-Q4_K_M.gguf",
+      "destination": "models/checkpoints/Hunyuan/hunyuan-video-i2v-720p-Q4_K_M.gguf",
+      "bytes": 7883680512,
+      "sha256": "1c1490eadf67083066da4ec338dd7a76b40eb2f8d313b01c2e0c6ed3b5ae5a6d"
+    },
+    {
+      "repo": "Comfy-Org/Wan-2.1",
+      "revision": "123acf1cc74bccbb9bfff8ac1ee72edc08c2341d",
+      "file": "split_files/clip_vision/clip_vision_h.safetensors",
+      "destination": "models/clip_vision/clip_vision_h.safetensors",
+      "bytes": 1264219396,
+      "sha256": "64a7ef761bfccbadbaa3da77366aac4185a6c58fa5de5f589b42a65bcc21f161"
+    },
+    {
+      "repo": "Comfy-Org/Hunyuan-Video",
+      "revision": "533a43813f01517d9e624f9e824a85bb94094120",
+      "file": "split_files/clip_vision/llava_llama3_vision.safetensors",
+      "destination": "models/clip_vision/llava_llama3_vision.safetensors",
+      "bytes": 649022376,
+      "sha256": "7d0f89bf7860815f3a994b9bdae8ebe3a29c161825d03ca9262cb13b0c973aa6"
+    },
+    {
+      "repo": "calcuis/wan-gguf",
+      "revision": "a06b67e9de7a93117b8734c24bcae740dfd2cdad",
+      "file": "clip_vision_h_fp8_e4m3fn.safetensors",
+      "destination": "models/clip_vision/clip_vision_h_fp8_e4m3fn.safetensors",
+      "bytes": 632142537,
+      "sha256": "644857118a5e8f5f8bb13e56c860eca7bdc1a32dd12ffdc97ed9cd9460254945"
+    }
+  ]
+}
