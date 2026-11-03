@@ -1,0 +1,12 @@
+{
+  "Wan 2.1 landscape": {"width": 832, "height": 480, "video_models": ["Wan Video"]},
+  "Wan 2.1 portrait": {"width": 480, "height": 832, "video_models": ["Wan Video"]},
+  "Wan 2.2 landscape": {"width": 1280, "height": 704, "video_models": ["Wan 2.2 5B"]},
+  "Wan 2.2 portrait": {"width": 704, "height": 1280, "video_models": ["Wan 2.2 5B"]},
+  "Hunyuan Video": {"width": 848, "height": 480, "video_models": ["Hunyuan Video"]},
+  "LTX Video": {"width": 768, "height": 512, "video_models": ["LTXV"]},
+  "LTX 2": {"width": 768, "height": 512, "video_models": ["LTXV2", "LTXV 2.3"]},
+  "MiniMax landscape": {"width": 1344, "height": 768, "video_models": ["MiniMaxH3"]},
+  "MiniMax portrait": {"width": 768, "height": 1344, "video_models": ["MiniMaxH3"]},
+  "LTX 2.5": {"width": 1536, "height": 1024, "video_models": ["LTXV 2.5"]}
+}

@@ -3,7 +3,6 @@ import random
 import time
 from pathlib import Path
 
-from contextlib import contextmanager
 from typing import Optional
 from urllib.parse import urlparse
 from shared import path_manager, shared_cache
@@ -11,8 +10,9 @@ import json
 
 
 def get_wildcard_files():
-    directories = path_manager.paths.get("path_wildcards", ["wildcards"])
-    directories.append("wildcards_official")
+    directories = list(path_manager.paths.get("path_wildcards", ["wildcards"]))
+    if "wildcards_official" not in directories:
+        directories.append("wildcards_official")
     files = []
 
     for directory in directories:
@@ -80,7 +80,8 @@ def _get_model_hashes(cache_path, not_found=None):
             data = {}
         if "files" not in data:
             data = {"files": [{"hashes": {}}]}
-        hashes.update(data['files'][0]['hashes'])
+        from modules.model_identity import checkpoint_hashes
+        hashes.update(checkpoint_hashes(data))
         return hashes
     else:
         if not_found:
@@ -99,9 +100,11 @@ def get_lora_hashes(model):
     )
 
 def _get_model_thumbnail(cache_path, not_found="html/warning.png"):
-    if cache_path in shared_cache:
-        return shared_cache[cache_path]
-    suffixes = [".jpeg", ".jpg", ".png", ".gif"]
+    cached = shared_cache.get(cache_path)
+    if cached is not None and Path(cached).is_file():
+        return cached
+    shared_cache.pop(cache_path, None)
+    suffixes = [".gif", ".jpeg", ".jpg", ".png", ".webp"]
     for suffix in suffixes:
         filename = cache_path.with_suffix(suffix)
         if Path(filename).is_file():
@@ -110,21 +113,6 @@ def _get_model_thumbnail(cache_path, not_found="html/warning.png"):
     else:
         return not_found
 
-def get_model_thumbnail(model):
-    res = _get_model_thumbnail(
-        Path(path_manager.model_paths["cache_path"] / "checkpoints" / Path(model).name),
-        not_found=None
-    )
-    if res is not None:
-        return res
-    res = _get_model_thumbnail(
-        Path(path_manager.model_paths["cache_path"] / "loras" / Path(model).name),
-        not_found=None
-    )
-    if res is not None:
-        return str(res)
-    else:
-        return "html/warning.png"
 
 def get_checkpoint_thumbnail(model):
     if Path(model).suffix == ".merge":
@@ -142,22 +130,6 @@ def get_lora_thumbnail(model):
         Path(path_manager.model_paths["cache_path"] / "loras" / Path(model).name)
     )
 
-def get_model_path(model, folders):
-    for folder in folders:
-        filename = Path(folder) / model
-        if filename.exists():
-            return filename
-    return None
-
-def get_checkpoint_path(model, folders=None):
-    if folders is None:
-        folders = [path_manager_model_paths["modelfile_path"]]
-    return get_model_path(model, folders)
-
-def get_lora_path(model, folders=None):
-    if folders is None:
-        folders = [path_manager_model_paths["lorafile_path"]]
-    return get_model_path(model, folders)
 
 def url_to_filename(url):
     import string
@@ -215,3 +187,37 @@ def remove_empty_str(items, default=None):
     if len(items) == 0 and default is not None:
         return [default]
     return items
+
+
+def get_model_thumbnail(model):
+    res = _get_model_thumbnail(
+        Path(path_manager.model_paths["cache_path"] / "checkpoints" / Path(model).name),
+        not_found=None
+    )
+    if res is not None:
+        return res
+    res = _get_model_thumbnail(
+        Path(path_manager.model_paths["cache_path"] / "loras" / Path(model).name),
+        not_found=None
+    )
+    if res is not None:
+        return str(res)
+    else:
+        return "html/warning.png"
+
+def get_model_path(model, folders):
+    for folder in folders:
+        filename = Path(folder) / model
+        if filename.exists():
+            return filename
+    return None
+
+def get_checkpoint_path(model, folders=None):
+    if folders is None:
+        folders = [path_manager_model_paths["modelfile_path"]]
+    return get_model_path(model, folders)
+
+def get_lora_path(model, folders=None):
+    if folders is None:
+        folders = [path_manager_model_paths["lorafile_path"]]
+    return get_model_path(model, folders)
