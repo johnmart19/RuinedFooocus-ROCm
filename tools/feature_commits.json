@@ -272,6 +272,57 @@
         "test_validation_runner.py",
         "test_workflow_comparison.py"
       ]
+    },
+    {
+      "id": "image-native-cleanup",
+      "subject": "Use native sampler defaults and remove obsolete image branches",
+      "requires": [
+        "api"
+      ],
+      "tests": [
+        "test_image_native_helpers.py",
+        "test_image_sampling.py",
+        "test_vae_decode.py"
+      ]
+    },
+    {
+      "id": "unused-app-helpers",
+      "subject": "Remove unused model lookup and UI compatibility helpers",
+      "requires": [
+        "ui"
+      ],
+      "tests": [
+        "test_model_headers.py",
+        "test_chat_boundaries.py",
+        "test_image_settings.py",
+        "test_ui_workflows.py",
+        "test_image_metadata_boundary.py"
+      ]
+    },
+    {
+      "id": "installer-cleanup",
+      "subject": "Remove the unused package-uninstall wrapper",
+      "requires": [
+        "startup"
+      ],
+      "tests": [
+        "test_dependency_requirements.py",
+        "test_cpu_startup.py",
+        "test_comfy_runtime.py"
+      ]
+    },
+    {
+      "id": "app-cleanup-validation",
+      "subject": "Register final app cleanup feature dependencies",
+      "requires": [
+        "validation",
+        "image-native-cleanup",
+        "unused-app-helpers",
+        "installer-cleanup"
+      ],
+      "tests": [
+        "test_feature_cherry_pick_manifest.py"
+      ]
     }
   ]
 }
