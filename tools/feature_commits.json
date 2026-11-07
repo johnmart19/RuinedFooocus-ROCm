@@ -2,6 +2,96 @@
   "base": "cd7abb27064155f62dea002f745a8ce1b040c990",
   "features": [
     {
+      "id": "retired-setup-tools",
+      "subject": "Retire obsolete portable setup tooling",
+      "requires": [
+        "docs-refresh",
+        "installer-tools",
+        "launchers",
+        "registration-4af05eb"
+      ],
+      "tests": [
+        "test_cpu_startup.py",
+        "test_dependency_requirements.py",
+        "test_chatbots.py",
+        "test_installer_gpu.py",
+        "test_installer_rocm.py"
+      ]
+    },
+    {
+      "id": "registration-4af05eb",
+      "subject": "Register the documentation refresh",
+      "requires": [
+        "registration-2c50a2d",
+        "docs-refresh"
+      ],
+      "tests": []
+    },
+    {
+      "id": "registration-2c50a2d",
+      "subject": "Register the UI native edit feature",
+      "requires": [
+        "registration-b89c5d3",
+        "ui-native-edits"
+      ],
+      "tests": []
+    },
+    {
+      "id": "registration-b89c5d3",
+      "subject": "Register the API native edit feature",
+      "requires": [
+        "registration-df89188",
+        "api-native-edits"
+      ],
+      "tests": []
+    },
+    {
+      "id": "registration-df89188",
+      "subject": "Register the model load feedback feature",
+      "requires": [
+        "registration-b812b27",
+        "model-load-feedback"
+      ],
+      "tests": []
+    },
+    {
+      "id": "registration-b812b27",
+      "subject": "Register the modern HTML feature",
+      "requires": [
+        "registration-87c5e3a",
+        "modern-html"
+      ],
+      "tests": []
+    },
+    {
+      "id": "registration-87c5e3a",
+      "subject": "Register the updated prompt-range and evolve tests",
+      "requires": [
+        "registration-212ef76",
+        "stale-test-updates"
+      ],
+      "tests": []
+    },
+    {
+      "id": "registration-212ef76",
+      "subject": "Register explicit image edit compatibility checks",
+      "requires": [
+        "registration-43daa93",
+        "explicit-image-source-compat"
+      ],
+      "tests": []
+    },
+    {
+      "id": "registration-43daa93",
+      "subject": "Register One Button format and chat bot feature dependencies",
+      "requires": [
+        "one-button-enhancer-join",
+        "offline-chatbots",
+        "one-button-prompt-formats"
+      ],
+      "tests": []
+    },
+    {
       "id": "docs-refresh",
       "subject": "Bring the readme, changelog and hints up to date",
       "requires": ["ui-native-edits", "launchers"],

@@ -1,5 +1,6 @@
 ### Unreleased (development)
 * Installers for NVIDIA CUDA, AMD ROCm 10.1 (Windows, Linux and WSL), DirectML and CPU, with validated PyTorch bundles and `RuinedFooocus.bat`/`RuinedFooocus.sh` launchers
+* Removed obsolete upstream portable setup helpers, their test/wrapper, the embedded-Python builder and Conda environment file; PyTorch switch/reinstall/freeze instructions are inline in the readme
 * Local chat models run on native llama.cpp with a Vulkan, ROCm, CUDA or CPU backend; chat bots gained vision, image generation with an optional reference and a browser Python runner
 * Rewritten chat bots that work offline, and new prompt-rewrite presets for local chat models
 * Prompt enhancement uses the Chat bots model and keeps your prompt; Erniehancer is replaced by the "Local chat model" style

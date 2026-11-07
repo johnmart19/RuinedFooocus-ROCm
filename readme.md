@@ -54,7 +54,11 @@ The launcher detects the GPU and installs a validated PyTorch bundle:
 
 Set `TORCH_PLATFORM` (for example `cu128`, `rocm10.1`, `cpu`) to override detection. Chat models run on the
 native llama.cpp server, which picks Vulkan, ROCm or CUDA itself; change it under Settings > llama.cpp backend.
-See [help/README.md](help/README.md) to reinstall, switch or freeze PyTorch.
+To switch PyTorch later, start with `TORCH_PLATFORM` set or with `--rocm10`, `--cuda-nightly`, `--cpu` or
+`--directml`. Create an empty `reinstalltorch` file in the RuinedFooocus folder to reinstall it on the next start,
+or an empty `freezetorch` file to stop the launcher from changing PyTorch (for example after installing it
+yourself). Deleting the `venv` folder gives a completely fresh install. The launchers replace the
+old portable setup helpers and Conda environment file; reinstall/freeze marker files are created locally.
 
 If you see **"MetadataIncompleteBuffer"**, a model file is incomplete or damaged; download it again. **Models > Model > Checkpoint tools** can check a checkpoint for damage.
 
@@ -125,7 +129,7 @@ The main window has the prompt box and Generate button above the **Generation**,
 * `--api` enables an OpenAI-compatible API; set `--api-key` (or `RF_API_KEY`), which is required when listening
   beyond localhost. `--mcp` starts an MCP server.
 * Create an empty file named `reinstall` (all packages) or `reinstalltorch` (PyTorch only) to reinstall on the
-  next start. See [help/README.md](help/README.md).
+  next start, or `freezetorch` to keep the installed PyTorch.
 
 ## Thanks
 
