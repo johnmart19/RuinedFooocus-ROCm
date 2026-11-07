@@ -2,6 +2,12 @@
   "base": "cd7abb27064155f62dea002f745a8ce1b040c990",
   "features": [
     {
+      "id": "docs-refresh",
+      "subject": "Bring the readme, changelog and hints up to date",
+      "requires": ["ui-native-edits", "launchers"],
+      "tests": ["test_chatbots.py"]
+    },
+    {
       "id": "ui-native-edits",
       "subject": "Offer native image edit in the UI with an image-to-image fallback",
       "requires": ["api-native-edits"],
