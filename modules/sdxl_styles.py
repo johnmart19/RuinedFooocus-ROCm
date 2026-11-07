@@ -1,6 +1,7 @@
 import random
 import re
 import csv
+import locale
 from os.path import exists
 from csv import DictReader
 from pathlib import Path
@@ -16,17 +17,22 @@ prompt_expansion = PromptExpansion()
 def load_styles():
     default_styles = []
     styles = []
+    styles_encoding = "utf-8-sig"
 
-    with open(DEFAULT_STYLES_FILE) as f:
+    with open(DEFAULT_STYLES_FILE, encoding="utf-8-sig", newline="") as f:
         csv_reader = csv.reader(f)
         for row in csv_reader:
             default_styles.append(row)
 
     if exists(STYLES_FILE):
-        with open(STYLES_FILE) as f:
-            csv_reader = csv.reader(f)
-            for row in csv_reader:
-                styles.append(row)
+        try:
+            with open(STYLES_FILE, encoding=styles_encoding, newline="") as f:
+                styles = list(csv.reader(f))
+        except UnicodeDecodeError:
+            # Earlier Windows releases wrote custom styles in the system locale.
+            styles_encoding = locale.getpreferredencoding(False)
+            with open(STYLES_FILE, encoding=styles_encoding, newline="") as f:
+                styles = list(csv.reader(f))
 
     # Add any missing default styles
     changed = False
@@ -36,13 +42,14 @@ def load_styles():
             changed = True
 
     if changed:
-        with open(STYLES_FILE, "w", newline='') as f:
+        styles_encoding = "utf-8-sig"
+        with open(STYLES_FILE, "w", encoding="utf-8", newline='') as f:
             csv_writer = csv.writer(f)
             for row in styles:
                 csv_writer.writerow(row)
 
 
-    with STYLES_FILE.open("r") as f:
+    with STYLES_FILE.open("r", encoding=styles_encoding, newline="") as f:
         reader = DictReader(f)
         styles = list(reader)
 

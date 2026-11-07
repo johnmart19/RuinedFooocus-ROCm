@@ -10,7 +10,6 @@ from shared import path_manager, settings
 import os
 import random
 import torch
-import math
 
 
 fooocus_expansion_path = "prompt_expansion"
@@ -48,20 +47,6 @@ class FooocusExpansion:
 
     def __call__(self, prompt, seed):
         seed = int(seed) % SEED_LIMIT_NUMPY
-        set_seed(seed)
-        positive_words = (
-            open(os.path.join(fooocus_expansion_path, "positive.txt"), encoding="utf-8")
-            .read()
-            .splitlines()
-        )
-        positive_words = ["Ġ" + x.lower() for x in positive_words if x != ""]
-        self.logits_bias = (
-            torch.zeros((1, len(self.tokenizer.vocab)), dtype=torch.float32) + neg_inf
-        )
-        for k, v in self.tokenizer.vocab.items():
-            if k in positive_words:
-                self.logits_bias[0, v] = 0
-
         text = safe_str(prompt) + ","
         tokenized_kwargs = self.tokenizer(text, return_tensors="pt")
         tokenized_kwargs.data["input_ids"] = tokenized_kwargs.data["input_ids"].to(
@@ -71,8 +56,17 @@ class FooocusExpansion:
             "attention_mask"
         ].to(self.patcher.load_device)
         current_token_length = int(tokenized_kwargs.data["input_ids"].shape[1])
-        max_token_length = 75 * int(math.ceil(float(current_token_length) / 75.0))
-        max_new_tokens = max_token_length - current_token_length
+        max_new_tokens = min(75 - current_token_length % 75,
+                             self.model.config.max_position_embeddings - current_token_length)
+        if max_new_tokens <= 0:
+            return prompt
+        set_seed(seed)
+        with open(os.path.join(fooocus_expansion_path, "positive.txt"), encoding="utf-8") as source:
+            positive_words = {"Ġ" + word.lower() for word in source.read().splitlines() if word}
+        vocab = self.tokenizer.get_vocab()
+        self.logits_bias = torch.full((1, len(vocab)), neg_inf, dtype=torch.float32)
+        allowed = [vocab[word] for word in positive_words if word in vocab]
+        self.logits_bias[0, allowed] = 0
         try:
             features = self.model.generate(
                 **tokenized_kwargs,
@@ -82,8 +76,9 @@ class FooocusExpansion:
                 logits_processor=LogitsProcessorList([self.logits_processor])
             )
 
-            response = self.tokenizer.batch_decode(features, skip_special_tokens=True)
-            result = safe_str(response[0])
+            response = self.tokenizer.batch_decode(features[:, current_token_length:], skip_special_tokens=True)
+            suffix = safe_str(response[0])
+            result = prompt + (", " + suffix if suffix else "")
         except Exception as e:
             print(f"Error during prompt expansion: {e}")
             result = prompt
@@ -106,7 +101,7 @@ class PromptExpansion:
     def expand_prompt(text):
         expansion = FooocusExpansion()
 
-        prompt = remove_empty_str([safe_str(text)], default="")[0]
+        prompt = remove_empty_str([text], default="")[0]
 
         max_seed = int(1024 * 1024 * 1024)
         seed = random.randint(1, max_seed)

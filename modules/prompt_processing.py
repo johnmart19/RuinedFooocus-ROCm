@@ -2,7 +2,7 @@ import os
 import re
 import random
 
-from modules.sdxl_styles import apply_style
+from modules.sdxl_styles import apply_style, styles as available_styles
 from modules.prompt_scheduling import prompt_switch_per_step
 from random_prompt.build_dynamic_prompt import (
     build_dynamic_prompt,
@@ -54,18 +54,19 @@ def get_promptlist(gen_data):
     return gen_data["prompt"].split("---")
 
 
-def process_wildcards(wildcard_text, directory=None):
+def process_wildcards(wildcard_text, directory=None, *, _stack=()):
     if directory is None:
         directory = path_manager.paths.get("path_wildcards", ["wildcards"])
-    placeholders = []
-    splitup = wildcard_text.split("__")
-    for i in range(len(splitup)):
-        if i % 2 != 0:  # check if index is odd
-            placeholders.append(splitup[i])
+    placeholders = re.findall(r"__([\w-]+?(?::(?:(?!__).)+?)?)__", wildcard_text)
+    if not placeholders:
+        return wildcard_text
+    for placeholder in placeholders:
+        if placeholder in _stack:
+            raise ValueError("Recursive wildcard: " + " -> ".join((*_stack, placeholder)))
 
     placeholder_choices = {}  # Store random choices for each placeholder
     official_directory = "wildcards_official"
-    directories = list(directory)
+    directories = [directory] if isinstance(directory, (str, os.PathLike)) else list(directory)
     if official_directory not in directories:
         directories.append(official_directory)
 
@@ -80,12 +81,14 @@ def process_wildcards(wildcard_text, directory=None):
                 for root, dirs, files in os.walk(dir):
                     if f"{placeholder}.txt" in files:
                         file_path = os.path.join(root, f"{placeholder}.txt")
-                        with open(file_path, encoding="utf-8") as f:
+                        with open(file_path, encoding="utf-8-sig") as f:
                             words = [
                                 word.strip()
                                 for word in f.read().splitlines()
                                 if not word.startswith("#")
                             ]
+                        if not words:
+                            raise ValueError(f"Wildcard file has no choices: {file_path}")
                         placeholder_choices[placeholder] = words
                         found = True
                         break
@@ -96,7 +99,7 @@ def process_wildcards(wildcard_text, directory=None):
                 print(
                     f"Error: Could not find file {placeholder}.txt in {directory} or its subdirectories."
                 )
-                placeholder_choices[placeholder] = [f"{placeholder}"]
+                placeholder_choices[placeholder] = None
 
     for placeholder in placeholders:
         random_choice = ""
@@ -237,16 +240,13 @@ def process_wildcards(wildcard_text, directory=None):
 
         # Regular wildcards
         else:
+            if placeholder_choices[placeholder] is None:
+                continue
             random_choice = random.choice(placeholder_choices[placeholder])
 
-        try:
-            wildcard_text = re.sub(
-                rf"__{placeholder}__", random_choice, wildcard_text, count=1
-            )
-        except Exception as e:
-            print(f"ERROR: {e}")
-            print(f"    placeholder: {placeholder}")
-            print(f"  random_choice: {random_choice}")
+        if "__" in random_choice:
+            random_choice = process_wildcards(random_choice, directory, _stack=(*_stack, placeholder))
+        wildcard_text = wildcard_text.replace(f"__{placeholder}__", random_choice, 1)
 
     return wildcard_text
 
@@ -269,6 +269,8 @@ def use_random_prompt(gen_data, prompt):
 def process_prompt(style, prompt, negative, gen_data=None):
     if gen_data is None:
         gen_data = {}
+    if gen_data.get('_metadata_prompt'):
+        return prompt, negative
     if use_random_prompt(gen_data, prompt):
         prompt = build_dynamic_prompt(
             insanitylevel=gen_data["obp_insanitylevel"],
@@ -298,9 +300,15 @@ def process_prompt(style, prompt, negative, gen_data=None):
     # Dropdown selections are staged for "Send Style to prompt". Generation
     # must not invisibly apply them again, including saved/default selections.
     styles = (style or []).copy() if "task_type" in gen_data and gen_data["task_type"] == "tool_call" else []
-    for match in re.finditer(pattern, prompt):
-        styles += [f"Style: {match.group(1)}"]
-    prompt = re.sub(pattern, "", prompt)
+    def inline_style(match):
+        key = f"Style: {match.group(1)}"
+        if key not in available_styles:
+            key = match.group(1)
+        if key in available_styles:
+            styles.append(key)
+            return ""
+        return match.group(0)
+    prompt = pattern.sub(inline_style, prompt)
     if "lora_keywords" in gen_data:
         keywords = gen_data["lora_keywords"]
     else:
@@ -308,12 +316,7 @@ def process_prompt(style, prompt, negative, gen_data=None):
     p_txt, n_txt = apply_style(styles, prompt, negative, keywords)
 
     # wildcards
-    wildcard_pattern = r"__([\w\-:]+)__"
-    wildcard_pattern_onebutton = r"__([\w]+:[^\s_]+(?:[^\s_]+|\s(?=[\w:]+))*)__"
-    while (
-        (match := re.search(wildcard_pattern, p_txt))
-        or (match := re.search(wildcard_pattern_onebutton, p_txt))
-    ) is not None:
+    if "__" in p_txt:
         p_txt = process_wildcards(p_txt)
 
     # apply auto negative prompt if enabled
