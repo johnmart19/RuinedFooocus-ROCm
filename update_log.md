@@ -1,3 +1,15 @@
+### Unreleased (development)
+* Installers for NVIDIA CUDA, AMD ROCm 10.1 (Windows, Linux and WSL), DirectML and CPU, with validated PyTorch bundles and `RuinedFooocus.bat`/`RuinedFooocus.sh` launchers
+* Local chat models run on native llama.cpp with a Vulkan, ROCm, CUDA or CPU backend; chat bots gained vision, image generation with an optional reference and a browser Python runner
+* Rewritten chat bots that work offline, and new prompt-rewrite presets for local chat models
+* Prompt enhancement uses the Chat bots model and keeps your prompt; Erniehancer is replaced by the "Local chat model" style
+* One Button Prompt formats follow the checkpoint: SD/SDXL tags, Illustrious/NoobAI/Pony tags, Anima and natural language
+* Native image edit in Image tools, chat and the API on edit-capable checkpoints, with image-to-image as the fallback
+* Checkpoint tools: inspect, check weights and create FP16 copies; clear messages when a model cannot load
+* OpenAI-compatible API (`--api`) and a restricted guest page (`--guest`)
+* Responsive UI for phones, laptops and 4K screens, and modernised HTML pages
+* Many fixes for ComfyUI integration, image, video and prompt handling
+
 ### 26.10.31
 * [Fibo 2.0](https://huggingface.co/briaai/Fibo-2.0-dev) support
 * [Flux3](https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy) support
