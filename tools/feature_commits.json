@@ -2,6 +2,24 @@
   "base": "cd7abb27064155f62dea002f745a8ce1b040c990",
   "features": [
     {
+      "id": "one-button-enhancer-join",
+      "subject": "Fit local enhancer additions into One Button prompt formats",
+      "requires": ["one-button-prompt-formats"],
+      "tests": ["test_prompt_formats.py", "test_local_prompt_enhancement.py"]
+    },
+    {
+      "id": "offline-chatbots",
+      "subject": "Rewrite the bundled chat bots and make them work offline",
+      "requires": ["explicit-image-sources"],
+      "tests": ["test_chatbots.py", "test_llama_rewrite.py", "test_chat_boundaries.py"]
+    },
+    {
+      "id": "one-button-prompt-formats",
+      "subject": "Match One Button prompts to the selected checkpoint family",
+      "requires": ["local-chat-prompt-enhancement", "image-prompt-labels"],
+      "tests": ["test_prompt_formats.py", "test_prompt_wildcards.py", "test_local_prompt_enhancement.py"]
+    },
+    {
       "id": "explicit-image-sources",
       "subject": "Require explicit image references and isolate generation state",
       "requires": ["local-chat-prompt-enhancement", "image-native-cleanup"],
