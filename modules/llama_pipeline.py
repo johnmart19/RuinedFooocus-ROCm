@@ -25,6 +25,19 @@ def llama_names():
         names.sort(key=lambda x: x[0].casefold())
         return names
 
+def clean_rewrite(text):
+    """Remove an echoed example label or wrapping quotes around a rewritten prompt."""
+    text = re.sub(r"^\s*(?:output|prompt|rewritten prompt)\s*:\s*", "", text or "", flags=re.I).strip()
+    if len(text) > 1 and text[0] == text[-1] and text[0] in "\"'":
+        text = text[1:-1].strip()
+    return text
+
+def restore_tags(original, rewritten):
+    """Re-append LoRA/style tags a model dropped, so a rewrite never disables them."""
+    missing = [tag for tag in dict.fromkeys(re.findall(r"<(?:lora|style):[^<>]+>", original, flags=re.I))
+               if tag not in rewritten]
+    return " ".join([rewritten.rstrip(" ,"), *missing]) if missing else rewritten
+
 def run_llama(system_file, prompt, *, instruction=None):
         name = None
         sys_pat = r"system:.*\n\n"
@@ -59,13 +72,16 @@ def run_llama(system_file, prompt, *, instruction=None):
                         "max_tokens": settings.default_settings.get("llm_hp_max_tokens", 256),
                         "messages": [{"role": "system", "content": system_prompt},
                                      {"role": "user", "content": prompt}],
+                        # Hidden reasoning shares max_tokens: keep gpt-oss at low effort and
+                        # Qwen3-style templates out of thinking mode. Other templates ignore these.
+                        "chat_template_kwargs": {"reasoning_effort": "low", "enable_thinking": False},
                     }
                 )
                 if instruction is not None:
                     from modules.prompt_enhancement import image_prompt_result
                     res = image_prompt_result(ret['choices'][0], prompt)
                 else:
-                    res = ret['choices'][0]['message']['content'] or prompt
+                    res = restore_tags(prompt, clean_rewrite(ret['choices'][0]['message']['content']) or prompt)
             except Exception as e:
                 print(f"LLAMA ERROR: {e}")
                 res = prompt
