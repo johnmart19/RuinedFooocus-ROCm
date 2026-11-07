@@ -52,7 +52,7 @@ class ChatRequest(BaseModel):
 
 class ControlNetRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    type: Literal["canny", "depth", "recolour", "sketch", "img2img", "rembg"]
+    type: Literal["canny", "depth", "recolour", "sketch", "img2img", "edit", "rembg"]
     strength: float = Field(default=1, ge=0, le=2)
     start: float = Field(default=0, ge=0, le=1)
     stop: float = Field(default=1, ge=0, le=1)

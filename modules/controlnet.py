@@ -15,6 +15,7 @@ controlnet_models = {
     "recolour": "control-lora-recolor-rank128.safetensors",
     "sketch": "control-lora-sketch-rank128-metadata.safetensors",
     "img2img": None,
+    "edit": None,
     "upscale": None,
     "rembg": None,
 }

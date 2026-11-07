@@ -74,7 +74,8 @@ class PromptLengthTests(unittest.TestCase):
                   and isinstance(node.value, ast.Name) and node.value.id == 'gen_data'
                   and isinstance(node.slice, ast.Constant) and isinstance(node.slice.value, str)}
         config = dict.fromkeys(fields, '')
-        config.update(obp_assume_direct_control=True, obp_image_prompt=False, input_image=object())
+        config.update(obp_assume_direct_control=True, obp_image_prompt=False, input_image=object(),
+                      controlnet={'type':'img2img'})
         for prompt in ('', 'Keep the black hair and neon street.'):
             self.assertEqual(process([], prompt, '', config), (prompt, ''))
         config.update(input_image=None, inpaint_toggle=True)

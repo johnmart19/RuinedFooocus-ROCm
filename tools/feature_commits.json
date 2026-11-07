@@ -2,6 +2,14 @@
   "base": "cd7abb27064155f62dea002f745a8ce1b040c990",
   "features": [
     {
+      "id": "explicit-image-sources",
+      "subject": "Require explicit image references and isolate generation state",
+      "requires": ["local-chat-prompt-enhancement", "image-native-cleanup"],
+      "tests": ["test_image_request_isolation.py", "test_image_hidream_references.py",
+        "test_image_inpaint_geometry.py", "test_image_controlnet_switch.py", "test_image_input_transport.py",
+        "test_image_settings.py", "test_chat_boundaries.py", "test_ui_workflows.py", "test_prompt_lengths.py"]
+    },
+    {
       "id": "style-payload-integrity",
       "subject": "Render style templates without rewriting prompt content",
       "requires": [

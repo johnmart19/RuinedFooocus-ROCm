@@ -58,6 +58,7 @@ class HiDreamReferenceTests(unittest.TestCase):
         helper_tree=ast.parse((NATIVE/'node_helpers.py').read_text(encoding='utf-8'))
         copier=next(n for n in helper_tree.body if isinstance(n,ast.FunctionDef) and n.name=='conditioning_set_values')
         owner=SimpleNamespace(conditions={key:{'cache':[[key,{}]]} for key in ('+','-','switch')},textencode=Mock())
+        owner.textencode.side_effect=lambda sign,text,skip:owner.conditions[sign].update(cache=[[text,{}]])
         scope=dict(self=owner,callback=None,positive_prompt='[first|second]',negative_prompt='',clip_skip=1,
             input_image=object(),hidream_edit=True,img2img_mode=False,control_type='None',controlnet={'type':'None'},switched_prompt=[],gen_data={'steps':2},
             pp=SimpleNamespace(prompt_switch_per_step=lambda *args:['first','second']))
@@ -122,15 +123,14 @@ class HiDreamReferenceTests(unittest.TestCase):
 
     def test_full_reference_mode_preserves_geometry_and_explicit_img2img_keeps_source_latent(self):
         _,process=process_tree()
-        automatic=next(n for n in process.body if isinstance(n,ast.If) and 'not hidream_edit' in ast.unparse(n.test))
         preprocess=next(n for n in process.body if isinstance(n,ast.If) and ast.unparse(n.test)=='input_image')
         image=Image.fromarray(np.arange(117*239*3,dtype=np.uint8).reshape(239,117,3))
         data=dict(width=2048,height=2048)
-        scope=dict(input_image=image,control_type='None',controlnet={'type':'None'},image_edit=False,
+        scope=dict(input_image=image,control_type='edit',controlnet={'type':'edit'},image_edit=False,
             hidream_edit=True,architecture='HiDreamO1',gen_data=data,prepare_reference=prepare_reference,
             guidance={'image_resize_mode':'preserve'})
-        exec(compile(ast.Module(body=[automatic,preprocess],type_ignores=[]),'reference_preprocess','exec'),scope)
-        self.assertEqual(scope['control_type'],'None')
+        exec(compile(ast.Module(body=[preprocess],type_ignores=[]),'reference_preprocess','exec'),scope)
+        self.assertEqual(scope['control_type'],'edit')
         self.assertEqual(tuple(scope['input_image'].shape),(1,256,128,3))
         restored=restore_reference_frame(scope['input_image'],scope['reference_frame'])
         self.assertTrue(torch.equal(restored,torch.from_numpy(np.array(image)).unsqueeze(0)/255))

@@ -108,8 +108,10 @@ class InpaintGeometryTests(unittest.TestCase):
         model_type=type('SDXL',(),{})
         image=object()
         def prepare(control,inpaint=True,source=image):
+            from modules.image_guidance import normalize_reference_images
             data=dict(inpaint_toggle=inpaint,input_image=source,reference_image_count=int(source is not None))
             scope=dict(gen_data=data,input_image=source,image_edit=False,hidream_edit=False,architecture='SDXL',
+                normalize_reference_images=normalize_reference_images,guidance={'moss_image_edit_format':'Disabled'},
                 SDXL=model_type,self=SimpleNamespace(xl_base_patched=SimpleNamespace(unet=SimpleNamespace(model=model_type()))),
                 modules=SimpleNamespace(controlnet=SimpleNamespace(get_settings=lambda data:dict(control),
                     controlnet_models=dict.fromkeys(('img2img','canny','depth','sketch','recolour')))))

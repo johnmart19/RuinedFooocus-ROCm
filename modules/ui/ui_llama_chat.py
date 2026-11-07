@@ -204,6 +204,18 @@ def create_chat(image_controls=None):
                     clear_chat = gr.Button("New conversation", min_width=140)
                 force_image = gr.Checkbox(label="Force image generation", value=False,
                     info="Generate for your next message, then return to normal chat.")
+                with gr.Accordion('Image reference', open=False):
+                    image_source = gr.Dropdown(label='Image source', value='New image',
+                        choices=['New image', 'Previous generated image', 'Uploaded image'],
+                        info='Optional for this message only. New image ignores previous generations and retained uploads.')
+                    image_reference = gr.Image(label='Chat image reference', type='pil', image_mode='RGBA',
+                        format='png', visible=False, height=200)
+                    image_denoise = gr.Slider(label='Image-to-image denoise', minimum=0.01, maximum=1.0,
+                        value=0.25, step=0.01, visible=False,
+                        info='Lower values preserve the source; higher values redraw more.')
+                    image_source.change(lambda mode: (gr.update(visible=mode == 'Uploaded image'),
+                        gr.update(visible=mode != 'New image')), inputs=image_source,
+                        outputs=[image_reference, image_denoise], api_visibility='undocumented')
                 with gr.Accordion("Run Python", open=True, visible=False) as python_panel:
                     load_code = gr.Button("Load code from chat")
                     code_runner = gr.HTML("", js_on_load=(Path(__file__).resolve().parents[2]
@@ -366,13 +378,17 @@ def create_chat(image_controls=None):
             return guarded
 
         @recover_controls
-        def llama_respond(message, system, embed, chat_history, model, show_thinking, vision_enabled, review_model, include_system, force, *image_values):
+        def llama_respond(message, system, embed, chat_history, model, show_thinking, vision_enabled, review_model, include_system, force,
+                          source_mode, source_image, source_denoise, *image_values):
             chat_history = list(chat_history)
             chat_history.append({"role": "user", "content": message})
 
             gen_data = {
                 "task_type": "llama",
                 "force_image": force,
+                "image_source": source_mode,
+                "image_reference": source_image if source_mode == 'Uploaded image' else None,
+                "image_denoise": source_denoise,
                 "vision_enabled": vision_enabled,
                 "vision_include_system": include_system,
                 "vision_model": review_model,
@@ -552,34 +568,39 @@ def create_chat(image_controls=None):
             show_progress="hidden")
 
         def submit_message(message, force, selected_model, system, embed, history, model,
-                           show_thinking, vision_enabled, review_model, include_system, *image_values):
+                           show_thinking, vision_enabled, review_model, include_system,
+                           source_mode='New image', source_image=None, source_denoise=0.25, *image_values):
             try:
                 message, force = llama_get_text(message, force, model, selected_model)
+                from modules.llama_vision import image_reference_source
+                image_reference_source(source_mode, source_image, history)
             except ValueError as error:
                 gr.Warning(str(error))
                 yield {llama_msg: gr.skip()}
                 return
-            yield {llama_msg: "", force_image: False,
+            yield {llama_msg: "", force_image: False, image_source: 'New image',
                    send_message: gr.update(interactive=False), clear_chat: gr.update(interactive=False)}
             yield from llama_respond(message, system, embed, history, model, show_thinking,
-                                    vision_enabled, review_model, include_system, force, *image_values)
+                                    vision_enabled, review_model, include_system, force,
+                                    source_mode, source_image, source_denoise, *image_values)
             yield {send_message: gr.update(interactive=True), clear_chat: gr.update(interactive=True)}
 
         gr.on(triggers=[llama_msg.submit, send_message.click], fn=submit_message,
             api_visibility='undocumented',
             inputs=[llama_msg, force_image, llama_quant, llama_system, llama_embed, llama_history,
                     llama_active_model, show_reasoning, enable_vision, vision_model, vision_include_system,
+                    image_source, image_reference, image_denoise,
                     *image_controls.values()],
             outputs=[llama_chat, llama_history, llama_model_status, llama_download,
-                     llama_active_model, llama_msg, llama_use, force_image, send_message, clear_chat],
+                     llama_active_model, llama_msg, llama_use, force_image, image_source, send_message, clear_chat],
             show_progress="hidden")
 
         def new_conversation(bot, python_enabled):
             history = _llama_select_assistant(bot)["chatstart"]
-            return history, history, "", False, python_runner(history) if python_enabled else ""
+            return history, history, "", False, 'New image', None, python_runner(history) if python_enabled else ""
 
         clear_chat.click(new_conversation, inputs=[llama_assistants, enable_python],
-            outputs=[llama_history, llama_chat, llama_msg, force_image, code_runner],
+            outputs=[llama_history, llama_chat, llama_msg, force_image, image_source, image_reference, code_runner],
             api_visibility='undocumented')
 
         llama_assistants.select(

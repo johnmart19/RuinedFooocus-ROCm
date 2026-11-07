@@ -397,6 +397,10 @@ class pipeline:
         return
 
     def load_loras(self, loras):
+        def patch_count(unet, clip):
+            return sum(len(rows) for patcher in (unet, getattr(clip, 'patcher', None))
+                       for rows in getattr(patcher, 'patches', {}).values())
+
         loaded_loras = []
         loras = sorted(loras, key=lambda x: x['name'].lower())
         resolved = []
@@ -428,6 +432,8 @@ class pipeline:
                 unet, clip = comfy.sd.load_lora_for_models(
                     model.unet, model.clip, lora, weight, weight
                 )
+                if patch_count(unet, clip) <= patch_count(model.unet, model.clip):
+                    raise ValueError('No compatible weights were applied. Choose a LoRA for this checkpoint family.')
                 model = self.StableDiffusionModel(
                     unet=unet,
                     clip=clip,
@@ -517,10 +523,6 @@ class pipeline:
         sampler_name = gen_data["sampler_name"]
         scheduler = gen_data["scheduler"]
         clip_skip = gen_data["clip_skip"]
-        input_image = gen_data["input_image"]
-        additional_references = normalize_reference_images(gen_data.get('reference_images'), input_image,
-            architecture, guidance['moss_image_edit_format'])
-        gen_data['reference_image_count'] = (1 if input_image is not None else 0) + len(additional_references)
         seed = gen_data["seed"] if isinstance(gen_data["seed"], int) else random.randint(1, 2**32)
         if "<facerestore>" in gen_data.get("positive_prompt", ""):
             gen_data["facerestore"] = True
@@ -531,9 +533,23 @@ class pipeline:
         hidream_edit = architecture == 'HiDreamO1'
         controlnet = modules.controlnet.get_settings(gen_data)
         control_type = controlnet.get("type", "")
-        if input_image is not None and control_type in ('', 'None') and not image_edit and not hidream_edit and architecture != 'Flux':
-            controlnet = {'type': 'img2img', 'denoise': 0.25}
-            control_type = 'img2img'
+        input_image = gen_data.get('input_image') if control_type not in ('', 'None', None) else None
+        additional_references = normalize_reference_images(
+            gen_data.get('reference_images') if input_image is not None else None, input_image,
+            architecture, guidance['moss_image_edit_format'])
+        gen_data['reference_image_count'] = (1 if input_image is not None else 0) + len(additional_references)
+        if control_type == 'edit':
+            if architecture == 'Flux':
+                name = gen_data.get('base_model_name', '')
+                path = shared.models.get_file('checkpoints', name)
+                metadata = shared.models.get_models_by_path('checkpoints', path, fetch=False) if path else {}
+                if 'kontext' not in f'{name} {shared.models.get_model_base(metadata)}'.lower():
+                    raise ValueError('Native image edit requires an image-edit checkpoint.')
+                controlnet['type'] = control_type = 'kontext'
+            elif not image_edit and not hidream_edit:
+                raise ValueError('Native image edit requires an image-edit checkpoint and its edit format.')
+            if input_image is None:
+                raise ValueError('Add an image in Image tools.')
         if control_type in modules.controlnet.controlnet_models and control_type not in ("upscale", "rembg", "faceswap"):
             if gen_data.get('inpaint_toggle') and control_type == 'img2img':
                 # Inpainting encodes Main with its mask, not the optional tool upload.
@@ -660,6 +676,8 @@ class pipeline:
                 )
             if self.conditions is None:
                 self.conditions = clean_prompt_cond_caches()
+            # Scheduled text is request-local; release the last job's extra tensor.
+            self.conditions['switch'] = {'text': None, 'cache': None}
             self.textencode("+", positive_prompt, clip_skip)
             self.textencode("-", negative_prompt, clip_skip)
 
@@ -696,19 +714,8 @@ class pipeline:
             controlnet = {}
             controlnet["type"] = "None"
 
-        # Flux and Kontext share an architecture; only opt in when identified.
-        if (
-            controlnet["type"] == "None" and
-            isinstance(self.xl_base.unet.model, Flux) and
-            input_image is not None
-        ):
-            name = gen_data.get("base_model_name", "")
-            path = shared.models.get_file("checkpoints", name)
-            metadata = shared.models.get_models_by_path("checkpoints", path, fetch=False) if path else {}
-            family = shared.models.get_model_base(metadata)
-            if "kontext" in f"{name} {family}".lower():
-                controlnet["type"] = "kontext"
-                img2img_mode = True
+        if controlnet['type'] == 'kontext':
+            img2img_mode = True
 
         if controlnet["type"] != "None" and input_images > 0:
             if callback is not None:

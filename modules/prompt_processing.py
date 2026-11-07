@@ -258,7 +258,11 @@ def use_random_prompt(gen_data, prompt):
     if "obp_assume_direct_control" not in gen_data:
         return False
     # An empty image-conditioned prompt is intentional, not a request for OBP.
-    image_conditioned = ("input_image" in gen_data and gen_data["input_image"] is not None) or (
+    control = gen_data.get('controlnet')
+    tool = control.get('type') if control is not None else gen_data.get('cn_selection')
+    if control is None and tool == 'Custom...':
+        tool = gen_data.get('cn_type')
+    image_conditioned = (gen_data.get("input_image") is not None and tool not in (None, '', 'None')) or (
         "inpaint_toggle" in gen_data and gen_data["inpaint_toggle"]
     )
     if image_conditioned:

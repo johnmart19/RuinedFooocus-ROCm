@@ -43,23 +43,45 @@ def image_tool_history(content, call_id):
     return []
 
 
-def attach_latest_image(chat, history):
-    user_turns = 0
+def latest_generated_image(history):
+    """Resolve only a known generated image in this conversation, never a model path."""
     for message in reversed(history):
-        user_turns += message.get("role") == "user"
-        if user_turns > 1:
-            return
         content = message.get("content", "")
         if message.get("role") != "assistant" or not isinstance(content, str):
             continue
         for url, path in reversed(list(_generated_images.items())):
             if f"![Image]({url})" in content and path.is_file():
-                for turn in reversed(chat):
-                    if turn["role"] == "user":
-                        text = turn["content"]
-                        parts = [{"type": "text", "text": text}] if isinstance(text, str) else list(text)
-                        turn["content"] = parts + [image_content(path)]
-                        return
+                return path, _generated_prompts.get(url, '')
+    raise ValueError('No generated image is available in this conversation. Upload a reference instead.')
+
+
+def image_reference_source(mode, upload, history):
+    if mode == 'New image':
+        return None, ''
+    if mode == 'Previous generated image':
+        return latest_generated_image(history)
+    if mode == 'Uploaded image' and isinstance(upload, Image.Image):
+        return upload, ''
+    raise ValueError('Choose and provide an image reference before sending the message.')
+
+
+def selected_image_reference(mode, upload, history):
+    source, prompt = image_reference_source(mode, upload, history)
+    if source is None:
+        return None, prompt
+    if isinstance(source, Image.Image):
+        return source.copy(), prompt
+    with Image.open(source) as image:
+        return ImageOps.exif_transpose(image).copy(), prompt
+
+
+def attach_image(chat, image):
+    for turn in reversed(chat):
+        if turn['role'] == 'user':
+            text = turn['content']
+            parts = [{'type': 'text', 'text': text}] if isinstance(text, str) else list(text)
+            turn['content'] = parts + [image_content(image)]
+            return
 
 
 def projector_path(settings, model=None, progress=None):
@@ -84,7 +106,8 @@ def projector_path(settings, model=None, progress=None):
 
 
 def image_content(image_path):
-    with Image.open(image_path) as source:
+    source = image_path.copy() if isinstance(image_path, Image.Image) else Image.open(image_path)
+    with source:
         image = ImageOps.exif_transpose(source).convert("RGB")
         image.thumbnail((1024, 1024))
         buffer = BytesIO()

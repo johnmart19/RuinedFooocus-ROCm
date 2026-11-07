@@ -26,13 +26,15 @@ def checkpoint_features(name, moss_format=None):
     if moss_format is None:
         moss_format = shared.settings.default_settings.get("moss_image_edit_format", "Disabled")
     native_edit = (canonical in ("MageFlow", "Fibo2", "QwenImage", "HiDreamO1")
-                   or canonical == "MOSSImage" and moss_format != "Disabled")
+                   or canonical == "MOSSImage" and moss_format != "Disabled"
+                   or 'kontext' in f'{name} {family}'.lower())
     return {"video": family in VIDEO_FPS, "sdxl": sdxl, "native_edit": native_edit}
 
 
 def control_types(features):
     return [name.capitalize() for name in controlnet.controlnet_models
             if (not features["video"] or name in ("upscale", "rembg"))
+            and (features['native_edit'] or name != 'edit')
             and (features["sdxl"] or name not in SDXL_CONTROLS)]
 
 
@@ -66,7 +68,7 @@ def input_context(inpainting, selection, control_type, checkpoint, moss_format=N
 
 def powerup_choices(video, sdxl=True, native_edit=False):
     choices = [("None", "None")]
-    order = {"img2img": 0, "canny": 1, "depth": 2, "sketch": 3,
+    order = {"edit": -1, "img2img": 0, "canny": 1, "depth": 2, "sketch": 3,
              "recolour": 4, "upscale": 5, "rembg": 6}
     if video:
         choices.append(("Image to video", "Image to video"))
@@ -79,6 +81,8 @@ def powerup_choices(video, sdxl=True, native_edit=False):
         if video and options["type"] not in ("upscale", "rembg"):
             continue
         if not sdxl and options["type"] in SDXL_CONTROLS:
+            continue
+        if options['type'] == 'edit' and not native_edit:
             continue
         label = "Image to image" if name == "Img2Img" else name
         choices.append((label, name))
@@ -96,7 +100,7 @@ def add_controlnet_tab(main_view, inpaint_view, prompt, image_number, run_event,
                 label=t("Image tool"),
                 choices=powerup_choices(**initial_features),
                 value="None",
-                info='Image-to-image uses adjustable denoise. With a native edit model, None uses its full edit workflow.',
+                info='None generates a fresh image. Select Image to image or Native image edit to use an upload.',
             )
             add_ctrl("cn_selection", cn_selection)
 
@@ -267,6 +271,7 @@ def add_controlnet_tab(main_view, inpaint_view, prompt, image_number, run_event,
             slider_states = {
                 "canny": [True, True, True, True, True, False],
                 "img2img": [False, False, True, False, False, False],
+                "edit": [False, False, False, False, False, False],
                 "default": [True, True, True, False, False, False],
                 "upscale": [False, False, False, False, False, True],
                 "rembg": [False, False, False, False, False, False],

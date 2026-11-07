@@ -25,7 +25,7 @@ class WorkflowControlsTests(unittest.TestCase):
             'use_random_prompt': policy, 'worker': SimpleNamespace(add_task=add),
             'get_promptlist': lambda data: data['prompt'].split('---')})
         config = dict(prompt='Keep the black hair and neon street.', image_number=2,
-                      input_image=object(), obp_assume_direct_control=True, obp_image_prompt=False)
+                      input_image=object(), controlnet={'type':'img2img'}, obp_assume_direct_control=True, obp_image_prompt=False)
         self.assertEqual(submit(config), 'task')
         self.assertEqual(add.call_args.args[0]['prompt'], config['prompt'])
         self.assertEqual(add.call_args.args[0]['image_total'], 2)
@@ -103,6 +103,18 @@ class WorkflowControlsTests(unittest.TestCase):
         self.assertNotEqual(first, second)
         self.assertIn('sandbox="allow-scripts"', second)
         self.assertNotIn("allow-same-origin", second)
+
+    def test_missing_chat_reference_preserves_message_without_submitting_or_loading(self):
+        warning, respond = Mock(), Mock()
+        submit = function_from('modules/ui/ui_llama_chat.py', 'submit_message', {
+            'gr': SimpleNamespace(Warning=warning, skip=lambda:'skip'), 'llama_msg':'message',
+            'llama_get_text':self.submit(), 'llama_respond':respond})
+        for mode in ('Uploaded image','Previous generated image'):
+            with self.subTest(mode=mode):
+                result=list(submit('Keep this prompt.',True,'a','','',[],'a',False,False,None,False,mode))
+                self.assertEqual(result,[{'message':'skip'}])
+        self.assertEqual(warning.call_count,2)
+        respond.assert_not_called()
 
     def test_search_single_page_has_no_phantom_second_page(self):
         search = function_from('modules/imagebrowser.py', 'search_metadata', {
