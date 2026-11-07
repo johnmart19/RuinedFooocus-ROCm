@@ -56,12 +56,14 @@ Reinstall/freeze markers can go there too; existing markers in the application f
 Git updates run only in a source checkout and skip local edits; upgrade a source ZIP by replacing application
 files while keeping user data. Bundled Windows/Linux CUDA/ROCm portable releases are a future build target.
 
-If you see **"MetadataIncompleteBuffer"**, a model file is incomplete or damaged; download it again. **Models > Model > Checkpoint tools** can check a checkpoint for damage.
+If you see **"MetadataIncompleteBuffer"**, a model file is incomplete or damaged; download it again. **Create > Models > Model > Checkpoint tools** can check a checkpoint for damage.
 
 ## Ruined Edition Features
 
-The main destinations are **Create**, **Chat**, **Library**, **Models** and **Settings**. Create puts the image
+The main destinations are **Create**, **Chat**, **Library** and **Settings**. Create puts the image
 preview above the prompt and Generate button, with the image model selector at the top of **Generation** in the right sidebar.
+**Models**, immediately beside Generation, contains checkpoint browsing, LoRAs and model tools. Checkpoints
+show cached publisher names and versions; filenames remain visible in their details and keep their original identity.
 On narrow screens the sidebar follows the image and prompt.
 Settings groups Appearance, Storage, Runtime, Defaults and Integrations. Text size applies immediately
 and is remembered by your browser; browser zoom and keyboard navigation remain available.
@@ -71,10 +73,10 @@ and is remembered by your browser; browser zoom and keyboard navigation remain a
 - SD 1.5, SDXL (including Pony, Illustrious and NoobAI), SD3, Flux, Flux 2 and Flux 3, Qwen-Image, HiDream and
   HiDream O1, Lumina 2, Z-Image, Anima, Krea 2, MOSS Image, Fibo 2, Mage Flow, Ernie Image, NewBie Image,
   PixArt, PixelDiT, AuraFlow, Cosmos Predict 2, Boogu and Ideogram 4 (limited). See the [update log](update_log.md).
-- Safetensors and GGUF checkpoints, including UNet-only files. **Models > Model > Image model components** lists
+- Safetensors and GGUF checkpoints, including UNet-only files. **Create > Models > Model > Image model components** lists
   and downloads the text encoders and VAE a checkpoint needs.
   ComfyUI detects checkpoint configuration directly; legacy YAML configs and merge-recipe files are not used.
-- **Models > Model > Checkpoint tools** reports a checkpoint's size and tensor types, checks its weights for
+- **Create > Models > Model > Checkpoint tools** reports a checkpoint's size and tensor types, checks its weights for
   damage (NaN/Inf), and can create a smaller FP16 copy while keeping the original.
   Existing destination files are never overwritten, including on drives without hard-link support.
 - If a checkpoint cannot load, the error names the cause: a missing file, a missing text encoder or VAE, a
@@ -94,7 +96,7 @@ and is remembered by your browser; browser zoom and keyboard navigation remain a
   Category headings are never styles. Custom rows override bundled styles by name; loading styles
   does not rewrite your file, and empty templates keep your prompt intact.
 - Wildcards: type `__name__` to insert a random line from `wildcards/name.txt` (see `wildcards/colors.txt`).
-- LoRAs from **Models > LoRAs** or with `<lora:name:0.9>` in the prompt. Trigger words are read from a `.txt`
+- LoRAs from **Create > Models > LoRAs** or with `<lora:name:0.9>` in the prompt. Trigger words are read from a `.txt`
   file next to the LoRA or downloaded from Civitai; the `LoRA keywords` style adds them for you.
 - Put `---` on its own line to queue several prompts. Automatic negative prompt is available.
 - **Prompt tools** has [One Button Prompt](https://github.com/AIrjen/OneButtonPrompt) for random prompts. Its

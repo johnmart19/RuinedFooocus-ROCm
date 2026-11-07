@@ -2,6 +2,12 @@
   "base": "cd7abb27064155f62dea002f745a8ce1b040c990",
   "features": [
     {
+      "id": "create-model-workspace",
+      "subject": "Browse named image models beside Generation",
+      "requires": ["style-catalog-safety"],
+      "tests": ["test_model_selection.py", "test_ui_workflows.py", "test_resource_paths.py"]
+    },
+    {
       "id": "style-catalog-safety",
       "subject": "Preserve prompts and custom styles with a read-only catalog",
       "requires": ["png-preset-ui-clarity"],

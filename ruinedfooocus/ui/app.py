@@ -199,10 +199,6 @@ def launch_app(args):
         # Use the whole window; Gradio's stepped max-widths leave wide side margins.
         fill_width=True,
     )
-    # Move the existing model controls, including their events, into the shell.
-    # The same components continue to supply Create, Chat and API image settings.
-    with shared.gradio_root:
-        model_tab.unrender()
     with main_tabs:
         with gr.Tabs(elem_id="app-tabs", overflow_behavior="wrap") as top_tabs:
             for interface, label in (
@@ -216,7 +212,6 @@ def launch_app(args):
                         component.overflow_behavior = "wrap"
                 with gr.Tab(label):
                     interface.render()
-            model_tab.render()
             with gr.Tab("Settings"):
                 app_settings.render()
         top_tabs.children[2].select(
@@ -580,7 +575,11 @@ with shared.gradio_root as block:
                 base_model = gr.Dropdown(
                     label="Image model",
                     choices=checkpoint_choices(
-                        shared.models.get_names("checkpoints"), settings["base_model"]
+                        shared.models.get_names("checkpoints"),
+                        settings["base_model"],
+                        lambda name: shared.models.get_models_by_path(
+                            "checkpoints", name, fetch=False
+                        ),
                     ),
                     value=settings["base_model"],
                     interactive=True,
@@ -1014,92 +1013,14 @@ with shared.gradio_root as block:
             )
             with model_tab:
                 with gr.Tab(label=t("Model")):
-                    from ruinedfooocus.features.models.ui_download import (
-                        create_ui as create_download_ui,
+                    from ruinedfooocus.features.models.ui_browser import (
+                        create_ui as create_model_browser,
                     )
 
-                    create_download_ui(base_model)
-                    model_current = gr.HTML(
-                        value=f"{settings['base_model']}",
+                    modelfilter, model_gallery, model_gallery_records, update_model_filter = (
+                        create_model_browser(base_model, shared.models)
                     )
-                    with gr.Group():
-                        modelfilter = gr.Textbox(
-                            label=t("Search checkpoints"),
-                            placeholder=t("Model name"),
-                            value="",
-                            show_label=False,
-                            container=False,
-                        )
-                        model_gallery = gr.Gallery(
-                            label=f"Checkpoint: {settings['base_model']}",
-                            show_label=False,
-                            height="auto",
-                            allow_preview=False,
-                            preview=False,
-                            columns=[1, 2, 3, 4, 4, 5],
-                            rows=[3],
-                            object_fit="contain",
-                            visible=True,
-                            buttons=[],
-                            min_width=60,
-                            value=list(
-                                map(
-                                    lambda x: (get_checkpoint_thumbnail(x), x),
-                                    shared.models.get_names("checkpoints"),
-                                )
-                            ),
-                        )
-
                     add_ctrl("base_model_name", base_model)
-
-                    from ruinedfooocus.features.models.ui_model_components import (
-                        create_ui as create_components_ui,
-                    )
-                    from ruinedfooocus.features.models.ui_checkpoint_tools import (
-                        create_ui as create_checkpoint_ui,
-                    )
-
-                    with gr.Accordion("Image model components", open=False):
-                        create_components_ui(base_model)
-                    with gr.Accordion("Checkpoint tools", open=False):
-                        create_checkpoint_ui(base_model)
-
-                    @modelfilter.input(
-                        api_visibility="undocumented", inputs=modelfilter, outputs=[model_gallery]
-                    )
-                    @modelfilter.submit(
-                        api_visibility="undocumented", inputs=modelfilter, outputs=[model_gallery]
-                    )
-                    def update_model_filter(filtered):
-                        filtered_filenames = filter(
-                            lambda filename: filtered.lower() in filename.lower(),
-                            shared.models.get_names("checkpoints"),
-                        )
-                        newlist = list(
-                            map(
-                                lambda x: (get_checkpoint_thumbnail(x), x),
-                                filtered_filenames,
-                            )
-                        )
-                        return gr.update(value=newlist)
-
-                    def update_model_select(evt: gr.SelectData):
-                        model_name = f"{evt.value['caption']}"
-                        model = shared.models.get_models_by_path("checkpoints", model_name)
-                        model_base = shared.models.get_model_base(model)
-
-                        txt = f"{evt.value['caption']}<br>{t('Model type')}: {model_base}"
-
-                        return {
-                            model_current: gr.update(value=txt),
-                            base_model: gr.update(value=model_name),
-                        }
-
-                    model_gallery.select(
-                        fn=update_model_select,
-                        api_visibility="undocumented",
-                        outputs=[model_current, base_model],
-                    )
 
                     def model_video_controls(name, performance):
                         model_base = shared.models.get_model_base(
@@ -1449,6 +1370,7 @@ with shared.gradio_root as block:
                 outputs=[
                     modelfilter,
                     model_gallery,
+                    model_gallery_records,
                     lorafilter,
                     lora_gallery,
                     style_selection,
@@ -1461,16 +1383,22 @@ with shared.gradio_root as block:
                 lora_active_selected = None
                 shared.models.update_all_models()
 
+                gallery_update, records = update_model_filter("")
                 results = {
                     modelfilter: gr.update(value=""),
-                    model_gallery: update_model_filter(""),
+                    model_gallery: gallery_update,
+                    model_gallery_records: records,
                     lorafilter: gr.update(value=""),
                     lora_gallery: update_lora_filter("", lora_active_gallery),
                     style_selection: gr.update(choices=list(load_styles().keys())),
                     preset_gallery: gr.update(value=path_manager.get_presets()),
                     base_model: gr.update(
                         choices=checkpoint_choices(
-                            shared.models.get_names("checkpoints"), selected_model
+                            shared.models.get_names("checkpoints"),
+                            selected_model,
+                            lambda name: shared.models.get_models_by_path(
+                                "checkpoints", name, fetch=False
+                            ),
                         )
                     ),
                 }
@@ -1485,14 +1413,20 @@ with shared.gradio_root as block:
             ):
                 current = shared.models.revision
                 if revision == current:
-                    return gr.skip(), gr.skip(), gr.skip(), gr.skip()
+                    return (gr.skip(),) * 5
+                gallery_update, records = update_model_filter(model_filter)
                 return (
                     current,
-                    update_model_filter(model_filter),
+                    gallery_update,
+                    records,
                     update_lora_filter(lora_filter, active_loras),
                     gr.update(
                         choices=checkpoint_choices(
-                            shared.models.get_names("checkpoints"), selected_model
+                            shared.models.get_names("checkpoints"),
+                            selected_model,
+                            lambda name: shared.models.get_models_by_path(
+                                "checkpoints", name, fetch=False
+                            ),
                         )
                     ),
                 )
@@ -1500,7 +1434,13 @@ with shared.gradio_root as block:
             cfg_timer.tick(
                 fn=update_model_previews,
                 inputs=[model_revision, modelfilter, lorafilter, lora_active_gallery, base_model],
-                outputs=[model_revision, model_gallery, lora_gallery, base_model],
+                outputs=[
+                    model_revision,
+                    model_gallery,
+                    model_gallery_records,
+                    lora_gallery,
+                    base_model,
+                ],
                 api_visibility="undocumented",
                 queue=False,
             )

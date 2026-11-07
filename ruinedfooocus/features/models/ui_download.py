@@ -21,7 +21,12 @@ def download_default(progress=gr.Progress()):
     shared.path_manager.get_folder_file_path("checkpoints", name, progress=report)
     shared.models.update_all_models()
     return gr.update(
-        choices=checkpoint_choices(shared.models.get_names("checkpoints"), name), value=name
+        choices=checkpoint_choices(
+            shared.models.get_names("checkpoints"),
+            name,
+            lambda filename: shared.models.get_models_by_path("checkpoints", filename, fetch=False),
+        ),
+        value=name,
     )
 
 

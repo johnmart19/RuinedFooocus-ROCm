@@ -522,6 +522,10 @@ textarea {
 }
 
 /* Details tab links: a plain list with icons beside the text. */
+#model-gallery .caption-label {
+  white-space: pre-line;
+}
+
 #details-links {
   list-style: none;
   margin: 0;
