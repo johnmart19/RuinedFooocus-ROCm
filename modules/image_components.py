@@ -57,6 +57,19 @@ GGUF_ARCHITECTURES = {'sdxl': 'SDXL', 'sd3': 'SD3', 'aura': 'AuraFlow',
     'flux3': 'Flux3', 'qwen_image21': 'QwenImage'}
 
 
+# Families whose native workflow edits a supplied image (matches has_image_edit in the pipeline).
+NATIVE_EDIT_FAMILIES = ('MageFlow', 'Fibo2', 'QwenImage', 'HiDreamO1')
+
+
+def native_edit_supported(family, name='', moss_format='Disabled'):
+    """Whether a checkpoint can edit an image natively; shared by the UI and the API."""
+    family = family or ''
+    canonical = ALIASES.get(family, family)
+    return (canonical in NATIVE_EDIT_FAMILIES
+            or canonical == 'MOSSImage' and moss_format != 'Disabled'
+            or 'kontext' in f'{name} {family}'.lower())
+
+
 def inventory(checkpoint, family, settings, paths):
     """Resolve local image dependencies. This function never downloads or hashes."""
     checkpoint = Path(checkpoint)

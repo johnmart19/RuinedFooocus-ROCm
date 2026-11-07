@@ -25,9 +25,8 @@ def checkpoint_features(name, moss_format=None):
     sdxl = canonical in ("SDXL", "SDXL 1.0")
     if moss_format is None:
         moss_format = shared.settings.default_settings.get("moss_image_edit_format", "Disabled")
-    native_edit = (canonical in ("MageFlow", "Fibo2", "QwenImage", "HiDreamO1")
-                   or canonical == "MOSSImage" and moss_format != "Disabled"
-                   or 'kontext' in f'{name} {family}'.lower())
+    from modules.image_components import native_edit_supported
+    native_edit = native_edit_supported(family, name, moss_format)
     return {"video": family in VIDEO_FPS, "sdxl": sdxl, "native_edit": native_edit}
 
 

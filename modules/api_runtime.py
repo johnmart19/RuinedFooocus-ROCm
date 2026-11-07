@@ -292,7 +292,10 @@ def _image_operation(payload, selected, defaults=None):
     references = [decode_image(value) for value in references]
     if input_image is None and not payload.get("prompt", "").strip():
         raise ValueError("A prompt is required for text-to-image generation.")
-    if input_image is not None and control is None:
+    # Without an explicit tool, an uploaded image is edited: natively when the
+    # checkpoint can (decided below), otherwise by gentle image-to-image.
+    default_control = input_image is not None and control is None
+    if default_control:
         control = {"type": "img2img", "denoise": 0.25}
     if control:
         if input_image is None:
@@ -326,6 +329,10 @@ def _image_operation(payload, selected, defaults=None):
         guidance = {key: payload[key] if key in payload else defaults[key]
                     for key in FIELD_SCHEMA if key in payload or (same_checkpoint and key in defaults)}
         values.update(resolve_guidance(guidance, settings, family, selected['name']))
+        if default_control:
+            from modules.image_components import native_edit_supported
+            if native_edit_supported(family, selected['name'], values.get('moss_image_edit_format', 'Disabled')):
+                control = {"type": "edit"}
         from modules.image_guidance import normalize_reference_images
         references = normalize_reference_images(references, input_image, family, values['moss_image_edit_format'])
     elif references:

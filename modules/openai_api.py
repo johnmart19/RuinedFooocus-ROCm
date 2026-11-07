@@ -301,7 +301,7 @@ def create_apps(backend, key=None):
 
     @api.post("/images/edits")
     async def image_edits(request: Request):
-        """Edit one uploaded image using the local image-to-image workflow."""
+        """Edit one uploaded image: native editing when the checkpoint supports it, otherwise image-to-image."""
         async with request.form(max_files=2, max_fields=20, max_part_size=28000000) as form:
             uploads = form.getlist("image") + form.getlist("image[]")
             if len(uploads) != 1 or not hasattr(uploads[0], "read"):

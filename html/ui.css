@@ -220,3 +220,5 @@ textarea { resize: vertical; }
 #details-links { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; }
 #details-links a { display: inline-flex; align-items: center; gap: .375rem; min-height: 1.5rem; }
 #details-links img { flex: none; }
+/* The bundled icons are white; darken them on the light theme so they stay visible. */
+body:not(.dark) #details-links img { filter: invert(1); }
