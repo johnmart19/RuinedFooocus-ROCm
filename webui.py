@@ -1313,9 +1313,13 @@ with shared.gradio_root as block:
                 with gr.Row():
                     gr.HTML(
                         value="""
-                        <a href="https://discord.gg/CvpAFya9Rr"><img src="gradio_api/file=html/icon_clyde_white_RGB.svg" height="16" width="16" style="display:inline-block;">&nbsp;Discord</a><br>
-                        <a href="https://github.com/runew0lf/RuinedFooocus"><img src="gradio_api/file=html/github-mark-white.svg" height="16" width="16" style="display:inline-block;">&nbsp;Github</a><br>
-                        <a href="gradio_api/file=html/last_image.html" target="_blank" rel="noopener">Last image</a>
+                        <nav aria-label="Community and viewer links">
+                          <ul id="details-links">
+                            <li><a href="https://discord.gg/CvpAFya9Rr"><img src="gradio_api/file=html/icon_clyde_white_RGB.svg" width="16" height="16" alt="">Discord</a></li>
+                            <li><a href="https://github.com/runew0lf/RuinedFooocus"><img src="gradio_api/file=html/github-mark-white.svg" width="16" height="16" alt="">Github</a></li>
+                            <li><a href="gradio_api/file=html/last_image.html" target="_blank" rel="noopener">Last image</a></li>
+                          </ul>
+                        </nav>
                         """,
                     )
 

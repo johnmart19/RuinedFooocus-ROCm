@@ -215,3 +215,8 @@ textarea { resize: vertical; }
   white-space: normal; overflow-wrap: anywhere; text-overflow: clip;
   padding: .5rem; font-size: var(--text-sm); line-height: 1.4;
 }
+
+/* Details tab links: a plain list with icons beside the text. */
+#details-links { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; }
+#details-links a { display: inline-flex; align-items: center; gap: .375rem; min-height: 1.5rem; }
+#details-links img { flex: none; }

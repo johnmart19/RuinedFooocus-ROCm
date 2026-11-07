@@ -1,6 +1,8 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
+<head>
 <meta charset="utf-8">
+<title>Python runner</title>
 <style>
   :root { font: 14px system-ui; --block-background-fill: #f4f4f5; --input-background-fill: #fff;
     --body-text-color: #27272a; --border-color-primary: #d4d4d8; --button-secondary-background-fill: #e4e4e7; }
@@ -17,15 +19,18 @@
   button { background: var(--button-secondary-background-fill); cursor: pointer; }
   button:disabled { opacity: .5; cursor: default; }
   p { margin: 8px 0; }
+  #output:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 </style>
+</head>
+<body>
 <label for="blocks">Code from chat</label><select id="blocks"></select>
 <p>Select a snippet to review below. Only Run Python executes it.</p>
 <label for="code">Review / edit code</label><textarea id="code" spellcheck="false" placeholder="Write or paste Python here"></textarea>
 <div id="input-area" hidden><label for="stdin">Script input (optional)</label>
 <textarea id="stdin" rows="2" placeholder="One answer per input() call. Empty means a blank answer."></textarea></div>
 <p>Runs in your browser. The app caches Python and supported packages on first use. Desktop apps, GPU libraries and some network requests are unsupported.</p>
-<button id="run">Run Python</button> <button id="stop" disabled>Stop</button> <span id="status" role="status">Ready</span>
-<pre id="output" aria-label="Python output"></pre>
+<button type="button" id="run">Run Python</button> <button type="button" id="stop" disabled>Stop</button> <span id="status" role="status">Ready</span>
+<pre id="output" role="region" aria-label="Python output" tabindex="0"></pre>
 <script>
 const blocks = __CODE_BLOCKS__;
 const byId = id => document.getElementById(id);
@@ -194,4 +199,5 @@ byId('run').onclick = async () => {
 byId('stop').onclick = () => finish('Stopped');
 window.addEventListener('pagehide', () => finish('Stopped'));
 </script>
+</body>
 </html>

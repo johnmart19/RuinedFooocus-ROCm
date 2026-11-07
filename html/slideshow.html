@@ -1,86 +1,70 @@
-<html>
-    <style>
-        html, body {
-            height: 100%;
-            margin: 0;
-            padding: 0;
-        }
-        #wrapper{
-            background-size: contain; /* scales the image */
-            background-position: center; /* centers the image */
-        }
-        img{
-            max-width: 100%;
-            max-height: 100%;
-            bottom: 0;
-            left: 0;
-            margin: auto;
-            overflow: auto;
-            position: fixed;
-            right: 0;
-            top: 0;
-            -o-object-fit: contain;
-            object-fit: contain;
-            zoom: 10;
-            -webkit-transition: opacity 2s;
-            -moz-transition: opacity 2s;
-            transition: opacity 2s;
-            position: absolute;
-            opacity: 0;
-        }
-        img.fade{
-            opacity: 1;
-        }
-        .imgbox {
-            display: grid;
-            height: 100%;
-        }
-    </style>
-    <head>
-        <script type="module">
-            import { Client } from "https://cdn.jsdelivr.net/npm/@gradio/client@2.7.1/dist/index.min.js";
-            const app = await Client.connect(window.location.origin);
-            const displays = [document.getElementById('display1'),document.getElementById('display2')];
-            var currentdisplay = 0;
-            const updateperiod = 10000;
-            var images = [];
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Slideshow – RuinedFooocus</title>
+  <style>
+    html, body { height: 100%; margin: 0; background: #000; }
+    /* Both images share one grid cell so they can cross-fade. */
+    main { display: grid; height: 100%; }
+    img {
+      grid-area: 1 / 1; width: 100%; height: 100%; object-fit: contain;
+      opacity: 0; transition: opacity 2s;
+    }
+    img.fade { opacity: 1; }
+    @media (prefers-reduced-motion: reduce) {
+      img { transition: none; }
+    }
+  </style>
+  <script type="module">
+    import { Client } from "https://cdn.jsdelivr.net/npm/@gradio/client@2.7.1/dist/index.min.js";
+    const app = await Client.connect(window.location.origin);
+    const displays = [document.getElementById("display1"), document.getElementById("display2")];
+    const updatePeriod = 10000;
+    let currentDisplay = 0;
+    let images = [];
 
-            async function getImages() {
-                try {
-                    var result = await app.predict("/search", {text: "max:100000 all:"});
-                    images = result.data[0];    
-                    // Update list after 10 minutes
-                    setTimeout(getImages, 10*60*1000);
-                } catch (error) {
-                    // Error... Wait a while
-                    setTimeout(getImages, 10*60*1000);
-                }
-            }
+    async function getImages() {
+      try {
+        const result = await app.predict("/search", {text: "max:100000 all:"});
+        images = result.data[0];
+      } catch {
+        // Keep showing the current list; it is refreshed below.
+      }
+      // Update the list every 10 minutes.
+      setTimeout(getImages, 10 * 60 * 1000);
+    }
 
-            function loaded() {
-                displays[currentdisplay].classList.add('fade');
-                currentdisplay = (currentdisplay + 1)%2;
-                displays[currentdisplay].classList.remove('fade');
-            }
-            displays[0].classList.add('fade');
-            displays[0].addEventListener("load", loaded);
-            displays[1].addEventListener("load", loaded);
+    // Fade in the image that just loaded and fade out the other one.
+    function loaded(event) {
+      if (!event.target.dataset.pending) return;
+      delete event.target.dataset.pending;
+      displays[currentDisplay].classList.add("fade");
+      currentDisplay = (currentDisplay + 1) % 2;
+      displays[currentDisplay].classList.remove("fade");
+    }
+    for (const display of displays) display.addEventListener("load", loaded);
 
-            async function showImage() {
-                if (images.length >= 1) {
-                    displays[currentdisplay].src = images[Math.floor(Math.random() * images.length)];
-                }
-                setTimeout(showImage, updateperiod);
-            }
-            setTimeout(getImages, 10);
-            setTimeout(showImage, 5000);
-            displays[1].classList.add('fade'); // Initial fade in of logo
-        </script>
-    </head>
-    <body bgcolor=black>
-        <div class="imgbox">
-            <img id="display1">
-            <img id="display2" src="/gradio_api/file=html/logo.png">
-        </div>
-    </body>
+    function showImage() {
+      if (images.length) {
+        const display = displays[currentDisplay];
+        display.dataset.pending = "1";
+        display.alt = "Generated image";
+        display.src = images[Math.floor(Math.random() * images.length)];
+      }
+      setTimeout(showImage, updatePeriod);
+    }
+    setTimeout(getImages, 10);
+    setTimeout(showImage, 5000);
+    displays[1].classList.add("fade"); // Initial fade-in of the logo
+  </script>
+</head>
+<body>
+  <main>
+    <img id="display1" src="/gradio_api/file=html/logo.png" alt="">
+    <img id="display2" src="/gradio_api/file=html/logo.png" alt="RuinedFooocus logo">
+  </main>
+</body>
 </html>

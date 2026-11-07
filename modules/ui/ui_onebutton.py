@@ -669,13 +669,7 @@ def ui_onebutton(prompt, run_event, checkpoint=None):
                     )
                     add_ctrl("obp_imagemodechance", imagemodechance)
             with gr.Row():
-                gr.Markdown(
-                    """
-                            <font size="2">
-                            Override options (choose the related subject type first for better results)
-                            </font>
-                            """
-                )
+                gr.Markdown("#### Override options\nChoose the related subject type first for better results.")
             with gr.Row():
                 givensubject = gr.Textbox(label="Overwrite subject: ", value=custom_obp_values["givensubject"])
                 add_ctrl("obp_givensubject", givensubject)
@@ -684,13 +678,7 @@ def ui_onebutton(prompt, run_event, checkpoint=None):
                 givenoutfit = gr.Textbox(label="Overwrite outfit: ", value=custom_obp_values["givenoutfit"])
                 add_ctrl("obp_givenoutfit", givenoutfit)
             with gr.Row():
-                gr.Markdown(
-                    """
-                            <font size="2">
-                            Prompt fields
-                            </font>
-                            """
-                )
+                gr.Markdown("#### Prompt fields")
             with gr.Row():
                 with gr.Column():
                     prefixprompt = gr.Textbox(
@@ -702,13 +690,7 @@ def ui_onebutton(prompt, run_event, checkpoint=None):
                     )
                     add_ctrl("obp_suffixprompt", suffixprompt)
             with gr.Row():
-                gr.Markdown(
-                    """
-                            <font size="2">
-                            Additional options
-                            </font>
-                            """
-                )
+                gr.Markdown("#### Additional options")
             with gr.Row():
                 giventypeofimage = gr.Textbox(label="Overwrite type of image: ", value=custom_obp_values["giventypeofimage"])
                 add_ctrl("obp_giventypeofimage", giventypeofimage)

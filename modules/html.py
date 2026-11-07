@@ -11,13 +11,14 @@ html { font-size: clamp(100%, 50% + .4167vw, 150%); }
 .gradio-container .main.fillable.app { padding: 8px !important; }
 }</style>"""
 
+# The label names the progress bar for assistive technology with its status text.
 progress_html = """
-<div class="loader-container">
-  <div class="progress-container">
+<label class="loader-container">
+  <span class="progress-container">
     <progress value="*number*" max="100"></progress>
-  </div>
+  </span>
   <span>*text*</span>
-</div>
+</label>
 """
 scripts = """
 function generate_shortcut(){
@@ -58,6 +59,8 @@ function generate_shortcut(){
 generate_shortcut();
 """
 
+import html as html_text
+
 from shared import state
 
 
@@ -66,4 +69,5 @@ def make_progress_html(number, text):
         number = state["last_progress"]
     else:
         state["last_progress"] = number
-    return progress_html.replace("*number*", str(number)).replace("*text*", text)
+    # Status text can name files or prompts; it is text, never markup.
+    return progress_html.replace("*number*", str(number)).replace("*text*", html_text.escape(str(text)))
