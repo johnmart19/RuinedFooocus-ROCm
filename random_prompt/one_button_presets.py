@@ -9,6 +9,8 @@ class OneButtonPresets:
     OBP_FILE = Path("random_prompt/userfiles/obp_presets.json")
     CUSTOM_OBP = "Custom..."
     RANDOM_PRESET_OBP = "All (random)..."
+    # Renamed bundled presets; saved files and settings keep working.
+    RENAMED = {"WIERD HATS": "Weird Hats"}
 
     def __init__(self):
         self.opb_presets = self.load_obp_presets()
@@ -24,6 +26,10 @@ class OneButtonPresets:
         except:
             print(f"ERROR: Failed to load {self.OBP_FILE}")
             data = {}
+
+        for old, new in self.RENAMED.items():
+            if old in data and new not in data:
+                data[new] = data.pop(old)
 
         for name, settings in default_data.items():
             if name not in data:
@@ -64,6 +70,7 @@ class OneButtonPresets:
         self.opb_presets = self.load_obp_presets()
 
     def get_obp_preset(self, name):
+        name = self.RENAMED.get(name, name)
         # Saved settings or API calls may name a deleted/renamed preset; fall back to Standard.
         if name in self.opb_presets:
             return self.opb_presets[name]

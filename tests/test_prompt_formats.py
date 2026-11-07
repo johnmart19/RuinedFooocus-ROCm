@@ -87,6 +87,21 @@ class PresetFallbackTests(unittest.TestCase):
                 self.assertEqual(presets.get_obp_preset("Photography")["insanitylevel"], 5)
                 self.assertEqual(presets.get_obp_preset(presets.CUSTOM_OBP)["subject"], "all")
 
+    def test_renamed_presets_keep_saved_edits_and_selections(self):
+        from random_prompt.one_button_presets import OneButtonPresets
+        with tempfile.TemporaryDirectory() as tmp:
+            default, user = Path(tmp) / "default.json", Path(tmp) / "user.json"
+            default.write_text(json.dumps({"Standard": {"subject": "all", "insanitylevel": 5},
+                                           "Weird Hats": {"subject": "all", "insanitylevel": 7}}), encoding="utf-8")
+            user.write_text(json.dumps({"Standard": {"subject": "all", "insanitylevel": 5},
+                                        "WIERD HATS": {"subject": "all", "insanitylevel": 9}}), encoding="utf-8")
+            with mock.patch.object(OneButtonPresets, "OBP_FILE", user), \
+                 mock.patch.object(OneButtonPresets, "DEFAULT_OBP_FILE", default):
+                presets = OneButtonPresets()
+                self.assertNotIn("WIERD HATS", presets.opb_presets)
+                self.assertEqual(presets.get_obp_preset("Weird Hats")["insanitylevel"], 9)  # user edit kept
+                self.assertEqual(presets.get_obp_preset("WIERD HATS")["insanitylevel"], 9)  # old selection
+
 
 if __name__ == "__main__":
     unittest.main()

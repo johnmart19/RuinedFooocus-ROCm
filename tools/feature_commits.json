@@ -2,6 +2,21 @@
   "base": "cd7abb27064155f62dea002f745a8ce1b040c990",
   "features": [
     {
+      "id": "weird-hats-preset",
+      "subject": "Rename the Weird Hats preset without losing saved choices",
+      "requires": [
+        "docs-refresh",
+        "launchers",
+        "one-button-enhancer-join",
+        "retired-merge-assets"
+      ],
+      "tests": [
+        "test_prompt_formats.py",
+        "test_prompt_wildcards.py",
+        "test_local_prompt_enhancement.py"
+      ]
+    },
+    {
       "id": "retired-merge-assets",
       "subject": "Remove unused merge recipes and legacy model assets",
       "requires": [
