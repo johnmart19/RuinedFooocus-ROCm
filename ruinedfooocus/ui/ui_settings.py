@@ -568,17 +568,18 @@ def create_settings():
                 gr.Markdown(
                     "Save the current prompt, image model, LoRAs and generation controls using **Create → Save current defaults**. Advanced startup overrides are below."
                 )
-                with gr.Accordion(t("Preset"), open=False):
+                with gr.Accordion(t("Saved settings (PNG)"), open=False):
                     preset_mode = gr.Dropdown(
-                        label=t("Preset Mode"),
+                        label=t("Reuse from the PNG"),
+                        info="Used while a saved PNG preset is active in Create. Your current prompt is kept.",
                         interactive=True,
                         choices=[
-                            ("Full", 7),
-                            ("Models and Performance", 6),
-                            ("Models and Size", 5),
-                            ("Performance and Size", 3),
-                            ("Models only", 4),
-                            ("Performance only", 2),
+                            ("Model + LoRAs, sampling and size", 7),
+                            ("Model + LoRAs and sampling", 6),
+                            ("Model + LoRAs and size", 5),
+                            ("Sampling and size", 3),
+                            ("Model + LoRAs", 4),
+                            ("Sampling only", 2),
                             ("Size only", 1),
                         ],
                         value=settings.default_settings.get("preset_mode", 7),

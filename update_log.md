@@ -1,5 +1,7 @@
 ### Unreleased (development)
 
+- Put image model selection directly above Saved settings (PNG) in Generation; explain reusable PNG recipes and name their selectable setting groups clearly
+
 - Image-first Create layout: preview above the prompt/Generate controls, image model selection at the top of the right sidebar, and stacked controls on narrow screens
 
 - Source ZIP builder records exact source/backend revisions and excludes user data and weights; archive launches skip Git updates, source updates preserve local work, and runtime caches/reinstall requests follow the writable data directory

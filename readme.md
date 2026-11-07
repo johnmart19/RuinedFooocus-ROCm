@@ -61,7 +61,7 @@ If you see **"MetadataIncompleteBuffer"**, a model file is incomplete or damaged
 ## Ruined Edition Features
 
 The main destinations are **Create**, **Chat**, **Library**, **Models** and **Settings**. Create puts the image
-preview above the prompt and Generate button, with the image model selector and tool tabs in the right sidebar.
+preview above the prompt and Generate button, with the image model selector at the top of **Generation** in the right sidebar.
 On narrow screens the sidebar follows the image and prompt.
 Settings groups Appearance, Storage, Runtime, Defaults and Integrations. Text size applies immediately
 and is remembered by your browser; browser zoom and keyboard navigation remain available.
@@ -115,6 +115,10 @@ and is remembered by your browser; browser zoom and keyboard navigation remain a
 
 ### Generations and metadata
 
+- **Generation > Saved settings (PNG)** reuses a RuinedFooocus PNG's model/LoRAs, sampling and/or size for each
+  generation while keeping your current prompt. Clear the preset to return to your controls. Choose the
+  groups in **Settings > Defaults > Saved settings (PNG)**; **Save current defaults** instead remembers
+  your choices for the next launch.
 - Full generation settings are embedded in each PNG. Drag an earlier RuinedFooocus image onto the main window,
   or paste its JSON into the prompt box, to reuse them. **Details** shows the metadata.
 - `Ctrl+Enter` generates, `Esc` toggles edit mode, **Cancel** stops, and Image number `0` generates forever.

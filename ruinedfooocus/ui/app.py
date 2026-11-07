@@ -79,6 +79,7 @@ from PIL import Image
 inpaint_toggle = None
 shared.shared_cache["browser"] = ImageBrowser()
 t = shared.translate
+PNG_PRESET_LABEL = "Saved settings (PNG)"
 
 
 def find_unclosed_markers(s):
@@ -575,23 +576,26 @@ with shared.gradio_root as block:
                 return params, [file]
 
         with gr.Column(scale=2, min_width=0, elem_id="generation-controls") as right_col:
-            base_model = gr.Dropdown(
-                label="Image model",
-                choices=checkpoint_choices(
-                    shared.models.get_names("checkpoints"), settings["base_model"]
-                ),
-                value=settings["base_model"],
-                interactive=True,
-                elem_id="create-model",
-            )
-            preset_notice = gr.Markdown("", visible=False)
-            clear_preset_btn = gr.Button("Clear generation preset", visible=False, size="sm")
             with gr.Tab(label=t("Generation")):
+                base_model = gr.Dropdown(
+                    label="Image model",
+                    choices=checkpoint_choices(
+                        shared.models.get_names("checkpoints"), settings["base_model"]
+                    ),
+                    value=settings["base_model"],
+                    interactive=True,
+                    elem_id="create-model",
+                )
+                preset_notice = gr.Markdown("", visible=False)
+                clear_preset_btn = gr.Button("Clear generation preset", visible=False, size="sm")
                 preset_accordion = gr.Accordion(
-                    label="Preset:",
+                    label=t(PNG_PRESET_LABEL),
                     open=False,
                 )
                 with preset_accordion:
+                    gr.Markdown(
+                        "Reuse model/LoRAs, sampling and size from a saved RuinedFooocus PNG while writing new prompts. These settings stay active until cleared. Choose which groups to reuse in **Settings → Defaults → Saved settings (PNG)**."
+                    )
                     with gr.Group(), gr.Column():
                         preset_image = gr.Image(
                             buttons=["download", "fullscreen"],
@@ -624,7 +628,7 @@ with shared.gradio_root as block:
                     lambda selected: (
                         gr.update(interactive=not bool(selected)),
                         gr.update(
-                            value="A generation preset supplies model/settings. Clear it to use the current controls.",
+                            value="Saved PNG settings are active. Clear the preset to use your current controls.",
                             visible=bool(selected),
                         ),
                         gr.update(visible=bool(selected)),
@@ -1911,11 +1915,6 @@ with shared.gradio_root as block:
         def preset_select(preset_gallery, evt: gr.SelectData):
             path = evt.value["image"]["path"]
             preset = Path(path).with_suffix("").name
-            show_models = (
-                gr.update(visible="hidden")
-                if (0b100 & settings.get("preset_mode", 7))
-                else gr.update()
-            )
             show_perf = gr.update(visible=False)
             show_size = (
                 gr.update(visible="hidden")
@@ -1925,7 +1924,7 @@ with shared.gradio_root as block:
             return {
                 preset_image: gr.update(value=path),
                 preset_selection: gr.update(value=path),
-                preset_accordion: gr.update(label=t("Preset:") + " " + preset),
+                preset_accordion: gr.update(label=t(PNG_PRESET_LABEL) + ": " + preset),
                 performance_selection: show_perf,
                 performance_help: show_perf,
                 cfg: show_perf,
@@ -1951,7 +1950,7 @@ with shared.gradio_root as block:
 
             return {
                 preset_selection: gr.update(value=""),
-                preset_accordion: gr.update(label=t("Preset:")),
+                preset_accordion: gr.update(label=t(PNG_PRESET_LABEL)),
                 performance_selection: gr.update(visible=True),
                 performance_help: gr.update(visible=True),
                 cfg: gr.update(visible=show_perf),
@@ -1972,7 +1971,7 @@ with shared.gradio_root as block:
             preset = Path(path).with_suffix("").name
             return {
                 preset_selection: gr.update(value=path),
-                preset_accordion: gr.update(label=t("Preset:" + " " + preset)),
+                preset_accordion: gr.update(label=t(PNG_PRESET_LABEL) + ": " + preset),
                 performance_selection: gr.update(visible="hidden"),
                 performance_help: gr.update(visible="hidden"),
                 cfg: gr.update(visible="hidden"),

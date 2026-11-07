@@ -2,6 +2,16 @@
   "base": "cd7abb27064155f62dea002f745a8ce1b040c990",
   "features": [
     {
+      "id": "png-preset-ui-clarity",
+      "subject": "Place model selection above saved PNG settings and explain recipes",
+      "requires": ["image-first-layout"],
+      "tests": [
+        "test_ui_workflows.py",
+        "test_preset_image_guidance.py",
+        "test_generation_defaults.py"
+      ]
+    },
+    {
       "id": "image-first-layout",
       "subject": "Put the image above its prompt and model selection in the sidebar",
       "requires": ["llama-server-data-logs"],
