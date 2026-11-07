@@ -18,6 +18,7 @@ from ruinedfooocus.backends.llama.llama_installer import (
     rocm_target,
 )
 from ruinedfooocus.core.child_process import start_process
+from ruinedfooocus.core.paths import data_path
 from ruinedfooocus.features.chat.llama_vision import projector_path
 
 
@@ -128,7 +129,7 @@ class Server:
         self.runtime_label = self.backend
         if str(layers) == "0" and self.backend != "CPU":
             self.runtime_label += "; CPU weights"
-        log_path = Path(f"cache/llama.cpp/server-{port}.log")
+        log_path = data_path("cache", "llama.cpp", f"server-{port}.log")
         log_path.parent.mkdir(parents=True, exist_ok=True)
         try:
             with log_path.open("w", encoding="utf-8") as log:

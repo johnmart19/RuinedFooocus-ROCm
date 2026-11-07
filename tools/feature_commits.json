@@ -2,6 +2,12 @@
   "base": "cd7abb27064155f62dea002f745a8ce1b040c990",
   "features": [
     {
+      "id": "llama-server-data-logs",
+      "subject": "Keep native chat server logs in writable user data",
+      "requires": ["generation-hint-binding"],
+      "tests": ["test_llama_server.py"]
+    },
+    {
       "id": "generation-hint-binding",
       "subject": "Keep generation hints independent of changelog text",
       "requires": ["source-archive-runtime"],
