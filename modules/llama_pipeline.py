@@ -209,14 +209,21 @@ class pipeline:
 
     def index_sources(self, sources):
         if not isinstance(sources, list):
-            raise ValueError("Chat context must be a list of text or URL sources.")
+            raise ValueError("Chat context must be a list of text, file or URL sources.")
         documents = []
         for source in sources:
             if (not isinstance(source, (list, tuple)) or len(source) != 2
-                    or source[0] not in ("text", "url") or not isinstance(source[1], str)):
-                raise ValueError("Each chat context source must be [text, content] or [url, address].")
+                    or source[0] not in ("text", "file", "url") or not isinstance(source[1], str)):
+                raise ValueError("Each chat context source must be [text, content], [file, path] or [url, address].")
             kind, content = source
-            if kind == "url":
+            if kind == "file":
+                # Bundled documents, relative to the app folder, keep bots usable offline.
+                root = Path(__file__).resolve().parents[1]
+                path = (root / content).resolve()
+                if root not in path.parents or not path.is_file():
+                    raise ValueError(f"Chat context file not found inside the app folder: {content}")
+                content = path.read_text(encoding="utf-8")
+            elif kind == "url":
                 filename = load_file_from_url(content, model_dir="cache/embeds",
                     progress=True, file_name=url_to_filename(content))
                 content = Path(filename).read_text(encoding="utf-8")
