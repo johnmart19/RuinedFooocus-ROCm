@@ -330,9 +330,8 @@ def _image_operation(payload, selected, defaults=None):
                     for key in FIELD_SCHEMA if key in payload or (same_checkpoint and key in defaults)}
         values.update(resolve_guidance(guidance, settings, family, selected['name']))
         if default_control:
-            from modules.image_components import native_edit_supported
-            if native_edit_supported(family, selected['name'], values.get('moss_image_edit_format', 'Disabled')):
-                control = {"type": "edit"}
+            from modules.image_components import edit_control
+            control = edit_control(family, selected['name'], values.get('moss_image_edit_format', 'Disabled'))
         from modules.image_guidance import normalize_reference_images
         references = normalize_reference_images(references, input_image, family, values['moss_image_edit_format'])
     elif references:

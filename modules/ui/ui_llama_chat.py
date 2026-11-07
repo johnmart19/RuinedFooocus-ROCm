@@ -210,12 +210,30 @@ def create_chat(image_controls=None):
                         info='Optional for this message only. New image ignores previous generations and retained uploads.')
                     image_reference = gr.Image(label='Chat image reference', type='pil', image_mode='RGBA',
                         format='png', visible=False, height=200)
+                    edit_mode = gr.Markdown('', visible=False)
                     image_denoise = gr.Slider(label='Image-to-image denoise', minimum=0.01, maximum=1.0,
                         value=0.25, step=0.01, visible=False,
                         info='Lower values preserve the source; higher values redraw more.')
-                    image_source.change(lambda mode: (gr.update(visible=mode == 'Uploaded image'),
-                        gr.update(visible=mode != 'New image')), inputs=image_source,
-                        outputs=[image_reference, image_denoise], api_visibility='undocumented')
+                    checkpoint_control = image_controls.get('base_model_name')
+                    format_control = image_controls.get('moss_image_edit_format')
+
+                    def reference_controls(mode, checkpoint=None, moss_format=None):
+                        # Native edit models edit the reference directly; others use denoise.
+                        from modules.ui.ui_controlnet import checkpoint_features
+                        native = bool(checkpoint) and checkpoint_features(checkpoint, moss_format)['native_edit']
+                        using = mode != 'New image'
+                        note = ('Native image edit: the selected checkpoint edits the reference directly.' if native
+                                else 'Image to image: this checkpoint has no native editing, so the denoise below applies.')
+                        return (gr.update(visible=mode == 'Uploaded image'),
+                                gr.update(visible=using and not native),
+                                gr.update(visible=using, value=note))
+
+                    reference_inputs = [image_source]
+                    if checkpoint_control is not None:
+                        reference_inputs += [checkpoint_control] + ([format_control] if format_control is not None else [])
+                    gr.on(triggers=[control.change for control in reference_inputs], fn=reference_controls,
+                          inputs=reference_inputs, outputs=[image_reference, image_denoise, edit_mode],
+                          api_visibility='undocumented')
                 with gr.Accordion("Run Python", open=True, visible=False) as python_panel:
                     load_code = gr.Button("Load code from chat")
                     code_runner = gr.HTML("", js_on_load=(Path(__file__).resolve().parents[2]

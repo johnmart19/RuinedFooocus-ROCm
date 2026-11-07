@@ -469,12 +469,22 @@ class pipeline:
                     # Source intent comes from the UI, never from tool arguments or old outputs.
                     tmp_data['input_image'] = reference
                     tmp_data['reference_images'] = None
-                    tmp_data['controlnet'] = ({'type': 'img2img',
-                        'denoise': gen_data.get('image_denoise', 0.25)} if reference is not None else {})
+                    tmp_data['controlnet'] = {}
 
                     import shared
                     if not tmp_data.get("base_model_name"):
                         raise ValueError("Select a checkpoint in Main before generating an image.")
+                    if reference is not None:
+                        # Edit natively when the checkpoint can, else by image-to-image.
+                        from modules.image_components import edit_control
+                        checkpoint = tmp_data["base_model_name"]
+                        path = shared.models.get_file("checkpoints", checkpoint)
+                        family = ((shared.models.detect_checkpoint_base(path) if path else None)
+                                  or shared.models.get_model_base(
+                                      shared.models.get_models_by_path("checkpoints", checkpoint)))
+                        tmp_data['controlnet'] = edit_control(
+                            family, checkpoint, tmp_data.get('moss_image_edit_format', 'Disabled'),
+                            gen_data.get('image_denoise', 0.25))
                     # Use the worker's normal model resolution/download path.
                     # Default models need not already exist in the scanned list.
                     review_enabled = vision_enabled

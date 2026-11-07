@@ -88,6 +88,35 @@ def powerup_choices(video, sdxl=True, native_edit=False):
     return choices + [(NEWCN, NEWCN)]
 
 
+def preset_for(kind):
+    """First saved tool preset of a type, e.g. the stock Img2Img or Native image edit."""
+    for name, options in controlnet.cn_options.items():
+        if options.get('type') == kind and name != 'Image to image (preserve details)':
+            return name
+    return None
+
+
+def edit_tool(features):
+    """The tool that edits an uploaded image on this checkpoint, if any."""
+    if features['video']:
+        return None
+    return preset_for('edit') if features['native_edit'] else preset_for('img2img')
+
+
+def fallback_selection(features, selection, fell_back):
+    """Keep editing across checkpoint changes: native edit falls back to image to
+    image on other checkpoints, and returns when an edit-capable one is chosen."""
+    choices = [value for _, value in powerup_choices(**features)]
+    kind = controlnet.cn_options.get(selection, {}).get('type')
+    if kind == 'edit' and not features['native_edit']:
+        selection, fell_back = preset_for('img2img'), True
+    elif fell_back and kind == 'img2img' and features['native_edit']:
+        selection, fell_back = preset_for('edit'), False
+    if selection not in choices:
+        selection, fell_back = 'None', False
+    return selection, fell_back
+
+
 def add_controlnet_tab(main_view, inpaint_view, prompt, image_number, run_event, base_model,
                        preset_selection=None, main_model=None, upscale_scale=None, upscale_target=None):
     initial_features = checkpoint_features(base_model.value)
@@ -99,9 +128,13 @@ def add_controlnet_tab(main_view, inpaint_view, prompt, image_number, run_event,
                 label=t("Image tool"),
                 choices=powerup_choices(**initial_features),
                 value="None",
-                info='None generates a fresh image. Select Image to image or Native image edit to use an upload.',
+                info='None generates a fresh image. Adding an image selects Native image edit when the '
+                     'checkpoint supports it, otherwise Image to image.',
             )
             add_ctrl("cn_selection", cn_selection)
+        # True while Image to image stands in for a native edit the checkpoint lacks.
+        edit_fell_back = gr.State(False)
+        cn_selection.input(lambda: False, outputs=edit_fell_back, api_visibility='undocumented', queue=False)
 
         cn_name = gr.Textbox(
             label=t("Tool preset name"),
@@ -406,34 +439,49 @@ def add_controlnet_tab(main_view, inpaint_view, prompt, image_number, run_event,
             trigger_mode='always_last', concurrency_id='image_input_context',
             concurrency_limit=1, api_visibility='undocumented')
 
-        def model_changed(checkpoint, selection, moss_format=None):
+        def model_changed(checkpoint, selection, moss_format=None, fell_back=False):
             features = checkpoint_features(checkpoint, moss_format)
-            choices = powerup_choices(**features)
-            if selection not in [value for _, value in choices]:
-                selection = "None"
+            selection, fell_back = fallback_selection(features, selection, fell_back)
             types = control_types(features)
-            return [gr.update(choices=choices, value=selection),
-                    gr.update(choices=types, value=types[0])]
+            return [gr.update(choices=powerup_choices(**features), value=selection),
+                    gr.update(choices=types, value=types[0]), fell_back]
 
-        base_model.change(model_changed, inputs=[base_model, cn_selection, moss_format_control],
-                          outputs=[cn_selection, cn_type],
+        base_model.change(model_changed, inputs=[base_model, cn_selection, moss_format_control, edit_fell_back],
+                          outputs=[cn_selection, cn_type, edit_fell_back],
                           api_visibility="undocumented")
 
-        def edit_format_changed(moss_format, checkpoint, selection, control_type):
+        def edit_format_changed(moss_format, checkpoint, selection, control_type, fell_back=False):
             features = checkpoint_features(checkpoint, moss_format)
+            previous = selection
+            selection, fell_back = fallback_selection(features, selection, fell_back)
             kind = tool_kind(selection, control_type)
             denoise = gr.update()
             if kind == "img2img":
                 denoise = gr.update(visible=True, label=t("Denoise"),
                     minimum=0.01, maximum=1.0,
                     info="Lower values preserve the input; higher values allow larger changes.")
-            # Update presentation only: preserve image pixels, selected preset,
-            # and the user's current denoise value when switching edit formats.
-            return [gr.update(choices=powerup_choices(**features)), denoise]
+            # Preserve image pixels and the user's current denoise value when
+            # switching edit formats; only the tool follows the new capability.
+            # Re-send the selection only when the tool changes, so presets stay selected.
+            changed = {} if selection == previous else {'value': selection}
+            return [gr.update(choices=powerup_choices(**features), **changed), denoise, fell_back]
 
         moss_format_control.change(edit_format_changed,
-            inputs=[moss_format_control, base_model, cn_selection, cn_type],
-            outputs=[cn_selection, cn_strength], api_visibility="undocumented")
+            inputs=[moss_format_control, base_model, cn_selection, cn_type, edit_fell_back],
+            outputs=[cn_selection, cn_strength, edit_fell_back], api_visibility="undocumented")
+
+        def image_added(image, selection, checkpoint, moss_format=None):
+            # An upload with no tool means "edit this image": pick the best tool.
+            if image is None or selection != "None":
+                return gr.update()
+            tool = edit_tool(checkpoint_features(checkpoint, moss_format))
+            if tool is None:
+                return gr.update()
+            gr.Info(f"Image added: using {'Image to image' if tool == 'Img2Img' else tool}.")
+            return gr.update(value=tool)
+
+        input_image.upload(image_added, inputs=[input_image, cn_selection, base_model, moss_format_control],
+                           outputs=cn_selection, api_visibility="undocumented")
 
         @inpaint_toggle.change(
             api_visibility='undocumented',

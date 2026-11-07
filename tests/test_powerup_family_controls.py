@@ -11,7 +11,8 @@ SOURCE = ROOT / 'modules/ui/ui_controlnet.py'
 
 def functions():
     tree = ast.parse(SOURCE.read_text(encoding='utf-8'))
-    names = {'checkpoint_features', 'control_types', 'input_label', 'tool_kind', 'input_context', 'powerup_choices'}
+    names = {'checkpoint_features', 'control_types', 'input_label', 'tool_kind', 'input_context', 'powerup_choices',
+             'preset_for', 'edit_tool', 'fallback_selection'}
     nodes = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name in names
              or isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == 'SDXL_CONTROLS' for target in node.targets)]
     models = SimpleNamespace(get_models_by_path=Mock(return_value={}), get_model_base=Mock(return_value='Pony'),
@@ -113,6 +114,25 @@ class PowerUpFamilyTests(unittest.TestCase):
         self.assertEqual(scope['input_context'](True, 'None', 'Img2img', 'selected')[2],
                          {'visible': False, 'value': False})
         self.assertEqual(scope['input_context'](False, 'None', 'Img2img', 'selected')[0]['label'], 'Image edit reference')
+
+    def test_uploads_pick_the_best_edit_tool_and_edits_survive_checkpoint_changes(self):
+        scope, models = functions()
+        scope['controlnet'].cn_options['Native image edit'] = {'type': 'edit'}
+        scope['controlnet'].controlnet_models['edit'] = None
+        models.detect_checkpoint_base.return_value = 'QwenImage'
+        qwen = scope['checkpoint_features']('selected')
+        models.detect_checkpoint_base.return_value = 'SDXL 1.0'
+        sdxl = scope['checkpoint_features']('selected')
+        self.assertEqual(scope['edit_tool'](qwen), 'Native image edit')
+        self.assertEqual(scope['edit_tool'](sdxl), 'Img2Img')
+        fallback = scope['fallback_selection']
+        # Native edit falls back to image to image, and returns on an edit-capable checkpoint.
+        self.assertEqual(fallback(sdxl, 'Native image edit', False), ('Img2Img', True))
+        self.assertEqual(fallback(qwen, 'Img2Img', True), ('Native image edit', False))
+        # A deliberate image-to-image choice and other tools are left alone.
+        self.assertEqual(fallback(qwen, 'Img2Img', False), ('Img2Img', False))
+        self.assertEqual(fallback(sdxl, 'Canny', False), ('Canny', False))
+        self.assertEqual(fallback(qwen, 'Canny', False), ('None', False))
 
     def test_moss_format_toggle_updates_presentation_without_clearing_inputs(self):
         scope, models = functions()

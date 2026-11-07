@@ -59,8 +59,11 @@ class ImageSourceTests(unittest.TestCase):
         for control in ({'type':'img2img'},{'type':'edit'}):
             with self.subTest(control=control), self.assertRaisesRegex(ValueError,'Add an image'):
                 self.route(control,None,native=True)
-        with self.assertRaisesRegex(ValueError,'image-edit checkpoint'):
-            self.route({'type':'edit'},Image.new('RGB',(64,64)))
+        # Native edit on a checkpoint without it edits by image-to-image instead of failing.
+        fallback = self.route({'type':'edit'},Image.new('RGB',(64,64)))
+        self.assertEqual((fallback['control_type'], fallback['controlnet']), ('img2img', {'type':'img2img','denoise':0.25}))
+        native = self.route({'type':'edit'},Image.new('RGB',(64,64)),native=True)
+        self.assertEqual(native['control_type'], 'edit')
         with self.assertRaisesRegex(ValueError,'denoise'):
             self.route({'type':'img2img','denoise':0},Image.new('RGB',(64,64)))
 

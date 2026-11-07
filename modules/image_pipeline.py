@@ -562,17 +562,24 @@ class pipeline:
             architecture, guidance['moss_image_edit_format'])
         gen_data['reference_image_count'] = (1 if input_image is not None else 0) + len(additional_references)
         if control_type == 'edit':
+            if input_image is None:
+                raise ValueError('Add an image in Image tools.')
+            native = image_edit or hidream_edit
             if architecture == 'Flux':
                 name = gen_data.get('base_model_name', '')
                 path = shared.models.get_file('checkpoints', name)
                 metadata = shared.models.get_models_by_path('checkpoints', path, fetch=False) if path else {}
-                if 'kontext' not in f'{name} {shared.models.get_model_base(metadata)}'.lower():
-                    raise ValueError('Native image edit requires an image-edit checkpoint.')
-                controlnet['type'] = control_type = 'kontext'
-            elif not image_edit and not hidream_edit:
-                raise ValueError('Native image edit requires an image-edit checkpoint and its edit format.')
-            if input_image is None:
-                raise ValueError('Add an image in Image tools.')
+                native = 'kontext' in f'{name} {shared.models.get_model_base(metadata)}'.lower()
+                if native:
+                    controlnet = dict(controlnet, type='kontext')
+                    control_type = 'kontext'
+            if not native:
+                # Saved presets or API requests may ask for native editing on a
+                # checkpoint without it; edit by image-to-image instead of failing.
+                from modules.image_components import IMG2IMG_DENOISE
+                print("Native image edit is not available for this checkpoint; using image to image.")
+                controlnet = {'type': 'img2img', 'denoise': IMG2IMG_DENOISE}
+                control_type = 'img2img'
         if control_type in modules.controlnet.controlnet_models and control_type not in ("upscale", "rembg", "faceswap"):
             if gen_data.get('inpaint_toggle') and control_type == 'img2img':
                 # Inpainting encodes Main with its mask, not the optional tool upload.

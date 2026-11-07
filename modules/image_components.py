@@ -70,6 +70,16 @@ def native_edit_supported(family, name='', moss_format='Disabled'):
             or 'kontext' in f'{name} {family}'.lower())
 
 
+IMG2IMG_DENOISE = 0.25  # Gentle default: keeps the source recognisable.
+
+
+def edit_control(family, name='', moss_format='Disabled', denoise=IMG2IMG_DENOISE):
+    """How to edit a supplied image: natively when possible, else image-to-image."""
+    if native_edit_supported(family, name, moss_format):
+        return {'type': 'edit'}
+    return {'type': 'img2img', 'denoise': denoise}
+
+
 def inventory(checkpoint, family, settings, paths):
     """Resolve local image dependencies. This function never downloads or hashes."""
     checkpoint = Path(checkpoint)
