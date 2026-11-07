@@ -8,7 +8,7 @@ import gradio as gr
 import numpy as np
 from PIL import Image
 
-from modules.inpaint_utils import editor_payload
+from ruinedfooocus.features.image_editing.inpaint_utils import editor_payload
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -31,7 +31,7 @@ def fixture(mode='RGBA'):
 
 class ImageInputTransportTests(unittest.TestCase):
     def test_image_tool_roundtrip_preserves_pixels_and_embedded_settings(self):
-        control = component('modules/ui/ui_controlnet.py', 'input_image')
+        control = component('ruinedfooocus/features/image_editing/ui.py', 'input_image')
         for mode in ('RGB', 'RGBA'):
             with self.subTest(mode=mode):
                 image = fixture(mode)
@@ -42,19 +42,19 @@ class ImageInputTransportTests(unittest.TestCase):
                     self.assertEqual(restored.info['parameters'], image.info['parameters'])
 
     def test_standalone_upscale_upload_preserves_rgba_pixels(self):
-        control = component('webui.py', 'upscale_upload')
+        control = component('ruinedfooocus/ui/app.py', 'upscale_upload')
         image = fixture()
         with control.preprocess(control.postprocess(image)) as restored:
             self.assertEqual(restored.tobytes(), image.tobytes())
 
     def test_inpaint_background_survives_editor_transport_without_compression(self):
-        control = component('webui.py', 'inpaint_view')
+        control = component('ruinedfooocus/ui/app.py', 'inpaint_view')
         image = fixture('RGB')
         restored = control.preprocess(control.postprocess(editor_payload(image)))
         np.testing.assert_array_equal(restored['background'], np.asarray(image.convert('RGBA')))
 
     def test_additional_reference_gallery_keeps_fine_rgb_details(self):
-        control = component('modules/ui/ui_image_guidance.py', 'references')
+        control = component('ruinedfooocus/features/image_editing/ui_guidance.py', 'references')
         image = fixture('RGB')
         with control.preprocess(control.postprocess([image]))[0][0] as restored:
             self.assertEqual(restored.size, image.size)

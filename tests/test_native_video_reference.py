@@ -1,3 +1,4 @@
+from ruinedfooocus.core.paths import asset_path, resource_path
 """CPU-only contracts for the native reference's sampler choice."""
 import ast
 from pathlib import Path
@@ -46,7 +47,7 @@ class NativeWanSamplerTests(unittest.TestCase):
         method = next(node for node in klass.body if isinstance(node, ast.FunctionDef) and node.name == 'calculate_sigmas')
         discard = next(node for node in klass.body if isinstance(node, ast.Assign)
                        and any(isinstance(target, ast.Name) and target.id == 'DISCARD_PENULTIMATE_SIGMA_SAMPLERS' for target in node.targets))
-        scope = {'torch': types.SimpleNamespace(cat=np.concatenate),
+        scope = {'asset_path': asset_path, 'resource_path': resource_path, 'torch': types.SimpleNamespace(cat=np.concatenate),
                  'calculate_sigmas': Mock(return_value=np.array([1., .9, .7, .4, 0.]))}
         isolated = ast.fix_missing_locations(ast.Module(body=[discard, method], type_ignores=[]))
         exec(compile(isolated, str(path), 'exec'), scope)

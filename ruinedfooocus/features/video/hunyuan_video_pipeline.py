@@ -1,0 +1,464 @@
+from ruinedfooocus.core.paths import asset_path
+from ruinedfooocus.features.models.resource_defaults import resource_name
+from ruinedfooocus.features.video.video_preview import video_callback
+from ruinedfooocus.features.video.video_output import save_mp4
+import numpy as np
+import os
+import torch
+from ruinedfooocus.backends.comfy.gguf_loader import load_diffusion_model as load_gguf_model
+from ruinedfooocus.features.video.video_settings import frame_count
+import traceback
+
+import ruinedfooocus.app.async_worker as worker
+from ruinedfooocus.core.util import generate_temp_filename
+from PIL import Image
+
+import os
+from comfy.model_base import BaseModel, SDXL, SD3, Flux, Lumina2, HunyuanVideo
+from ruinedfooocus.app.state import path_manager, settings
+import ruinedfooocus.app.state as shared
+from pathlib import Path
+import random
+from ruinedfooocus.features.generation.pipeline_utils import (
+    clean_prompt_cond_caches,
+)
+
+import comfy.utils
+import comfy.clip_vision
+import comfy.model_management
+from comfy.sd import load_checkpoint_guess_config
+from tqdm import tqdm
+
+
+
+from nodes import (
+    CLIPTextEncode,
+    CLIPVisionEncode,
+    VAEDecodeTiled,
+)
+
+from comfy_extras.nodes_custom_sampler import SamplerCustomAdvanced, RandomNoise, BasicScheduler, KSamplerSelect, BasicGuider
+from comfy_extras.nodes_hunyuan import EmptyHunyuanLatentVideo, HunyuanImageToVideo, TextEncodeHunyuanVideo_ImageToVideo
+from comfy_extras.nodes_model_advanced import ModelSamplingSD3
+from comfy_extras.nodes_flux import FluxGuidance
+
+
+class pipeline:
+    pipeline_type = ["hunyuan_video"]
+
+    class StableDiffusionModel:
+        def __init__(self, unet, vae, clip, clip_vision):
+            self.unet = unet
+            self.vae = vae
+            self.clip = clip
+            self.clip_vision = clip_vision
+
+        def to_meta(self):
+            if self.unet is not None:
+                self.unet.model.to("meta")
+            if self.clip is not None:
+                self.clip.cond_stage_model.to("meta")
+            if self.vae is not None:
+                self.vae.first_stage_model.to("meta")
+
+    model_hash = ""
+    model_base = None
+    model_hash_patched = ""
+    model_base_patched = None
+    conditions = None
+
+
+    # Optional function
+    def parse_gen_data(self, gen_data):
+        if gen_data.get("video_duration") is not None:
+            gen_data["original_image_number"] = frame_count(gen_data["video_duration"], gen_data.get("video_fps", 24))
+        else:
+            gen_data["original_image_number"] = 1 + ((int(gen_data["image_number"] / 4.0) + 1) * 4)
+        gen_data["image_number"] = 1
+        gen_data["show_preview"] = False
+        return gen_data
+
+    def load_base_model(self, name, unet_only=True, input_unet=None, hash=None): # Hunyuan_Video never has the clip and vae models?
+
+        # Check if model is already loaded
+        components = {key: value for key, value in settings.default_settings.items()
+                      if key.startswith(("clip_", "vae_"))}
+        if (self.model_hash == name and self.model_base is not None
+                and components == getattr(self, "component_settings", None)):
+            return
+        self.component_settings = components
+
+        self.model_base = None
+        self.model_hash = ""
+        self.model_base_patched = None
+        self.model_hash_patched = ""
+        self.conditions = None
+
+        filename = shared.models.get_model_path("checkpoints", name, hash=hash)
+        if filename is None:
+            raise FileNotFoundError(f"Could not find video checkpoint: {name}")
+        filename = str(filename)
+
+        print(f"Loading Hunyuan video {'unet' if unet_only else 'model'}: {name}")
+
+        if filename.endswith(".gguf") or unet_only:
+            with torch.torch.inference_mode():
+                try:
+                    if filename.endswith(".gguf"):
+                        unet = load_gguf_model(filename)
+                    else:
+                        # Let ComfyUI choose a supported dtype for this device.
+                        model_options = {}
+                        unet = comfy.sd.load_diffusion_model(filename, model_options=model_options)
+
+                    clip_paths = []
+                    clip_names = []
+
+                    if isinstance(unet.model, HunyuanVideo):
+                        clip_name = resource_name("clip_l", settings.default_settings)
+                        clip_names.append(str(clip_name))
+                        clip_path = path_manager.get_folder_file_path(
+                            "clip",
+                            clip_name,
+                            default = os.path.join(path_manager.model_paths["clip_path"], clip_name)
+                        )
+                        clip_paths.append(str(clip_path))
+                        # https://huggingface.co/calcuis/hunyuan-gguf/tree/main
+                        clip_name = resource_name("clip_llava", settings.default_settings)
+                        clip_names.append(str(clip_name))
+                        clip_path = path_manager.get_folder_file_path(
+                            "clip",
+                            clip_name,
+                            default = os.path.join(path_manager.model_paths["clip_path"], clip_name)
+                        )
+                        clip_paths.append(str(clip_path))
+                        clip_type = comfy.sd.CLIPType.HUNYUAN_VIDEO
+                        # https://huggingface.co/calcuis/hunyuan-gguf/tree/main
+                        vae_name = resource_name("vae_hunyuan_video", settings.default_settings)
+
+                    else:
+                        print(f"ERROR: Not a Hunyuan Video model?")
+                        unet = None
+                        return
+
+                    print(f"Loading CLIP: {clip_names}")
+                    clip_type = comfy.sd.CLIPType.HUNYUAN_VIDEO
+                    clip = comfy.sd.load_clip(ckpt_paths=clip_paths, clip_type=clip_type, model_options={})
+
+                    vae_path = path_manager.get_folder_file_path(
+                        "vae",
+                        vae_name,
+                        default = os.path.join(path_manager.model_paths["vae_path"], vae_name)
+                    )
+                    print(f"Loading VAE: {vae_name}")
+                    sd, metadata = comfy.utils.load_torch_file(str(vae_path), return_metadata=True)
+                    vae = comfy.sd.VAE(sd=sd, metadata=metadata)
+                    vae.throw_exception_if_invalid()
+
+                    clip_vision = None
+                except Exception as e:
+                    raise RuntimeError(f"Could not load video model {name}: {e}") from e
+
+        else:
+            try:
+                with torch.torch.inference_mode():
+                    unet, clip, vae, clip_vision = load_checkpoint_guess_config(filename)
+
+                if clip == None or vae == None:
+                    raise
+            except:
+                print(f"Failed. Trying to load as unet.")
+                self.load_base_model(
+                    filename,
+                    unet_only=True
+                )
+                return
+
+        if unet == None:
+            print(f"Failed to load {name}")
+            self.model_base = None
+            self.model_hash = ""
+        else:
+            self.model_base = self.StableDiffusionModel(
+                unet=unet, clip=clip, vae=vae, clip_vision=clip_vision
+            )
+            if not (
+                isinstance(self.model_base.unet.model, HunyuanVideo)
+            ):
+                print(
+                    f"Model {type(self.model_base.unet.model)} not supported. Expected Hunyuan Video model."
+                )
+                self.model_base = None
+
+            if self.model_base is not None:
+                self.model_hash = name
+                print(f"Base model loaded: {self.model_hash}")
+        return
+
+    def load_keywords(self, lora):
+        filename = lora.replace(".safetensors", ".txt")
+        try:
+            with open(filename, "r") as file:
+                data = file.read()
+            return data
+        except FileNotFoundError:
+            return " "
+
+    def load_loras(self, loras):
+        loaded_loras = []
+
+        model = self.model_base
+#        for name, weight in loras:
+#           if name == "None" or weight == 0:
+#               continue
+#           filename = str(shared.models.get_file("loras", name))
+
+        for lora in loras:
+            name = lora.get("name", "None")
+            weight = lora.get("weight", 0)
+            hash = lora.get("hash", None)
+            if name == "None" or weight == 0:
+                continue
+
+            filename = shared.models.get_model_path(
+                "loras",
+                name,
+                hash=hash,
+            )
+
+            if filename is None:
+                raise FileNotFoundError(f"Could not find video LoRA: {name}")
+
+            print(f"Loading LoRAs: {name}")
+            try:
+                lora = comfy.utils.load_torch_file(filename, safe_load=True)
+                unet, clip = comfy.sd.load_lora_for_models(
+                    model.unet, model.clip, lora, weight, weight
+                )
+                model = self.StableDiffusionModel(
+                    unet=unet,
+                    clip=clip,
+                    vae=model.vae,
+                    clip_vision=model.clip_vision,
+                )
+                loaded_loras += [(name, weight)]
+            except Exception as error:
+                raise RuntimeError(f"Could not load video LoRA {name}: {error}") from error
+        self.model_base_patched = model
+        if self.model_hash_patched != str(loras):
+            self.conditions = None
+        self.model_hash_patched = str(loras)
+
+        print(f"LoRAs loaded: {loaded_loras}")
+
+        return
+
+    def refresh_controlnet(self, name=None):
+        return
+
+    def clean_prompt_cond_caches(self):
+        return
+
+    conditions = None
+
+    def textencode(self, id, text, clip_skip):
+        update = False
+        hash = f"{text} {clip_skip}"
+        if hash != self.conditions[id]["text"]:
+            self.conditions[id]["cache"] = CLIPTextEncode().encode(
+                clip=self.model_base_patched.clip, text=text
+            )[0]
+        self.conditions[id]["text"] = hash
+        update = True
+        return update
+
+    @torch.inference_mode()
+    def process(
+        self,
+        gen_data=None,
+        callback=None,
+    ):
+        if self.model_base_patched is None:
+            raise RuntimeError("Video model is not loaded. Check its required components.")
+        seed = gen_data["seed"] if isinstance(gen_data["seed"], int) else random.randint(1, 2**32)
+
+        if callback is not None:
+            worker.add_result(
+                gen_data["task_id"],
+                "preview",
+                (-1, f"Processing text encoding ...", str(asset_path('logo.png')))
+            )
+
+        if self.conditions is None:
+            self.conditions = clean_prompt_cond_caches()
+
+        positive_prompt = gen_data["positive_prompt"]
+        negative_prompt = gen_data["negative_prompt"]
+        clip_skip = 1
+
+        if gen_data["input_image"] is None:
+            self.textencode("+", positive_prompt, clip_skip)
+        self.textencode("-", negative_prompt, clip_skip)
+
+        callback_function = video_callback(self.model_base_patched.unet, gen_data)
+
+        # Noise
+        noise = RandomNoise().get_noise(noise_seed=seed)[0]
+
+        # latent_image
+        # t2v or i2v?
+        if gen_data["input_image"]:
+            image = np.array(gen_data["input_image"]).astype(np.float32) / 255.0
+            image = torch.from_numpy(image)[None,]
+
+            # Native v2 I2V embeds the first frame in LLaVA's prompt as well as
+            # anchoring its VAE latent. A text-only prompt misses that input.
+            if self.model_base_patched.clip_vision is None:
+                vision_name = resource_name("clip_hunyuan_vision", settings.default_settings)
+                vision_path = path_manager.get_folder_file_path("clip_vision", vision_name)
+                self.model_base_patched.clip_vision = comfy.clip_vision.load(str(vision_path))
+                if self.model_base_patched.clip_vision is None:
+                    raise RuntimeError("Hunyuan I2V requires a valid LLaVA vision encoder")
+            vision = CLIPVisionEncode().encode(self.model_base_patched.clip_vision, image, crop="none")[0]
+            image_positive = TextEncodeHunyuanVideo_ImageToVideo.execute(
+                self.model_base_patched.clip, vision, positive_prompt, image_interleave=4)[0]
+
+            (positive, latent_image) = HunyuanImageToVideo().encode(
+                positive = image_positive,
+                vae = self.model_base_patched.vae,
+                width = gen_data["width"],
+                height = gen_data["height"],
+                length = gen_data["original_image_number"],
+                batch_size = 1,
+                #guidance_type = "v1 (concat)", # "v2 (replace)"
+                guidance_type = "v2 (replace)",
+                start_image = image,
+            )
+        else:
+            # latent_image
+            latent_image = EmptyHunyuanLatentVideo().execute(
+                width = gen_data["width"],
+                height = gen_data["height"],
+                length = gen_data["original_image_number"],
+                batch_size = 1,
+            )[0]
+            positive = self.conditions["+"]["cache"]
+
+        negative = self.conditions["-"]["cache"]
+
+        # Guider
+        model_sampling = ModelSamplingSD3().patch(
+            model = self.model_base_patched.unet,
+            shift = 7.0,
+        )[0]
+        flux_guideance = FluxGuidance().append(
+            conditioning = positive,
+            guidance = gen_data["cfg"],
+        )[0]
+
+        guider = BasicGuider().get_guider(
+            model = model_sampling,
+            conditioning = flux_guideance,
+        )[0]
+
+        # Sampler
+        ksampler = KSamplerSelect().get_sampler(
+            sampler_name = gen_data["sampler_name"],
+        )[0]
+
+        # Sigmas
+        sigmas = BasicScheduler().get_sigmas(
+            model = model_sampling,
+            scheduler = gen_data["scheduler"],
+            steps = gen_data["steps"],
+            denoise = 1,
+        )[0]
+
+        worker.add_result(
+            gen_data["task_id"],
+            "preview",
+            (-1, f"Generating ...", None)
+        )
+
+        # From https://github.com/comfyanonymous/ComfyUI/blob/880c205df1fca4491c78523eb52d1a388f89ef92/comfy_extras/nodes_custom_sampler.py#L623
+        latent = latent_image
+        latent_image = latent["samples"]
+        latent = latent.copy()
+        latent_image = comfy.sample.fix_empty_latent_channels(
+            guider.model_patcher, latent_image,
+            latent.get("downscale_ratio_spacial"), latent.get("downscale_ratio_temporal"),
+        )
+        latent["samples"] = latent_image
+
+        noise_mask = None
+        if "noise_mask" in latent:
+            noise_mask = latent["noise_mask"]
+
+        samples = guider.sample(
+            noise.generate_noise(latent),
+            latent_image,
+            ksampler,
+            sigmas,
+            denoise_mask=noise_mask,
+            callback=callback_function,
+            disable_pbar=not comfy.utils.PROGRESS_BAR_ENABLED,
+            seed=noise.seed
+        )
+        samples = samples.to(comfy.model_management.intermediate_device())
+
+        sampled = latent.copy()
+        sampled.pop("downscale_ratio_spacial", None)
+        sampled.pop("downscale_ratio_temporal", None)
+        sampled["samples"] = samples
+
+
+        if callback is not None:
+            worker.add_result(
+                gen_data["task_id"],
+                "preview",
+                (-1, f"VAE Decoding ...", None)
+            )
+
+        decoded_latent = VAEDecodeTiled().decode(
+            samples=sampled,
+            tile_size=128,
+            overlap=64,
+            vae=self.model_base_patched.vae,
+        )[0]
+
+        pil_images = []
+        for image in decoded_latent:
+            i = 255. * image.cpu().numpy()
+            img = Image.fromarray(np.clip(i, 0, 255).astype(np.uint8))
+            pil_images.append(img)
+
+        if callback is not None:
+            worker.add_result(
+                gen_data["task_id"],
+                "preview",
+                (-1, f"Saving ...", None)
+            )
+
+        file = generate_temp_filename(
+            folder=path_manager.model_paths["temp_outputs_path"], extension="gif"
+        )
+        os.makedirs(os.path.dirname(file), exist_ok=True)
+
+        fps=float(gen_data.get("video_fps", 24.0))
+        compress_level=9 # Min = 0, Max = 9
+
+        # Save GIF
+        pil_images[0].save(
+            file,
+            compress_level=compress_level,
+            save_all=True,
+            duration=int(1000.0/fps),
+            append_images=pil_images[1:],
+            optimize=True,
+            loop=0,
+        )
+
+        # Save mp4
+        save_mp4(file.with_suffix(".mp4"), pil_images, fps)
+
+        return [file]

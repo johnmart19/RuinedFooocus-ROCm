@@ -1,3 +1,4 @@
+from ruinedfooocus.core.paths import asset_path, resource_path
 """Prompt preservation and scheduling without importing models or shared UI state."""
 import ast
 from pathlib import Path
@@ -6,8 +7,8 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-from modules.prompt_scheduling import prompt_switch_per_step
-from modules.shift_attention import shift_attention
+from ruinedfooocus.features.prompting.prompt_scheduling import prompt_switch_per_step
+from ruinedfooocus.features.image_editing.shift_attention import shift_attention
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -53,7 +54,7 @@ class PromptPreservationTests(unittest.TestCase):
         for prompt, expected in cases.items():
             with self.subTest(prompt=prompt):
                 self.assertEqual(prompt_switch_per_step(prompt, 4), expected)
-        with patch('modules.prompt_scheduling.random.randrange', return_value=1):
+        with patch('ruinedfooocus.features.prompting.prompt_scheduling.random.randrange', return_value=1):
             self.assertEqual(prompt_switch_per_step('[a?b]', 2), ['b', 'b'])
         self.assertEqual(prompt_switch_per_step('[cat:dog:.5]', 3), ['cat', 'dog', 'dog'])
         self.assertEqual(prompt_switch_per_step(r'\\[a|b]', 2), [r'\\a', r'\\b'])
@@ -68,7 +69,7 @@ class PromptPreservationTests(unittest.TestCase):
         self.assertEqual(shift_attention('(cat:0~2~0)', .5), '(cat:2.0)')
 
     def test_lora_controls_accept_signed_weights_and_keep_malformed_text(self):
-        parse = function_from('modules/prompt_processing.py', 'parse_loras', {'re': re})
+        parse = function_from('ruinedfooocus/features/prompting/prompt_processing.py', 'parse_loras', {'re': re})
         positive = 'cat <lora:detail:-0.5> <lora:bad:1..2> <lora:literal>'
         loras, prompt, negative = parse(positive, '<lora:other:+.25> dog')
         self.assertEqual([(row['name'], row['weight']) for row in loras],
@@ -81,7 +82,7 @@ class PromptPreservationTests(unittest.TestCase):
         owner = SimpleNamespace(conditions={'+': {'text': None, 'cache': None}},
                                 xl_base_patched=SimpleNamespace(clip=object()))
         last_layer = Mock(side_effect=lambda clip, layer: [clip])
-        encode_text = function_from('modules/image_pipeline.py', 'textencode', {
+        encode_text = function_from('ruinedfooocus/features/generation/image_pipeline.py', 'textencode', {
             'CLIPTextEncode': lambda: SimpleNamespace(encode=encode),
             'CLIPSetLastLayer': lambda: SimpleNamespace(set_last_layer=last_layer)})
         prompt = ' ,  Київ\n[red cup] <lora:literal>  , '
@@ -92,7 +93,7 @@ class PromptPreservationTests(unittest.TestCase):
         last_layer.assert_called_once_with(owner.xl_base_patched.clip, -2)
 
     def test_pipeline_reuses_schedule_encodings_without_timestep_gaps(self):
-        tree = ast.parse((ROOT / 'modules/image_pipeline.py').read_text(encoding='utf-8'))
+        tree = ast.parse((ROOT / 'ruinedfooocus/features/generation/image_pipeline.py').read_text(encoding='utf-8'))
         process = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == 'process')
         branch = next(n for n in process.body if isinstance(n, ast.If) and
                       ast.unparse(n.test) == 'image_edit and input_images > 0')
@@ -104,7 +105,7 @@ class PromptPreservationTests(unittest.TestCase):
         owner.textencode = Mock(side_effect=encode)
         helper_tree = ast.parse((ROOT / 'repositories/ComfyUI/node_helpers.py').read_text(encoding='utf-8'))
         copier = next(n for n in helper_tree.body if isinstance(n, ast.FunctionDef) and n.name == 'conditioning_set_values')
-        scope = dict(self=owner, callback=None, positive_prompt='[red|blue]', negative_prompt='', clip_skip=1,
+        scope = dict(asset_path=asset_path, resource_path=resource_path, self=owner, callback=None, positive_prompt='[red|blue]', negative_prompt='', clip_skip=1,
                      switched_prompt=[], gen_data={'steps': 30},
                      pp=SimpleNamespace(prompt_switch_per_step=prompt_switch_per_step))
         exec(compile(ast.Module(body=[copier, *branch.orelse], type_ignores=[]), 'pipeline_schedule', 'exec'), scope)

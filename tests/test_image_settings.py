@@ -1,3 +1,4 @@
+from ruinedfooocus.core.paths import asset_path, resource_path
 """Isolate GPU/UI boundaries while exercising the production function bodies."""
 
 import ast
@@ -11,7 +12,7 @@ from unittest.mock import Mock, patch
 import numpy as np
 import torch
 
-from modules.settings_validation import validate_settings
+from ruinedfooocus.core.settings_validation import validate_settings
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -22,10 +23,10 @@ class ImageOutputTests(unittest.TestCase):
         import json
         import shutil
         import tempfile
-        tree = ast.parse((ROOT / 'modules/controlnet.py').read_text(encoding='utf-8'))
+        tree = ast.parse((ROOT / 'ruinedfooocus/features/image_editing/controlnet.py').read_text(encoding='utf-8'))
         loader = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'load_cnsettings')
-        defaults = json.loads((ROOT / 'settings/powerup.default').read_text())
-        from modules.openai_api import ControlNetRequest
+        defaults = json.loads((ROOT / 'ruinedfooocus/resources/defaults/powerup.default').read_text())
+        from ruinedfooocus.integrations.openai_api import ControlNetRequest
         self.assertEqual(ControlNetRequest(type='img2img').denoise, defaults['Img2Img']['denoise'])
         legacy = {'type': 'img2img', 'start': 0.06, 'denoise': 0.64}
         for preset in (legacy, dict(legacy, denoise=0.5), dict(legacy, loopback=True)):
@@ -34,7 +35,7 @@ class ImageOutputTests(unittest.TestCase):
                 source.write_text(json.dumps(defaults))
                 saved.write_text(json.dumps(defaults | {'Img2Img': preset}))
                 save = Mock(side_effect=lambda path, data: Path(path).write_text(json.dumps(data)))
-                scope = dict(os=os, shutil=shutil, json=json, CNSETTINGS_FILE=str(saved),
+                scope = dict(asset_path=asset_path, resource_path=resource_path, os=os, shutil=shutil, json=json, CNSETTINGS_FILE=str(saved),
                     DEFAULT_CNSETTINGS_FILE=str(source), save_json=save,
                     controlnet_models={value['type']: None for value in defaults.values()})
                 exec(compile(ast.Module(body=[loader], type_ignores=[]), 'load_cnsettings', 'exec'), scope)
@@ -44,7 +45,7 @@ class ImageOutputTests(unittest.TestCase):
                 self.assertEqual(save.call_count, int(preset == legacy))
 
     def test_decode_oom_releases_diffusion_before_one_retry(self):
-        from modules.vae_decode import decode_image_vae
+        from ruinedfooocus.backends.comfy.vae_decode import decode_image_vae
         memory = SimpleNamespace(unload_model_and_clones=Mock(), soft_empty_cache=Mock())
         def raise_non_oom(error):
             if not isinstance(error, MemoryError):
@@ -66,7 +67,7 @@ class ImageOutputTests(unittest.TestCase):
                 self.assertEqual(decode.call_count, calls)
 
     def test_file_checkpoint_loader_retains_embedded_components_and_fills_missing_ones(self):
-        tree = ast.parse((ROOT / "modules/image_pipeline.py").read_text(encoding="utf-8"))
+        tree = ast.parse((ROOT / "ruinedfooocus/features/generation/image_pipeline.py").read_text(encoding="utf-8"))
         cls = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "pipeline")
         method = next(node for node in cls.body if isinstance(node, ast.FunctionDef) and node.name == "load_base_model")
         branch = next(node for node in method.body if isinstance(node, ast.If) and 'unet_only' in ast.unparse(node.test))
@@ -79,7 +80,7 @@ class ImageOutputTests(unittest.TestCase):
                 self.first_stage_model = object() if valid else None
                 self.throw_exception_if_invalid = Mock()
         loader = Mock()
-        namespace = dict(load_checkpoint_guess_config=loader, CLIP=Clip, VAE=Vae)
+        namespace = dict(asset_path=asset_path, resource_path=resource_path, load_checkpoint_guess_config=loader, CLIP=Clip, VAE=Vae)
         exec(compile(ast.fix_missing_locations(ast.Module(body=[function], type_ignores=[])),
                      "file_checkpoint", "exec"), namespace)
         unet, clip, vae = object(), Clip(), Vae()
@@ -97,7 +98,7 @@ class ImageOutputTests(unittest.TestCase):
                                                         input_unet=unet, input_components=expected)
 
     def test_diffusion_loader_preserves_native_and_quantized_paths(self):
-        tree = ast.parse((ROOT / "modules/pipeline_utils.py").read_text(encoding="utf-8"))
+        tree = ast.parse((ROOT / "ruinedfooocus/features/generation/pipeline_utils.py").read_text(encoding="utf-8"))
         function = next(node for node in tree.body if isinstance(node, ast.FunctionDef)
                         and node.name == "load_diffusion_model")
         class NativePatcher:
@@ -105,7 +106,7 @@ class ImageOutputTests(unittest.TestCase):
         state_loader = Mock(return_value="native weights")
         file_loader = Mock(return_value="file weights")
         gguf = Mock(return_value="quantized weights")
-        namespace = dict(Path=Path, ModelPatcher=NativePatcher, load_gguf_model=gguf,
+        namespace = dict(asset_path=asset_path, resource_path=resource_path, Path=Path, ModelPatcher=NativePatcher, load_gguf_model=gguf,
                          comfy=SimpleNamespace(sd=SimpleNamespace(
                              load_diffusion_model_state_dict=state_loader,
                              load_diffusion_model=file_loader)))
@@ -125,14 +126,14 @@ class ImageOutputTests(unittest.TestCase):
 
     def test_img2img_batches_encode_the_reference_unless_feedback_is_explicit(self):
         from PIL import Image
-        tree = ast.parse((ROOT / 'modules/image_pipeline.py').read_text(encoding='utf-8'))
+        tree = ast.parse((ROOT / 'ruinedfooocus/features/generation/image_pipeline.py').read_text(encoding='utf-8'))
         process = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == 'process')
         branch = next(n for n in ast.walk(process) if isinstance(n, ast.If)
                       and ast.unparse(n.test) == 'img2img_mode')
         function = ast.parse('def encode(self, controlnet, gen_data, input_image): pass').body[0]
         function.body = branch.body
         encoded = Mock(return_value=[{'samples': torch.zeros(1, 4, 2, 3)}])
-        scope = dict(Image=Image, np=np, torch=torch, VAEEncode=lambda: SimpleNamespace(encode=encoded),
+        scope = dict(asset_path=asset_path, resource_path=resource_path, Image=Image, np=np, torch=torch, VAEEncode=lambda: SimpleNamespace(encode=encoded),
                      shared=SimpleNamespace(state={'preview_count': 9},
                          shared_cache={'prev_image': np.full((16, 24, 3), 255, dtype=np.uint8)}))
         exec(compile(ast.fix_missing_locations(ast.Module(body=[function], type_ignores=[])),
@@ -152,7 +153,7 @@ class ImageOutputTests(unittest.TestCase):
                                        torch.full_like(reference, 128 / 255)))
 
     def test_upscaled_batch_loopback_remains_at_native_size(self):
-        tree = ast.parse((ROOT / "modules/image_pipeline.py").read_text(encoding="utf-8"))
+        tree = ast.parse((ROOT / "ruinedfooocus/features/generation/image_pipeline.py").read_text(encoding="utf-8"))
         cls = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "pipeline")
         process = next(node for node in cls.body if isinstance(node, ast.FunctionDef) and node.name == "process")
         start = next(index for index, node in enumerate(process.body) if isinstance(node, ast.Assign)
@@ -161,8 +162,8 @@ class ImageOutputTests(unittest.TestCase):
         # Isolate the real decode/output stage from model loading and sampling.
         function = ast.parse("def finish(self, sampled_latent, gen_data, architecture, callback=None): pass").body[0]
         function.body = process.body[start:]
-        from modules.image_geometry import restore_reference_frame
-        namespace = {"np": np, "img2img_mode": True, "controlnet": {"loopback": True},
+        from ruinedfooocus.features.image_editing.image_geometry import restore_reference_frame
+        namespace = {'asset_path': asset_path, 'resource_path': resource_path, "np": np, "img2img_mode": True, "controlnet": {"loopback": True},
                      "reference_frame": None, "restore_reference_frame": restore_reference_frame,
                      "guidance": {'vae_tiled':False, 'vae_tile_size':None, 'vae_overlap':None}}
         exec(compile(ast.fix_missing_locations(ast.Module(body=[function], type_ignores=[])),
@@ -172,7 +173,7 @@ class ImageOutputTests(unittest.TestCase):
             image.repeat_interleave(2, dim=1).repeat_interleave(2, dim=2))
         owner = SimpleNamespace(decode_latent=lambda samples, **options: samples)
         native = torch.full((1, 16, 24, 3), 0.5)
-        with patch.dict(sys.modules, {"modules.automatic_upscale": upscaler}):
+        with patch.dict(sys.modules, {"ruinedfooocus.features.generation.automatic_upscale": upscaler}):
             for _ in range(3):
                 result = namespace["finish"](owner, native, request, "SDXL")
                 self.assertEqual(result[0].shape, (32, 48, 3))
@@ -186,18 +187,18 @@ class ImageOutputTests(unittest.TestCase):
 
 class MetadataModeTests(unittest.TestCase):
     def save(self, local_only, launch_offline=False, environment_offline=False, extra=None):
-        tree = ast.parse((ROOT / "modules/ui/ui_settings.py").read_text(encoding="utf-8"))
+        tree = ast.parse((ROOT / "ruinedfooocus/ui/ui_settings.py").read_text(encoding="utf-8"))
         function = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "save_clicked")
         settings = SimpleNamespace(default_settings={}, set_settings_path=Mock(), save_settings=Mock(),
                                    settings_path="synthetic-settings.json", name=None)
         store = SimpleNamespace(offline=False)
         models = SimpleNamespace(offline=False)
-        namespace = dict(settings=settings, models=models, performance_settings=SimpleNamespace(model_recommendations=store),
+        namespace = dict(asset_path=asset_path, resource_path=resource_path, settings=settings, models=models, performance_settings=SimpleNamespace(model_recommendations=store),
             state={"setting_name": ["local_model_metadata", *(extra or {})]}, validate_settings=validate_settings,
             path_manager=SimpleNamespace(set_settings_path=Mock(), save_paths=Mock()),
             gr=SimpleNamespace(Info=Mock(), Error=ValueError), t=lambda text, **kwargs: text)
         exec(compile(ast.Module(body=[function], type_ignores=[]), "settings_save", "exec"), namespace)
-        with patch.dict(sys.modules, {"argparser": SimpleNamespace(args=SimpleNamespace(offline=launch_offline))}), \
+        with patch.dict(sys.modules, {"ruinedfooocus.app.arguments": SimpleNamespace(args=SimpleNamespace(offline=launch_offline))}), \
                 patch.dict(os.environ, {"RF_OFFLINE": "1" if environment_offline else "0"}):
             namespace["save_clicked"](local_only, *(extra or {}).values())
         self.assertEqual(store.offline, models.offline)

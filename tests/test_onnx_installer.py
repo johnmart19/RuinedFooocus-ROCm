@@ -3,7 +3,7 @@ import hashlib,json,sys,tempfile
 from pathlib import Path
 import unittest
 from unittest.mock import patch
-from modules import onnx_installer as installer
+import ruinedfooocus.backends.onnx.onnx_installer as installer
 
 class OnnxInstallerTests(unittest.TestCase):
     def test_optional_install_is_isolated_pinned_and_does_not_replace_cpu_ort(self):

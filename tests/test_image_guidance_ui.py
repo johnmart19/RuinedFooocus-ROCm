@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from modules.ui import ui_image_guidance as ui
+from ruinedfooocus.features.image_editing import ui_guidance as ui
 
 
 class Widget:
@@ -67,12 +67,12 @@ class GuidanceUI(unittest.TestCase):
         base = Widget(value='moss')
         with patch.object(ui, 'gr', fake), patch.object(ui, 'family_for_checkpoint',
                 side_effect=lambda name: {'moss': 'MOSSImage', 'sdxl': 'SDXL'}[name]), \
-                patch.dict(sys.modules, {'shared': shared}):
+                patch.dict(sys.modules, {'ruinedfooocus.app.state': shared}):
             controls = ui.create_ui(base)
             self.assertEqual(set(registered), set(controls))
             self.assertTrue(set(ui.FIELD_SCHEMA).issubset(controls))
             self.assertIn('reference_images', registered)
-            from modules.image_guidance import resolve_guidance
+            from ruinedfooocus.features.image_editing.image_guidance import resolve_guidance
             values = {key: controls[key].value for key in ('sampling_shift', 'cfg_norm_strength')}
             resolved = resolve_guidance(values, {}, 'MOSSImage')
             self.assertIsNone(resolved['sampling_shift'])
@@ -92,7 +92,7 @@ class GuidanceUI(unittest.TestCase):
             self.assertEqual(slg_change('moss', False), {'visible':False})
 
     def test_api_snapshot_includes_scalar_guidance_but_never_uploaded_references(self):
-        source = Path('webui.py').read_text(encoding='utf-8')
+        source = Path('ruinedfooocus/ui/app.py').read_text(encoding='utf-8')
         tree = ast.parse(source)
         values = next(node.value for node in ast.walk(tree) if isinstance(node, ast.Assign)
                       and any(isinstance(t, ast.Name) and t.id == 'image_keys' for t in node.targets))

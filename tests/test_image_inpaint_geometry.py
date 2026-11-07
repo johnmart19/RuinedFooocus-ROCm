@@ -1,3 +1,4 @@
+from ruinedfooocus.core.paths import asset_path, resource_path
 """Inpaint source/mask geometry through the pinned VAE node; CPU, no weights."""
 import ast
 import math
@@ -10,7 +11,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 import torch
 
-from modules.image_geometry import reference_plan, restore_reference_frame
+from ruinedfooocus.features.image_editing.image_geometry import reference_plan, restore_reference_frame
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -19,14 +20,14 @@ def native_node():
     tree=ast.parse((ROOT/'repositories/ComfyUI/nodes.py').read_text(encoding='utf-8'))
     node=next(n for n in tree.body if isinstance(n,ast.ClassDef) and n.name=='VAEEncodeForInpaint')
     node.body=[n for n in node.body if isinstance(n,ast.FunctionDef) and n.name=='encode']
-    scope=dict(torch=torch,math=math)
+    scope=dict(asset_path=asset_path, resource_path=resource_path, torch=torch,math=math)
     exec(compile(ast.Module(body=[node],type_ignores=[]),'native_inpaint','exec'),scope)
     return scope[node.name]
 
 
 class InpaintGeometryTests(unittest.TestCase):
     def setUp(self):
-        tree=ast.parse((ROOT/'modules/image_pipeline.py').read_text(encoding='utf-8'))
+        tree=ast.parse((ROOT/'ruinedfooocus/features/generation/image_pipeline.py').read_text(encoding='utf-8'))
         process=next(n for n in ast.walk(tree) if isinstance(n,ast.FunctionDef) and n.name=='process')
         branch=next(n for n in process.body if isinstance(n,ast.If) and any(
             isinstance(child,ast.Call) and isinstance(child.func,ast.Name) and
@@ -38,7 +39,7 @@ class InpaintGeometryTests(unittest.TestCase):
     def route(self,image,mask=None,mode='preserve',data=None):
         if mask is None:mask=Image.new('L',image.size,255)
         request=data if data is not None else dict(width=1152,height=896,inpaint_toggle=True)
-        scope=dict(np=np,torch=torch,gen_data=request,guidance={'image_resize_mode':mode},
+        scope=dict(asset_path=asset_path, resource_path=resource_path, np=np,torch=torch,gen_data=request,guidance={'image_resize_mode':mode},
             inpaint_source=image,inpaint_mask=mask,reference_frame=None,
             VAEEncodeForInpaint=native_node(),self=SimpleNamespace(xl_base_patched=SimpleNamespace(vae=self.vae)))
         exec(self.code,scope)
@@ -67,7 +68,7 @@ class InpaintGeometryTests(unittest.TestCase):
         np.testing.assert_array_equal((restored.numpy()[unmasked]*255).round().astype(np.uint8),image[unmasked])
 
     def test_source_and_mask_share_the_preserve_or_crop_transform(self):
-        from modules.inpaint_utils import prepare_inpaint
+        from ruinedfooocus.features.image_editing.inpaint_utils import prepare_inpaint
         mask=Image.new('L',(301,701))
         ImageDraw.Draw(mask).ellipse((101,301,199,399),fill=255)
         source=Image.merge('RGB',(mask,mask,mask))
@@ -98,7 +99,7 @@ class InpaintGeometryTests(unittest.TestCase):
                 self.vae.encode.assert_not_called()
 
     def test_inpaint_ignores_unused_img2img_uploads_without_erasing_them_or_control_guides(self):
-        tree=ast.parse((ROOT/'modules/image_pipeline.py').read_text(encoding='utf-8'))
+        tree=ast.parse((ROOT/'ruinedfooocus/features/generation/image_pipeline.py').read_text(encoding='utf-8'))
         process=next(n for n in ast.walk(tree) if isinstance(n,ast.FunctionDef) and n.name=='process')
         def assignment(name):
             return next(i for i,n in enumerate(process.body) if isinstance(n,ast.Assign) and
@@ -108,13 +109,13 @@ class InpaintGeometryTests(unittest.TestCase):
         model_type=type('SDXL',(),{})
         image=object()
         def prepare(control,inpaint=True,source=image):
-            from modules.image_guidance import normalize_reference_images
+            from ruinedfooocus.features.image_editing.image_guidance import normalize_reference_images
             data=dict(inpaint_toggle=inpaint,input_image=source,reference_image_count=int(source is not None))
-            scope=dict(gen_data=data,input_image=source,image_edit=False,hidream_edit=False,architecture='SDXL',
+            scope=dict(asset_path=asset_path, resource_path=resource_path, gen_data=data,input_image=source,image_edit=False,hidream_edit=False,architecture='SDXL',
                 normalize_reference_images=normalize_reference_images,guidance={'moss_image_edit_format':'Disabled'},
                 SDXL=model_type,self=SimpleNamespace(xl_base_patched=SimpleNamespace(unet=SimpleNamespace(model=model_type()))),
-                modules=SimpleNamespace(controlnet=SimpleNamespace(get_settings=lambda data:dict(control),
-                    controlnet_models=dict.fromkeys(('img2img','canny','depth','sketch','recolour')))))
+                control_tools=SimpleNamespace(get_settings=lambda data:dict(control),
+                    controlnet_models=dict.fromkeys(('img2img','canny','depth','sketch','recolour'))))
             exec(code,scope)
             self.assertIs(data['input_image'],source)
             return scope

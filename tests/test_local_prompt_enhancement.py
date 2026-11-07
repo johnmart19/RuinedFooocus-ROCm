@@ -1,3 +1,4 @@
+from ruinedfooocus.core.paths import asset_path, resource_path
 """Shared prompt enhancement preserves payloads, cancellation and helper ownership."""
 import ast
 from collections import defaultdict
@@ -9,7 +10,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-from modules.prompt_enhancement import image_prompt_result, enhance_prompt
+from ruinedfooocus.features.prompting.prompt_enhancement import image_prompt_result, enhance_prompt
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -27,12 +28,12 @@ class Cancelled(Exception):
 
 class LocalPromptTests(unittest.TestCase):
     def test_ui_enhancement_queues_and_worker_uses_existing_chat_helper(self):
-        from modules import api_runtime
+        import ruinedfooocus.app.api_runtime as api_runtime
         worker = SimpleNamespace(worker_thread=None, check_interrupt=Mock())
         run = Mock(return_value='enhanced')
-        with patch.dict(sys.modules, {'modules.async_worker':worker,
-                                     'modules.llama_pipeline':SimpleNamespace(run_llama=run)}), \
-                patch('modules.async_worker',worker,create=True), \
+        with patch.dict(sys.modules, {'ruinedfooocus.app.async_worker':worker,
+                                     'ruinedfooocus.features.chat.llama_pipeline':SimpleNamespace(run_llama=run)}), \
+                patch('ruinedfooocus.app.async_worker',worker,create=True), \
                 patch.object(api_runtime,'submit',return_value=object()) as submit, \
                 patch.object(api_runtime,'wait_for_result',return_value='queued'):
             self.assertEqual(enhance_prompt('Two red cups.'),'queued')
@@ -47,10 +48,10 @@ class LocalPromptTests(unittest.TestCase):
         owner = Mock()
         owner.load_base_model.side_effect = load_error
         owner.llm.handle_chat_completions.side_effect = lambda params, callback: [callback(c) for c in chunks]
-        scope = dict(re=re, pipeline=Mock(return_value=owner), rewrite_template_kwargs=lambda: {},
+        scope = dict(asset_path=asset_path, resource_path=resource_path, re=re, pipeline=Mock(return_value=owner), rewrite_template_kwargs=lambda: {},
             settings=SimpleNamespace(default_settings={'llm_hp_max_tokens':300}),
             model_management=SimpleNamespace(unload_all_models=Mock(), InterruptProcessingException=Cancelled))
-        run = function('modules/llama_pipeline.py', 'run_llama', scope)
+        run = function('ruinedfooocus/features/chat/llama_pipeline.py', 'run_llama', scope)
         return run, owner, scope
 
     def test_stream_uses_fresh_messages_selected_runtime_and_configured_budget(self):
@@ -99,16 +100,16 @@ class LocalPromptTests(unittest.TestCase):
     def processing(self, random_prompt):
         aliases = {'Erniehancer':'Local chat model','Style: Erniehancer':'Local chat model'}
         style_scope = dict(re=re, STYLE_ALIASES=aliases, styles={}, default_style=('{prompt}',''), allstyles=[])
-        apply = function('modules/sdxl_styles.py','apply_style',style_scope)
-        scope = dict(re=re, STYLE_ALIASES=aliases, available_styles={'Local chat model':('{prompt}','')},
+        apply = function('ruinedfooocus/features/prompting/sdxl_styles.py','apply_style',style_scope)
+        scope = dict(asset_path=asset_path, resource_path=resource_path, re=re, STYLE_ALIASES=aliases, available_styles={'Local chat model':('{prompt}','')},
                      apply_style=apply, use_random_prompt=lambda *args:random_prompt)
         scope['build_dynamic_prompt'] = lambda **kwargs:kwargs['enhancer']('original scene','Anime Model','')
-        return function('modules/prompt_processing.py','process_prompt',scope)
+        return function('ruinedfooocus/features/prompting/prompt_processing.py','process_prompt',scope)
 
     def test_legacy_style_uses_replacement_and_dedup_is_request_scoped(self):
         process = self.processing(False)
         enhance = Mock(side_effect=lambda text,*args,**kwargs:text+' enhanced')
-        with patch('modules.prompt_enhancement.enhance_prompt',enhance):
+        with patch('ruinedfooocus.features.prompting.prompt_enhancement.enhance_prompt',enhance):
             for _ in range(2):
                 positive, negative = process([], '<style:Erniehancer>Two red cups.', 'no blur', {})
                 self.assertEqual(positive,'Two red cups. enhanced')
@@ -119,7 +120,7 @@ class LocalPromptTests(unittest.TestCase):
         process = self.processing(True)
         data = defaultdict(str,task_type='tool_call')
         enhance = Mock(return_value='enhanced scene')
-        with patch('modules.prompt_enhancement.enhance_prompt',enhance):
+        with patch('ruinedfooocus.features.prompting.prompt_enhancement.enhance_prompt',enhance):
             positive, _ = process(['Local chat model','Erniehancer'],'original','',data)
         self.assertEqual(positive,'enhanced scene')
         enhance.assert_called_once()

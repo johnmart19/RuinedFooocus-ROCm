@@ -9,7 +9,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from random_prompt import prompt_formats as pf  # noqa: E402
+from ruinedfooocus.features.prompting.one_button import prompt_formats as pf  # noqa: E402
 
 
 class FamilyTests(unittest.TestCase):
@@ -77,7 +77,7 @@ class FinalizeTests(unittest.TestCase):
 
 class PresetFallbackTests(unittest.TestCase):
     def test_existing_legacy_and_modern_custom_presets_remain_distinct(self):
-        from random_prompt.one_button_presets import OneButtonPresets
+        from ruinedfooocus.features.prompting.one_button.one_button_presets import OneButtonPresets
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp)/'presets.json'
             data = {'Standard': {'subject':'all'}, 'WIERD HATS': {'subject':'old custom'},
@@ -89,7 +89,7 @@ class PresetFallbackTests(unittest.TestCase):
                 self.assertEqual(presets.get_obp_preset('WIERD HATS')['subject'], 'old custom')
                 self.assertEqual(presets.get_obp_preset('Weird Hats')['subject'], 'new custom')
                 import ast
-                tree = ast.parse((ROOT/'modules/ui/ui_onebutton.py').read_text(encoding='utf-8'))
+                tree = ast.parse((ROOT/'ruinedfooocus/features/prompting/ui_random.py').read_text(encoding='utf-8'))
                 call = next(n.value for n in ast.walk(tree) if isinstance(n, ast.Assign)
                             and any(isinstance(t, ast.Name) and t.id=='OBP_preset' for t in n.targets))
                 value = next(k.value for k in call.keywords if k.arg=='value')
@@ -98,7 +98,7 @@ class PresetFallbackTests(unittest.TestCase):
                 self.assertEqual(json.loads(path.read_text(encoding='utf-8')), data)
 
     def test_legacy_anime_customization_survives_missing_bundled_preset(self):
-        from random_prompt.one_button_presets import OneButtonPresets
+        from ruinedfooocus.features.prompting.one_button.one_button_presets import OneButtonPresets
         with tempfile.TemporaryDirectory() as tmp:
             default, user = Path(tmp)/'default.json', Path(tmp)/'user.json'
             default.write_text(json.dumps({'Standard':{'subject':'all'}}),encoding='utf-8')
@@ -111,7 +111,7 @@ class PresetFallbackTests(unittest.TestCase):
                 self.assertEqual(presets.get_obp_preset("Waifu's"),custom)
 
     def test_unknown_preset_uses_standard(self):
-        from random_prompt.one_button_presets import OneButtonPresets
+        from ruinedfooocus.features.prompting.one_button.one_button_presets import OneButtonPresets
         with tempfile.TemporaryDirectory() as tmp:
             user = Path(tmp) / "obp_presets.json"
             user.write_text(json.dumps({"Standard": {"subject": "all", "insanitylevel": 5}}), encoding="utf-8")
@@ -122,7 +122,7 @@ class PresetFallbackTests(unittest.TestCase):
                 self.assertEqual(presets.get_obp_preset(presets.CUSTOM_OBP)["subject"], "all")
 
     def test_renamed_presets_keep_saved_edits_and_selections(self):
-        from random_prompt.one_button_presets import OneButtonPresets
+        from ruinedfooocus.features.prompting.one_button.one_button_presets import OneButtonPresets
         with tempfile.TemporaryDirectory() as tmp:
             default, user = Path(tmp) / "default.json", Path(tmp) / "user.json"
             default.write_text(json.dumps({"Standard": {"subject": "all", "insanitylevel": 5},

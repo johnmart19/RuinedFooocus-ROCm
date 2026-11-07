@@ -1,3 +1,4 @@
+from ruinedfooocus.core.paths import asset_path, resource_path
 """Lazy session reuse must preserve model outputs and transparent-input behavior."""
 import ast
 import base64
@@ -13,13 +14,13 @@ import PIL.Image
 
 class BackgroundSessionTests(unittest.TestCase):
     def setUp(self):
-        tree = ast.parse(Path('modules/rembg_pipeline.py').read_text())
+        tree = ast.parse(Path('ruinedfooocus/features/image_processing/rembg_pipeline.py').read_text())
         node = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == 'pipeline')
         self.rembg = Mock()
         self.worker = Mock()
         self.args = SimpleNamespace(cpu=False)
         self.get_settings = Mock(side_effect=lambda data: data.get('controlnet') or data.get('preset_control', {}))
-        namespace = {'rembg': self.rembg, 'worker': self.worker, 'PIL': PIL, 'Any': Any, 'args': self.args,
+        namespace = {'asset_path': asset_path, 'resource_path': resource_path, 'rembg': self.rembg, 'worker': self.worker, 'PIL': PIL, 'Any': Any, 'args': self.args,
                      'new_session': self.rembg.new_session, 'get_settings': self.get_settings}
         exec(compile(ast.Module(body=[node], type_ignores=[]), 'rembg_pipeline.py', 'exec'), namespace)
         self.pipeline = namespace['pipeline']()
@@ -112,8 +113,8 @@ class BackgroundSessionTests(unittest.TestCase):
         self.assertIsNone(self.rembg.new_session.return_value.check_cancelled)
 
     def test_api_can_preserve_png_alpha_without_changing_normal_rgb_inputs(self):
-        from modules.api_runtime import decode_image
-        from modules.openai_api import ImageRequest
+        from ruinedfooocus.app.api_runtime import decode_image
+        from ruinedfooocus.integrations.openai_api import ImageRequest
         self.assertEqual(ImageRequest(input_image='base64', controlnet={'type': 'rembg'}).controlnet.type, 'rembg')
         self.assertFalse(ImageRequest(input_image='base64', controlnet={'type': 'rembg'}).controlnet.force)
         self.assertTrue(ImageRequest(input_image='base64', controlnet={'type': 'rembg', 'force': True}).controlnet.force)

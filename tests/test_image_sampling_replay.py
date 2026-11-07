@@ -1,3 +1,4 @@
+from ruinedfooocus.core.paths import asset_path, resource_path
 """Keep native and override shift units distinct when importing image metadata."""
 import ast
 import math
@@ -8,7 +9,7 @@ from unittest.mock import Mock
 
 import torch
 
-from modules.image_guidance import effective_guidance, request_model, resolve_guidance, restore_guidance_metadata
+from ruinedfooocus.features.image_editing.image_guidance import effective_guidance, request_model, resolve_guidance, restore_guidance_metadata
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -18,7 +19,7 @@ def native_samplers():
     tree = ast.parse(path.read_text(encoding='utf-8'))
     names = {'ModelSamplingFlux', 'ModelSamplingDiscreteFlow', 'time_snr_shift', 'flux_time_shift'}
     selected = [node for node in tree.body if isinstance(node, (ast.ClassDef, ast.FunctionDef)) and node.name in names]
-    scope = dict(torch=torch, math=math, __name__='comfy.model_sampling')
+    scope = dict(asset_path=asset_path, resource_path=resource_path, torch=torch, math=math, __name__='comfy.model_sampling')
     exec(compile(ast.Module(body=selected, type_ignores=[]), str(path), 'exec'), scope)
     return scope
 
@@ -85,7 +86,7 @@ class ImageSamplingReplayTests(unittest.TestCase):
             family='MOSSImage')['sampling_shift'], 5)
 
     def test_qwen_png_preset_keeps_auto_in_the_visible_shift_control(self):
-        from modules.ui.ui_image_guidance import preset_control_state
+        from ruinedfooocus.features.image_editing.ui_guidance import preset_control_state
         _, metadata = self.metadata('ModelSamplingFlux', 1.15)
         result = preset_control_state({}, {}, dict(software='RuinedFooocus', image_guidance=metadata),
             7, 'QwenImage', 'qwen', 'qwen', None)

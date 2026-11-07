@@ -1,0 +1,119 @@
+from ruinedfooocus.core.paths import data_path, resource_path
+import os
+import shutil
+import json
+from ruinedfooocus.app.state import path_manager
+from ruinedfooocus.core.config_io import save_json
+
+DEFAULT_CNSETTINGS_FILE = resource_path("defaults", "powerup.default")
+CNSETTINGS_FILE = data_path("settings", "powerup.json")
+NEWCN = "Custom..."
+
+# https://huggingface.co/stabilityai/control-lora/tree/main/control-LoRAs-rank128
+controlnet_models = {
+    "canny": "control-lora-canny-rank128.safetensors",
+    "depth": "control-lora-depth-rank128.safetensors",
+    "recolour": "control-lora-recolor-rank128.safetensors",
+    "sketch": "control-lora-sketch-rank128-metadata.safetensors",
+    "img2img": None,
+    "edit": None,
+    "upscale": None,
+    "rembg": None,
+}
+
+def load_cnsettings():
+    settings = {}
+    if not os.path.isfile(CNSETTINGS_FILE):
+        shutil.copy(DEFAULT_CNSETTINGS_FILE, CNSETTINGS_FILE)
+
+    if os.path.exists(CNSETTINGS_FILE):
+        with open(CNSETTINGS_FILE) as f:
+            settings.update(json.load(f))
+
+    with open(DEFAULT_CNSETTINGS_FILE) as f:
+        default_settings = json.load(f)
+
+    # Update settings with any missing keys from default_settings
+    settings_updated = False
+    # The old stock preset caused large redraws. Keep customized presets intact.
+    if settings.get("Img2Img") == {"type": "img2img", "start": 0.06, "denoise": 0.64}:
+        settings["Img2Img"] = dict(default_settings["Img2Img"])
+        settings_updated = True
+    for key in ('Depth (low)', 'Depth (high)'):
+        updated = default_settings.get(key, {})
+        previous = {key: value for key, value in updated.items() if key != 'depth_preprocess'}
+        if updated and settings.get(key) == previous:
+            settings[key] = dict(updated)
+            settings_updated = True
+    for key, value in default_settings.items():
+        if key not in settings:
+            settings[key] = value
+            settings_updated = True
+
+    # If settings were updated, write them back to the file
+    if settings_updated:
+        save_json(CNSETTINGS_FILE, settings)
+
+    # Ignore unknown settings
+    for key in list(settings.keys()):
+        if settings[key]["type"] not in controlnet_models:
+            del settings[key]
+
+    return settings
+
+
+def save_cnsettings(cn_save_options):
+    global controlnet_settings, cn_options
+    save_json(CNSETTINGS_FILE, cn_save_options)
+    controlnet_settings = cn_save_options
+    cn_options = {f"{k}": v for k, v in controlnet_settings.items()}
+def get_model(type):
+    if type not in controlnet_models or controlnet_models[type] is None:
+        return None
+    return path_manager.get_file_path(f"cn_{type}", default=None)
+
+
+def get_settings(gen_data):
+    if gen_data.get("automatic_upscale_target") == "Input image only":
+        from ruinedfooocus.features.generation.automatic_upscale import model_for
+        model = model_for(gen_data.get("automatic_upscale"))
+        if model is None:
+            raise ValueError("Choose an upscale model before upscaling the input image.")
+        return {"type": "upscale", "upscaler": model}
+    if gen_data.get("controlnet") is not None:
+        return dict(gen_data["controlnet"])
+    if "cn_selection" not in gen_data:
+        return {}
+    if gen_data["cn_selection"] == NEWCN:
+        options = {
+            "type": gen_data["cn_type"].lower(),
+            "edge_low": gen_data["cn_edge_low"],
+            "edge_high": gen_data["cn_edge_high"],
+            "start": gen_data["cn_start"],
+            "stop": gen_data["cn_stop"],
+            "strength": gen_data["cn_strength"],
+            "upscaler": gen_data["cn_upscale"],
+        }
+    else:
+        options = dict(controlnet_settings.get(gen_data["cn_selection"], {}))
+        if options.get("type") == "img2img" and "cn_strength" in gen_data:
+            options["denoise"] = gen_data["cn_strength"]
+        elif options.get("type") in ("canny", "depth", "sketch", "recolour"):
+            for key in ("strength", "start", "stop"):
+                if "cn_" + key in gen_data:
+                    options[key] = gen_data["cn_" + key]
+            if options["type"] == "canny":
+                for key in ("edge_low", "edge_high"):
+                    if "cn_" + key in gen_data:
+                        options[key] = gen_data["cn_" + key]
+        elif options.get("type") == "upscale" and "cn_upscale" in gen_data:
+            options["upscaler"] = gen_data["cn_upscale"]
+    if options.get('type') == 'depth':
+        from ruinedfooocus.features.image_editing.depth_control import DEPTH_DEFAULTS, depth_settings
+        options.update(depth_settings({**options, **{key:gen_data['cn_' + key] for key in DEPTH_DEFAULTS
+                                                    if 'cn_' + key in gen_data}}))
+    return options
+
+
+controlnet_settings = load_cnsettings()
+cn_options = {f"{k}": v for k, v in controlnet_settings.items()}

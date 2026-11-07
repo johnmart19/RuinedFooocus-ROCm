@@ -1,3 +1,4 @@
+from ruinedfooocus.core.paths import asset_path, resource_path
 """Native image decoding contracts with simulated VRAM, never GPU execution."""
 import ast
 from pathlib import Path
@@ -7,8 +8,8 @@ from unittest.mock import Mock, patch
 
 import torch
 
-from modules.image_guidance import resolve_guidance, validate_guidance
-from modules.vae_decode import decode_image_vae
+from ruinedfooocus.features.image_editing.image_guidance import resolve_guidance, validate_guidance
+from ruinedfooocus.backends.comfy.vae_decode import decode_image_vae
 
 ROOT = Path(__file__).resolve().parents[1]
 GIB = 1024**3
@@ -19,7 +20,7 @@ def native_method(filename, cls, name):
     node = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == cls)
     function = next(node for node in node.body if isinstance(node, ast.FunctionDef) and node.name == name)
     function.decorator_list = []
-    namespace = {}
+    namespace = {'asset_path': asset_path, 'resource_path': resource_path, }
     exec(compile(ast.Module(body=[function], type_ignores=[]), filename, 'exec'), namespace)
     return namespace[name]
 
@@ -95,7 +96,7 @@ class VaeDecodeTests(unittest.TestCase):
         self.assertEqual(vae.decode_tiled.call_args.kwargs['overlap'], 2)
 
     def test_request_defaults_validation_and_explicit_native_parameters(self):
-        from modules.openai_api import ImageRequest
+        from ruinedfooocus.integrations.openai_api import ImageRequest
         from pydantic import ValidationError
         defaults = resolve_guidance({}, {}, 'SDXL')
         self.assertEqual({key:defaults[key] for key in ('vae_tiled','vae_tile_size','vae_overlap')},

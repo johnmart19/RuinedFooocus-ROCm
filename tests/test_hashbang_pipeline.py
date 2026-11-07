@@ -14,14 +14,14 @@ class HashbangTests(unittest.TestCase):
                                    save_performance=lambda options: saved.update(options))
         shared = SimpleNamespace(performance_settings=settings, update_cfg=Mock())
         samplers = SimpleNamespace(KSampler=SimpleNamespace(SAMPLERS=["uni_pc"], SCHEDULERS=["simple"]))
-        stubs = {"shared": shared, "modules.async_worker": Mock(), "comfy.samplers": samplers}
+        stubs = {"ruinedfooocus.app.state": shared, "ruinedfooocus.app.async_worker": Mock(), "comfy.samplers": samplers}
         with patch.dict(sys.modules, stubs):
-            sys.modules.pop("modules.hashbang_pipeline", None)
-            module = importlib.import_module("modules.hashbang_pipeline")
+            sys.modules.pop("ruinedfooocus.features.automation.hashbang_pipeline", None)
+            module = importlib.import_module("ruinedfooocus.features.automation.hashbang_pipeline")
             prompt = "#!add performance\nname: WAN\nsteps: 12\ncfg: 4\nscheduler: simple\nsampler: uni_pc"
             with patch.object(module.Image, "open", return_value=Mock()):
                 module.pipeline().process(dict(task_id=1, prompt=prompt))
-        sys.modules.pop("modules.hashbang_pipeline", None)
+        sys.modules.pop("ruinedfooocus.features.automation.hashbang_pipeline", None)
         self.assertEqual(saved["WAN"], dict(custom_steps=12, cfg=4.0, sampler_name="uni_pc",
                                             scheduler="simple", clip_skip=1))
         self.assertEqual(defaults, dict(custom_steps=30, cfg=8, sampler_name="dpmpp_2m_sde_gpu",

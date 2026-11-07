@@ -241,7 +241,7 @@ def _diffusion(filename, weight_dtype, gguf_loader):
         raise ValueError("GGUF references require weight_dtype=default")
     if gguf_loader == "shared_compact":
         import warnings
-        from modules.gguf_loader import load_diffusion_model
+        from ruinedfooocus.backends.comfy.gguf_loader import load_diffusion_model
         warnings.warn("NONINDEPENDENT LOADER: reference shares app quantized weight loader; pipeline-only comparison", RuntimeWarning)
         return load_diffusion_model(filename)
     from molbal_comfyui_gguf.nodes import UnetLoaderGGUF

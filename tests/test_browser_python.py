@@ -11,7 +11,7 @@ from unittest.mock import patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from modules import browser_python as runtime
+import ruinedfooocus.features.chat.browser_python as runtime
 
 
 def digest(data):

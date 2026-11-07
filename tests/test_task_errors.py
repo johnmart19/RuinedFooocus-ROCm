@@ -1,7 +1,7 @@
 """GPU resets require a fresh device context; OOM and network timeouts do not."""
 import unittest
 
-from modules.task_errors import describe_error
+from ruinedfooocus.core.task_errors import describe_error
 
 
 class TaskErrorTests(unittest.TestCase):

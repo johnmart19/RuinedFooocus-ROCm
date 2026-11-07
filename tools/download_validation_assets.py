@@ -180,7 +180,7 @@ def acquire_locked(asset, path, folder, ranged):
     elif ranged:
         temporary = ranged_download(asset, url)
     else:
-        from modules.hub_download import download_hub_file
+        from ruinedfooocus.core.hub_download import download_hub_file
         download_hub_file(url, temporary)
     digest = verify(temporary, asset)
     path.parent.mkdir(parents=True, exist_ok=True)

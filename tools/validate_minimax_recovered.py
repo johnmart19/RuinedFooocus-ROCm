@@ -34,7 +34,7 @@ def main():
         initialize(case.get('runtime_args', []))
         import torch
         import comfy.model_management as memory
-        import shared
+        import ruinedfooocus.app.state as shared
         from tools.comfy_video_app import generate
         kwargs = dict(case['app']['kwargs'])
         kwargs.update(family='minimax', source_image=None, recovered_encoder=True,

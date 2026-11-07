@@ -7,8 +7,8 @@ import numpy as np
 from PIL import Image, ImageDraw
 import torch
 
-from modules.image_geometry import reference_plan, prepare_reference, restore_reference_frame
-from modules.image_guidance import validate_guidance
+from ruinedfooocus.features.image_editing.image_geometry import reference_plan, prepare_reference, restore_reference_frame
+from ruinedfooocus.features.image_editing.image_guidance import validate_guidance
 
 
 class ImageGeometryTests(unittest.TestCase):
@@ -58,7 +58,7 @@ class ImageGeometryTests(unittest.TestCase):
             validate_guidance({'image_resize_mode': 'stretch'})
 
     def test_large_generation_inputs_can_be_downscaled_without_weakening_other_image_limits(self):
-        from modules.api_runtime import decode_image
+        from ruinedfooocus.app.api_runtime import decode_image
         with Image.new('L', (4097, 4096)) as image:
             data = io.BytesIO()
             image.save(data, format='PNG')

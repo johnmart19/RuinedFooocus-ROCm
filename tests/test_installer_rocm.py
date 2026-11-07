@@ -2,7 +2,7 @@
 import unittest
 from unittest.mock import patch
 import os
-from modules import rocm_installer
+import ruinedfooocus.packaging.rocm_installer as rocm_installer
 
 
 class RocmPackagePlanTests(unittest.TestCase):

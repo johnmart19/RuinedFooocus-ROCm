@@ -8,9 +8,9 @@ import types
 import unittest
 from unittest.mock import Mock, patch
 
-from modules.comfy_compat import configure_device_environment, initialize_comfy_memory
-from modules import comfy_compat
-from modules.comfy_args import add_comfy_arguments, COMFY_DESTINATIONS
+from ruinedfooocus.backends.comfy.comfy_compat import configure_device_environment, initialize_comfy_memory
+import ruinedfooocus.backends.comfy.comfy_compat as comfy_compat
+from ruinedfooocus.backends.comfy.comfy_args import add_comfy_arguments, COMFY_DESTINATIONS
 
 
 class ComputeArgumentContractTests(unittest.TestCase):
@@ -59,7 +59,7 @@ class ComputeArgumentContractTests(unittest.TestCase):
         args.offline = False
         backend = types.SimpleNamespace()
         cli = types.ModuleType("comfy.cli_args")
-        from modules.comfy_args import PerformanceFeature
+        from ruinedfooocus.backends.comfy.comfy_args import PerformanceFeature
         cli.PerformanceFeature = PerformanceFeature
         cli.LatentPreviewMethod = types.SimpleNamespace(from_string=lambda value: value)
         with patch.dict(sys.modules, {"comfy.cli_args": cli}):
@@ -102,23 +102,23 @@ class DeviceSelectionTests(unittest.TestCase):
                 self.assertEqual(os.environ['MIMALLOC_PURGE_DELAY'], existing.get('MIMALLOC_PURGE_DELAY', '0'))
 
     def test_single_nvidia_default_does_not_create_phantom_devices(self):
-        from modules.cuda_selection import nvidia_devices
+        from ruinedfooocus.packaging.cuda_selection import nvidia_devices
         responses = ["CUDA Version: 13.2", "GPU-test, 00000000:01:00.0, 8.6"] * 2
         with patch.dict(os.environ, {}, clear=True), patch(
-                "modules.cuda_selection.subprocess.check_output", side_effect=responses):
+                "ruinedfooocus.packaging.cuda_selection.subprocess.check_output", side_effect=responses):
             configure_device_environment(device_args())
             self.assertEqual(os.environ["CUDA_VISIBLE_DEVICES"], "0")
             self.assertEqual(nvidia_devices(), ((8.6,), (13, 2)))
 
     def test_multi_gpu_reorders_only_real_devices(self):
         with patch.dict(os.environ, {"CUDA_DEVICE_ORDER": "PCI_BUS_ID"}, clear=True), patch(
-                "modules.cuda_selection.nvidia_devices", return_value=((8.6, 8.9, 8.6), (13, 2))):
+                "ruinedfooocus.packaging.cuda_selection.nvidia_devices", return_value=((8.6, 8.9, 8.6), (13, 2))):
             configure_device_environment(device_args(default_device=1))
             self.assertEqual(os.environ["CUDA_VISIBLE_DEVICES"], "1,0,2")
 
     def test_ambiguous_nvidia_order_rejected_and_environment_restored(self):
         with patch.dict(os.environ, {"CUDA_VISIBLE_DEVICES": "GPU-old"}, clear=True), patch(
-                "modules.cuda_selection.nvidia_devices", return_value=((8.6, 8.9), (13, 2))):
+                "ruinedfooocus.packaging.cuda_selection.nvidia_devices", return_value=((8.6, 8.9), (13, 2))):
             with self.assertRaisesRegex(ValueError, "PCI_BUS_ID"):
                 configure_device_environment(device_args())
             self.assertEqual(os.environ["CUDA_VISIBLE_DEVICES"], "GPU-old")
@@ -128,21 +128,21 @@ class DeviceSelectionTests(unittest.TestCase):
             self.assertNotIn("HIP_VISIBLE_DEVICES", os.environ)
             return "2\n"
         with patch.dict(os.environ, {"HIP_VISIBLE_DEVICES": "1"}, clear=True), patch(
-                "modules.cuda_selection.nvidia_devices", return_value=((), None)), patch(
-                "modules.comfy_compat.subprocess.check_output", side_effect=probe):
+                "ruinedfooocus.packaging.cuda_selection.nvidia_devices", return_value=((), None)), patch(
+                "ruinedfooocus.backends.comfy.comfy_compat.subprocess.check_output", side_effect=probe):
             configure_device_environment(device_args(default_device=1))
             self.assertEqual(os.environ["HIP_VISIBLE_DEVICES"], "1,0")
 
     def test_unavailable_index_does_not_change_visibility(self):
         with patch.dict(os.environ, {"CUDA_VISIBLE_DEVICES": "0"}, clear=True), patch(
-                "modules.comfy_compat._physical_device_count", return_value=1):
+                "ruinedfooocus.backends.comfy.comfy_compat._physical_device_count", return_value=1):
             with self.assertRaisesRegex(ValueError, "unavailable"):
                 configure_device_environment(device_args(default_device=1))
             self.assertEqual(os.environ["CUDA_VISIBLE_DEVICES"], "0")
 
     def test_explicit_selection_skips_default_probe(self):
         with patch.dict(os.environ, {}, clear=True), patch(
-                "modules.comfy_compat._physical_device_count") as probe:
+                "ruinedfooocus.backends.comfy.comfy_compat._physical_device_count") as probe:
             configure_device_environment(device_args(cuda_device="2,0"))
             self.assertEqual(os.environ["CUDA_VISIBLE_DEVICES"], "2,0")
             configure_device_environment(device_args(gpu_device_id=1))
@@ -203,7 +203,7 @@ class DynamicMemoryTests(unittest.TestCase):
         support = types.SimpleNamespace(inspect_installed_rocm=lambda platform: None,
             inspect_installed_cuda=lambda platform: None, select_torch_platform=lambda *args: "rocm10.1")
         with patch.dict(os.environ, {}, clear=True), \
-                patch.dict(sys.modules, {"torchruntime": types.SimpleNamespace(), "modules.runtime_support": support}), \
+                patch.dict(sys.modules, {"torchruntime": types.SimpleNamespace(), "ruinedfooocus.packaging.runtime_support": support}), \
                 patch.object(comfy_compat, "_runtime_platform", None), \
                 patch.object(comfy_compat, "configure_torch_allocator", side_effect=lambda *args: order.append("allocator")), \
                 patch.object(comfy_compat, "configure_torch_compatibility", side_effect=lambda: order.append("compatibility")), \

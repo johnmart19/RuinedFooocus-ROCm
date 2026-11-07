@@ -82,7 +82,7 @@ def _run(family, diffusion_model, text_encoder, vae_model, audio_vae_model=None,
          length=9, fps=24.0, source_image=None, distilled=False, weight_dtype='default',
          lora=None, lora_strength=1.0, output_video=None, clip_vision_model=None,
          sampling_shift=None, refinement_upscaler=None, gguf_loader="upstream", recovered_encoder=False):
-    import shared
+    import ruinedfooocus.app.state as shared
     if gguf_loader not in ('upstream', 'shared_compact'):
         raise ValueError('gguf_loader describes the native reference policy, upstream or shared_compact')
     # The app always retains its production loader; this option describes the
@@ -132,13 +132,13 @@ def _run(family, diffusion_model, text_encoder, vae_model, audio_vae_model=None,
         import importlib
         # Match production bootstrap: worker imports the pipeline registry before
         # individual pipelines import video_preview and its worker dependency.
-        importlib.import_module('modules.async_worker')
+        importlib.import_module('ruinedfooocus.app.async_worker')
         app = importlib.import_module('modules.' + module)
         owner = app.pipeline()
         owner.load_base_model(str(model), unet_only=True)
         owner.load_loras([{'name': str(files['loras']), 'weight': lora_strength}] if lora else [])
         if family == 'ltx_av':
-            from modules.video_settings import is_ltx25_distilled
+            from ruinedfooocus.features.video.video_settings import is_ltx25_distilled
             production_distilled = (owner.model_info['unet_type'] == 'LTXAV2.5' and
                                     is_ltx25_distilled('LTXV 2.5', str(model)))
             if bool(distilled) != production_distilled:

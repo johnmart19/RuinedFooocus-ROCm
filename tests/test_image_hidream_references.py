@@ -1,3 +1,4 @@
+from ruinedfooocus.core.paths import asset_path, resource_path
 """Native O1 reference conditioning and request isolation; CPU, no weights."""
 import ast
 from contextlib import redirect_stdout
@@ -12,8 +13,8 @@ import numpy as np
 from PIL import Image
 import torch
 
-from modules.image_geometry import prepare_reference, restore_reference_frame
-from modules.image_guidance import capabilities, normalize_reference_images, reference_image_map
+from ruinedfooocus.features.image_editing.image_geometry import prepare_reference, restore_reference_frame
+from ruinedfooocus.features.image_editing.image_guidance import capabilities, normalize_reference_images, reference_image_map
 
 ROOT=Path(__file__).resolve().parents[1]
 NATIVE=ROOT/'repositories/ComfyUI'
@@ -25,7 +26,7 @@ def native_reference():
     output=next(n for n in output_tree.body if isinstance(n,ast.ClassDef) and n.name=='NodeOutput')
     output.bases=[]
     output.body=[n for n in output.body if isinstance(n,ast.FunctionDef) and n.name in ('__init__','__getitem__','result')]
-    namespace=dict(Any=Any,_UIOutput=type('UIOutput',(),{}))
+    namespace=dict(asset_path=asset_path, resource_path=resource_path, Any=Any,_UIOutput=type('UIOutput',(),{}))
     exec(compile(ast.Module(body=[output],type_ignores=[]),'native_output','exec'),namespace)
     helper_tree=ast.parse((NATIVE/'node_helpers.py').read_text(encoding='utf-8'))
     helper=next(n for n in helper_tree.body if isinstance(n,ast.FunctionDef) and n.name=='conditioning_set_values')
@@ -42,7 +43,7 @@ def native_reference():
 
 
 def process_tree():
-    tree=ast.parse((ROOT/'modules/image_pipeline.py').read_text(encoding='utf-8'))
+    tree=ast.parse((ROOT/'ruinedfooocus/features/generation/image_pipeline.py').read_text(encoding='utf-8'))
     return tree,next(n for n in ast.walk(tree) if isinstance(n,ast.FunctionDef) and n.name=='process')
 
 
@@ -59,7 +60,7 @@ class HiDreamReferenceTests(unittest.TestCase):
         copier=next(n for n in helper_tree.body if isinstance(n,ast.FunctionDef) and n.name=='conditioning_set_values')
         owner=SimpleNamespace(conditions={key:{'cache':[[key,{}]]} for key in ('+','-','switch')},textencode=Mock())
         owner.textencode.side_effect=lambda sign,text,skip:owner.conditions[sign].update(cache=[[text,{}]])
-        scope=dict(self=owner,callback=None,positive_prompt='[first|second]',negative_prompt='',clip_skip=1,
+        scope=dict(asset_path=asset_path, resource_path=resource_path, self=owner,callback=None,positive_prompt='[first|second]',negative_prompt='',clip_skip=1,
             input_image=object(),hidream_edit=True,img2img_mode=False,control_type='None',controlnet={'type':'None'},switched_prompt=[],gen_data={'steps':2},
             pp=SimpleNamespace(prompt_switch_per_step=lambda *args:['first','second']))
         exec(compile(ast.Module(body=[copier],type_ignores=[]),'native_conditioning','exec'),scope)
@@ -89,7 +90,7 @@ class HiDreamReferenceTests(unittest.TestCase):
         tree,process=process_tree()
         branch=next(n for n in process.body if isinstance(n,ast.If) and ast.unparse(n.test)=='hidream_edit and input_image is not None')
         transform=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='reference_tensor')
-        scope=dict(torch=torch,np=np)
+        scope=dict(asset_path=asset_path, resource_path=resource_path, torch=torch,np=np)
         exec(compile(ast.Module(body=[transform],type_ignores=[]),'reference_tensor','exec'),scope)
         positive=[[torch.zeros(1,device='cpu'),{'text_input_ids':'positive'}]]
         negative=[[torch.ones(1,device='cpu'),{'text_input_ids':'negative'}]]
@@ -126,7 +127,7 @@ class HiDreamReferenceTests(unittest.TestCase):
         preprocess=next(n for n in process.body if isinstance(n,ast.If) and ast.unparse(n.test)=='input_image')
         image=Image.fromarray(np.arange(117*239*3,dtype=np.uint8).reshape(239,117,3))
         data=dict(width=2048,height=2048)
-        scope=dict(input_image=image,control_type='edit',controlnet={'type':'edit'},image_edit=False,
+        scope=dict(asset_path=asset_path, resource_path=resource_path, input_image=image,control_type='edit',controlnet={'type':'edit'},image_edit=False,
             hidream_edit=True,architecture='HiDreamO1',gen_data=data,prepare_reference=prepare_reference,
             guidance={'image_resize_mode':'preserve'})
         exec(compile(ast.Module(body=[preprocess],type_ignores=[]),'reference_preprocess','exec'),scope)
@@ -152,7 +153,7 @@ class HiDreamReferenceTests(unittest.TestCase):
         self.assertEqual((empty.call_count,encoder.call_count),(1,1))
 
     def test_normalization_and_ui_allow_native_o1_but_reject_invalid_refs(self):
-        from modules.ui.ui_image_guidance import references_visible
+        from ruinedfooocus.features.image_editing.ui_guidance import references_visible
         primary=Image.new('RGB',(8,8))
         extra=Image.new('RGBA',(5,7))
         self.assertTrue(capabilities('HiDream O1')['multiple_refs'])

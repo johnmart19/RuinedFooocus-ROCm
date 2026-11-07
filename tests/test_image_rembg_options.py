@@ -1,3 +1,4 @@
+from ruinedfooocus.core.paths import asset_path, resource_path
 """Background-removal controls and saved options without model inference."""
 import ast
 from pathlib import Path
@@ -7,7 +8,7 @@ from unittest.mock import Mock
 from test_powerup_family_controls import functions
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / 'modules/ui/ui_controlnet.py'
+SOURCE = ROOT / 'ruinedfooocus/features/image_editing/ui.py'
 
 
 def callback(name, scope):

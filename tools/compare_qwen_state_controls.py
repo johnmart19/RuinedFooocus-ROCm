@@ -12,8 +12,8 @@ import re
 from pathlib import Path
 
 CORE = ('conditioning', 'latent', 'output', 'settings')
-SOURCE_FILES = ('modules/image_pipeline.py', 'modules/pipeline_utils.py',
-                'modules/model_attention.py', 'modules/resource_defaults.py',
+SOURCE_FILES = ('ruinedfooocus/features/generation/image_pipeline.py', 'ruinedfooocus/features/generation/pipeline_utils.py',
+                'ruinedfooocus/backends/comfy/model_attention.py', 'ruinedfooocus/features/models/resource_defaults.py',
                 'tools/comfy_feature_app.py', 'tools/comfy_feature_reference.py')
 
 

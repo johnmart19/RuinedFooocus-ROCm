@@ -1,3 +1,4 @@
+from ruinedfooocus.core.paths import asset_path, resource_path
 """Compare bounded prefill against the installed upstream math on CPU."""
 import ast
 from pathlib import Path
@@ -8,7 +9,7 @@ from unittest.mock import patch
 import torch
 import torch.nn.functional as F
 
-from modules.sequence_prefill import install_qwen35_prefill, windowed_delta_rule
+from ruinedfooocus.backends.comfy.sequence_prefill import install_qwen35_prefill, windowed_delta_rule
 
 
 def native_delta_rule():
@@ -16,7 +17,7 @@ def native_delta_rule():
     tree = ast.parse(source.read_text(encoding='utf-8'))
     node = next(n for n in tree.body if isinstance(n, ast.FunctionDef)
                 and n.name == 'torch_chunk_gated_delta_rule')
-    namespace = {'torch': torch, 'F': F}
+    namespace = {'asset_path': asset_path, 'resource_path': resource_path, 'torch': torch, 'F': F}
     exec(compile(ast.Module(body=[node], type_ignores=[]), str(source), 'exec'), namespace)
     return namespace[node.name]
 

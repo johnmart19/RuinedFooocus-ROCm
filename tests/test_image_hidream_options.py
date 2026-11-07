@@ -1,3 +1,4 @@
+from ruinedfooocus.core.paths import asset_path, resource_path
 """HiDream native patch callbacks and geometry; no model weights or GPU work."""
 import ast
 from pathlib import Path
@@ -9,8 +10,8 @@ from unittest.mock import Mock, patch
 from PIL import Image
 import torch
 
-from modules.image_geometry import prepare_reference, restore_reference_frame
-from modules.image_guidance import FIELD_SCHEMA, resolve_guidance, request_model, effective_guidance, restore_guidance_metadata
+from ruinedfooocus.features.image_editing.image_geometry import prepare_reference, restore_reference_frame
+from ruinedfooocus.features.image_editing.image_guidance import FIELD_SCHEMA, resolve_guidance, request_model, effective_guidance, restore_guidance_metadata
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -44,21 +45,21 @@ def native_nodes():
     cls=next(n for n in tree.body if isinstance(n,ast.ClassDef) and n.name=='HiDreamO1PatchSeamSmoothing')
     cls.bases=[]
     cls.body=[n for n in cls.body if not isinstance(n,ast.FunctionDef) or n.name!='define_schema']
-    namespace=dict(torch=torch,io=SimpleNamespace(NodeOutput=lambda *args:args),
+    namespace=dict(asset_path=asset_path, resource_path=resource_path, torch=torch,io=SimpleNamespace(NodeOutput=lambda *args:args),
         comfy=SimpleNamespace(patcher_extension=SimpleNamespace(WrappersMP=SimpleNamespace(DIFFUSION_MODEL='diffusion'))))
     exec(compile(ast.Module(body=[cls],type_ignores=[]),str(path),'exec'),namespace)
     smoothing=namespace[cls.name].execute
     advanced=ast.parse((path.parent/'nodes_model_advanced.py').read_text(encoding='utf-8'))
     noise_cls=next(n for n in advanced.body if isinstance(n,ast.ClassDef) and n.name=='ModelNoiseScale')
     method=next(n for n in noise_cls.body if isinstance(n,ast.FunctionDef) and n.name=='patch')
-    scope={}
+    scope={'asset_path': asset_path, 'resource_path': resource_path, }
     exec(compile(ast.Module(body=[method],type_ignores=[]),'native_noise_scale','exec'),scope)
     return dict(seam=smoothing,noise_scale=lambda **kwargs:scope['patch'](None,**kwargs))
 
 
 class HiDreamOptionsTests(unittest.TestCase):
     def test_dev_automatic_noise_and_seams_respect_explicit_overrides(self):
-        from modules.ui.ui_image_guidance import preset_control_state
+        from ruinedfooocus.features.image_editing.ui_guidance import preset_control_state
         native=native_nodes()
         base=Patcher()
         name='hidream_o1_image_dev_fp8.safetensors'
@@ -81,7 +82,7 @@ class HiDreamOptionsTests(unittest.TestCase):
         self.assertFalse(resolve_guidance(changed['values'],{},'HiDreamO1',name)['hidream_o1_seam_smoothing'])
         self.assertIsNone(changed['values']['lcm_noise_clip'])
         self.assertIsNone(resolve_guidance({'hidream_o1_seam_smoothing':'auto'},{},'SDXL')['hidream_o1_noise_scale'])
-        from modules.settings_validation import validate_settings
+        from ruinedfooocus.core.settings_validation import validate_settings
         self.assertIsNone(validate_settings({'hidream_o1_seam_smoothing':'auto'})['hidream_o1_seam_smoothing'])
         self.assertFalse(resolve_guidance({'hidream_o1_seam_smoothing':'off'},{},'HiDreamO1')['hidream_o1_seam_smoothing'])
 
@@ -136,19 +137,19 @@ class HiDreamOptionsTests(unittest.TestCase):
         restored=restore_reference_frame(result,plan)
         self.assertEqual(tuple(restored.shape),(1,239,117,3))
         self.assertTrue(torch.allclose(restored,pixels[:,plan['top']:plan['top']+239,plan['left']:plan['left']+117]))
-        tree=ast.parse((ROOT/'modules/image_pipeline.py').read_text(encoding='utf-8'))
+        tree=ast.parse((ROOT/'ruinedfooocus/features/generation/image_pipeline.py').read_text(encoding='utf-8'))
         process=next(n for n in ast.walk(tree) if isinstance(n,ast.FunctionDef) and n.name=='process')
         branch=next(n for n in process.body if isinstance(n,ast.If) and ast.unparse(n.test)=='input_image')
         data={'width':520,'height':776}
-        scope=dict(input_image=None,architecture='HiDreamO1',gen_data=data)
+        scope=dict(asset_path=asset_path, resource_path=resource_path, input_image=None,architecture='HiDreamO1',gen_data=data)
         exec(compile(ast.Module(body=[branch],type_ignores=[]),'native_canvas','exec'),scope)
         self.assertEqual((data['width'],data['height']),(544,800))
         self.assertEqual(tuple(restore_reference_frame(torch.zeros(1,800,544,3,device='cpu'),scope['reference_frame']).shape),
                          (1,776,520,3))
 
     def test_api_validation_family_guards_and_metadata_ranges(self):
-        from modules.openai_api import ImageRequest
-        from modules.image_guidance import validate_guidance
+        from ruinedfooocus.integrations.openai_api import ImageRequest
+        from ruinedfooocus.features.image_editing.image_guidance import validate_guidance
         from pydantic import ValidationError
         for values in ({'hidream_o1_noise_scale':-1},{'hidream_o1_noise_scale':65},
                 {'hidream_o1_seam_smoothing':'true'},{'hidream_o1_seam_pattern':'random'},
@@ -164,7 +165,7 @@ class HiDreamOptionsTests(unittest.TestCase):
         self.assertFalse({'hidream_o1_seam_start','hidream_o1_seam_end'} & restored.keys())
 
     def test_api_freezes_hidream_options_without_carrying_other_model_overrides(self):
-        from modules import api_runtime
+        import ruinedfooocus.app.api_runtime as api_runtime
         perf=SimpleNamespace(CUSTOM_PERFORMANCE='Own settings',
             choices_for_model=lambda *args:['Own settings'],
             selection_for_model=lambda *args:'Own settings',
@@ -177,7 +178,7 @@ class HiDreamOptionsTests(unittest.TestCase):
             hidream_o1_seam_smoothing=True,hidream_o1_seam_pattern='symmetric',
             hidream_o1_seam_start=.7,hidream_o1_seam_end=.9,hidream_o1_seam_passes='4',
             hidream_o1_seam_blend='window',hidream_o1_seam_strength=.5)
-        with patch.dict(sys.modules,{'shared':shared,'comfy.samplers':samplers}), \
+        with patch.dict(sys.modules,{'ruinedfooocus.app.state':shared,'comfy.samplers':samplers}), \
                 patch.object(api_runtime,'image_defaults',defaults), \
                 patch.object(api_runtime,'submit',side_effect=lambda run:run):
             operation=api_runtime.images(payload,dict(family='HiDreamO1',name='dev.safetensors'))
@@ -194,7 +195,7 @@ class HiDreamOptionsTests(unittest.TestCase):
 
     def test_real_gradio_controls_have_auto_and_keep_existing_defaults(self):
         import gradio as gr
-        from modules.ui.ui_image_guidance import create_hidream_controls, create_lcm_controls
+        from ruinedfooocus.features.image_editing.ui_guidance import create_hidream_controls, create_lcm_controls
         with gr.Blocks(analytics_enabled=False):
             fields,options=create_hidream_controls({})
             lcm=create_lcm_controls({})
@@ -210,7 +211,7 @@ class HiDreamOptionsTests(unittest.TestCase):
     def test_gallery_replay_can_be_submitted_through_hidden_seam_control(self):
         import gradio as gr
         from test_image_metadata_boundary import gallery
-        from modules.ui.ui_image_guidance import create_hidream_controls
+        from ruinedfooocus.features.image_editing.ui_guidance import create_hidream_controls
         updates = gallery({'prompt': 'Keep the source.'})
         with gr.Blocks(analytics_enabled=False):
             fields, _ = create_hidream_controls({})

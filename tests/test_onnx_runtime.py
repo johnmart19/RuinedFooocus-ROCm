@@ -7,9 +7,9 @@ from unittest.mock import Mock, patch
 from weakref import WeakSet
 
 from PIL import Image
-from modules import auxiliary_resources as resources
-from modules import onnx_installer as installer
-from modules import onnx_runtime as runtime
+import ruinedfooocus.features.image_processing.auxiliary_resources as resources
+import ruinedfooocus.backends.onnx.onnx_installer as installer
+import ruinedfooocus.backends.onnx.onnx_runtime as runtime
 
 
 class OnnxRuntimeTests(unittest.TestCase):
@@ -71,7 +71,7 @@ class OnnxRuntimeTests(unittest.TestCase):
         rembg = SimpleNamespace(new_session=Mock())
         with patch.object(ort, 'get_available_providers', return_value=['CUDAExecutionProvider']) as providers, \
              patch.dict('sys.modules', {'rembg': rembg,
-                 'argparser': SimpleNamespace(args=SimpleNamespace(directml=None))}), \
+                 'ruinedfooocus.app.arguments': SimpleNamespace(args=SimpleNamespace(directml=None))}), \
              patch.object(runtime, 'runtime_available', return_value=False), \
              patch.object(runtime, 'release_torch_weights'):
             runtime.new_session(cpu=True)
@@ -88,7 +88,7 @@ class OnnxRuntimeTests(unittest.TestCase):
         rembg = SimpleNamespace(new_session=Mock())
         args = SimpleNamespace(directml=2)
         with patch.object(ort, 'get_available_providers', return_value=['CUDAExecutionProvider']), \
-             patch.dict('sys.modules', {'rembg': rembg, 'argparser': SimpleNamespace(args=args)}), \
+             patch.dict('sys.modules', {'rembg': rembg, 'ruinedfooocus.app.arguments': SimpleNamespace(args=args)}), \
              patch.object(runtime.platform, 'system', return_value='Windows'), \
              patch.object(runtime, 'runtime_available', return_value=True):
             selected = runtime.new_session(preference='Auto')

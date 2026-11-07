@@ -1,3 +1,4 @@
+from ruinedfooocus.core.paths import asset_path, resource_path, data_path
 """Retired image-tool requests must not silently generate an unrelated image."""
 import ast
 import json
@@ -13,19 +14,19 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def control_scope():
-    tree = ast.parse((ROOT / 'modules/controlnet.py').read_text(encoding='utf-8'))
+    tree = ast.parse((ROOT / 'ruinedfooocus/features/image_editing/controlnet.py').read_text(encoding='utf-8'))
     nodes = [node for node in tree.body if isinstance(node, ast.FunctionDef) or
              isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id in
                 ('DEFAULT_CNSETTINGS_FILE', 'CNSETTINGS_FILE', 'NEWCN', 'controlnet_models')
                 for target in node.targets)]
-    scope = dict(os=os, shutil=shutil, json=json)
+    scope = dict(asset_path=asset_path, resource_path=resource_path, data_path=data_path, os=os, shutil=shutil, json=json)
     exec(compile(ast.Module(body=nodes, type_ignores=[]), 'control_settings', 'exec'), scope)
-    scope['controlnet_settings'] = json.loads((ROOT / 'settings/powerup.default').read_text())
+    scope['controlnet_settings'] = json.loads((ROOT / 'ruinedfooocus/resources/defaults/powerup.default').read_text())
     return scope
 
 
 def route(scope, data):
-    tree = ast.parse((ROOT / 'modules/pipelines.py').read_text(encoding='utf-8'))
+    tree = ast.parse((ROOT / 'ruinedfooocus/features/generation/pipelines.py').read_text(encoding='utf-8'))
     node = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'update')
     state = {'pipeline': None}
     factories = {name: SimpleNamespace(pipeline=Mock(return_value=SimpleNamespace(pipeline_type=[kind])))
@@ -33,7 +34,7 @@ def route(scope, data):
                                     ('rembg_pipeline', 'rembg'), ('llama_pipeline', 'llama'))}
     models = SimpleNamespace(get_file=lambda *args: Path('model.safetensors'),
         get_models_by_path=lambda *args: {}, get_model_base=lambda *args: 'SDXL')
-    namespace = dict(state=state, shared=SimpleNamespace(models=models), Path=Path, VIDEO_PIPELINES={},
+    namespace = dict(asset_path=asset_path, resource_path=resource_path, state=state, shared=SimpleNamespace(models=models), Path=Path, VIDEO_PIPELINES={},
         controlnet=SimpleNamespace(get_settings=scope['get_settings']), selected_pipeline=lambda: state['pipeline'],
         NoPipeLine=lambda: SimpleNamespace(pipeline_type=[]), **factories)
     exec(compile(ast.Module(body=[node], type_ignores=[]), 'select_image_pipeline', 'exec'), namespace)
@@ -44,7 +45,7 @@ class ImageToolRegistryTests(unittest.TestCase):
     def test_custom_tool_choices_only_offer_implemented_types(self):
         scope = control_scope()
         self.assertNotIn('faceswap', scope['controlnet_models'])
-        tree = ast.parse((ROOT / 'modules/ui/ui_controlnet.py').read_text(encoding='utf-8'))
+        tree = ast.parse((ROOT / 'ruinedfooocus/features/image_editing/ui.py').read_text(encoding='utf-8'))
         node = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'control_types')
         ui = dict(controlnet=SimpleNamespace(controlnet_models=scope['controlnet_models']),
                   SDXL_CONTROLS=frozenset(('canny', 'depth', 'sketch', 'recolour')))

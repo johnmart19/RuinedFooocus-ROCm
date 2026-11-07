@@ -1,3 +1,4 @@
+from ruinedfooocus.core.paths import asset_path, resource_path
 """Style templates may add text without rewriting placeholders in the user's text."""
 import ast
 from pathlib import Path
@@ -10,9 +11,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class StylePayloadTests(unittest.TestCase):
     def apply(self, selected, prompt, keywords='metadata {prompt}'):
-        tree = ast.parse((ROOT / 'modules/sdxl_styles.py').read_text(encoding='utf-8'))
+        tree = ast.parse((ROOT / 'ruinedfooocus/features/prompting/sdxl_styles.py').read_text(encoding='utf-8'))
         node = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'apply_style')
-        scope = dict(random=random, re=re, STYLE_ALIASES={}, styles={
+        scope = dict(asset_path=asset_path, resource_path=resource_path, random=random, re=re, STYLE_ALIASES={}, styles={
             'Frame': ('Frame {prompt}, , done', ''), 'Outer': ('Outer {prompt}', ''),
             'Keywords': ('{prompt} {lora_keywords}', ''), 'Negative only': (None,'noise')},
             default_style=('{prompt}',''), allstyles=[])

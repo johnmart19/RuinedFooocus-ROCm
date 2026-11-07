@@ -1,3 +1,4 @@
+from ruinedfooocus.core.paths import asset_path, resource_path
 """Exercise the pinned ControlNet conditioning node; no network weights/GPU."""
 import ast
 from pathlib import Path
@@ -26,10 +27,10 @@ class ControlNetSwitchTests(unittest.TestCase):
         native=ast.parse((ROOT/'repositories/ComfyUI/nodes.py').read_text(encoding='utf-8'))
         node=next(n for n in native.body if isinstance(n,ast.ClassDef) and n.name=='ControlNetApplyAdvanced')
         node.body=[n for n in node.body if isinstance(n,ast.FunctionDef) and n.name=='apply_controlnet']
-        namespace={}
+        namespace={'asset_path': asset_path, 'resource_path': resource_path, }
         exec(compile(ast.Module(body=[node],type_ignores=[]),'native_controlnet','exec'),namespace)
         self.native=namespace[node.name]
-        tree=ast.parse((ROOT/'modules/image_pipeline.py').read_text(encoding='utf-8'))
+        tree=ast.parse((ROOT/'ruinedfooocus/features/generation/image_pipeline.py').read_text(encoding='utf-8'))
         process=next(n for n in ast.walk(tree) if isinstance(n,ast.FunctionDef) and n.name=='process')
         self.branch=next(n for n in ast.walk(process) if isinstance(n,ast.If) and ast.unparse(n.test)=='self.xl_controlnet')
         self.select=next(n for n in process.body if isinstance(n,ast.Assign) and
@@ -48,7 +49,7 @@ class ControlNetSwitchTests(unittest.TestCase):
         owner=SimpleNamespace(xl_controlnet=control,xl_base_patched=SimpleNamespace(vae=vae),
             conditions={'+':{'cache':cached_positive},'-':{'cache':cached_negative}})
         image=torch.linspace(0,1,32*64*3,device='cpu').reshape(1,32,64,3)
-        scope=dict(self=owner,positive_conditioning=positive,negative_conditioning=negative,switched_prompt=intervals,
+        scope=dict(asset_path=asset_path, resource_path=resource_path, self=owner,positive_conditioning=positive,negative_conditioning=negative,switched_prompt=intervals,
             input_image=image,controlnet=dict(strength=strength,start=.1,stop=.9),ControlNetApplyAdvanced=self.native)
         exec(compile(ast.Module(body=[self.branch,self.select],type_ignores=[]),'controlnet_route','exec'),scope)
         return scope,copies,control,positive,negative,intervals

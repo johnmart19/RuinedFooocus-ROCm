@@ -1,3 +1,4 @@
+from ruinedfooocus.core.paths import asset_path, resource_path
 """Depth preparation, cache and UI contracts; no accelerator execution."""
 import ast
 import json
@@ -10,7 +11,7 @@ from unittest.mock import Mock, patch
 
 import torch
 
-from modules.depth_control import DEPTH_DEFAULTS, depth_settings, prepare_depth, depth_model_name
+from ruinedfooocus.features.image_editing.depth_control import DEPTH_DEFAULTS, depth_settings, prepare_depth, depth_model_name
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -25,7 +26,7 @@ def function(path, name, **scope):
 
 class DepthTests(unittest.TestCase):
     def test_old_maps_and_new_api_defaults_are_distinct_and_validated(self):
-        from modules.openai_api import ControlNetRequest
+        from ruinedfooocus.integrations.openai_api import ControlNetRequest
         from pydantic import ValidationError
         self.assertEqual(depth_settings({})['depth_preprocess'], 'none')
         self.assertEqual(ControlNetRequest(type='depth').depth_preprocess, 'auto')
@@ -67,7 +68,7 @@ class DepthTests(unittest.TestCase):
             path.write_bytes(b'tiny mock weights')
             paths = SimpleNamespace(get_folder_file_path=lambda *args:path)
             owner = SimpleNamespace()
-            with patch.dict('sys.modules', {'shared':SimpleNamespace(path_manager=paths),
+            with patch.dict('sys.modules', {'ruinedfooocus.app.state':SimpleNamespace(path_manager=paths),
                     'folder_paths':Mock(), 'comfy_extras.nodes_depth_anything_3':native}):
                 options = dict(DEPTH_DEFAULTS, depth_model='small', depth_normalization='min_max', depth_resolution=280)
                 prepare_depth(owner, image, options)
@@ -89,7 +90,7 @@ class DepthTests(unittest.TestCase):
 
     def test_ui_and_custom_presets_forward_depth_values_without_mutation(self):
         preset = dict(type='depth', strength=0.5, depth_preprocess='auto')
-        get = function('modules/controlnet.py','get_settings', controlnet_settings={'Depth':preset}, NEWCN='Custom...')
+        get = function('ruinedfooocus/features/image_editing/controlnet.py','get_settings', controlnet_settings={'Depth':preset}, NEWCN='Custom...')
         data = dict(cn_selection='Depth', cn_depth_preprocess='none', cn_depth_resolution=280, cn_depth_dtype='fp32')
         result = get(data)
         self.assertEqual((result['depth_preprocess'],result['depth_resolution'],result['depth_dtype']), ('none',280,'fp32'))
@@ -99,7 +100,7 @@ class DepthTests(unittest.TestCase):
         self.assertEqual(custom['depth_preprocess'], 'none')
 
     def test_only_unchanged_stock_depth_presets_opt_into_estimation(self):
-        defaults = json.loads((ROOT/'settings/powerup.default').read_text())
+        defaults = json.loads((ROOT/'ruinedfooocus/resources/defaults/powerup.default').read_text())
         stock = {key:value for key,value in defaults['Depth (low)'].items() if key != 'depth_preprocess'}
         customized = dict(stock,strength=.73)
         with tempfile.TemporaryDirectory() as folder:
@@ -108,7 +109,7 @@ class DepthTests(unittest.TestCase):
             source.write_text(json.dumps(defaults))
             saved.write_text(json.dumps(defaults | {'Depth (low)':stock, 'Depth (high)':customized}))
             save = Mock()
-            load = function('modules/controlnet.py', 'load_cnsettings', os=os, json=json,
+            load = function('ruinedfooocus/features/image_editing/controlnet.py', 'load_cnsettings', os=os, json=json,
                 CNSETTINGS_FILE=str(saved), DEFAULT_CNSETTINGS_FILE=str(source), save_json=save,
                 controlnet_models=dict.fromkeys(value['type'] for value in defaults.values()))
             result = load()
@@ -128,9 +129,9 @@ class DepthTests(unittest.TestCase):
         cn = SimpleNamespace(NEWCN='Custom...',cn_options={'Depth':dict(type='depth',depth_preprocess='auto'),
                                                         'Old map':dict(type='depth')})
         registered={}
-        build = function('modules/ui/ui_depth_control.py','create_ui', gr=gr,controlnet=cn,
+        build = function('ruinedfooocus/features/image_editing/ui_depth_control.py','create_ui', gr=gr,controlnet=cn,
             shared=SimpleNamespace(add_ctrl=lambda key,value:registered.update({key:value})),
-            DEPTH_DEFAULTS=DEPTH_DEFAULTS, DEPTH_CHOICES=__import__('modules.depth_control',fromlist=['DEPTH_CHOICES']).DEPTH_CHOICES,
+            DEPTH_DEFAULTS=DEPTH_DEFAULTS, DEPTH_CHOICES=__import__('ruinedfooocus.features.image_editing.depth_control',fromlist=['DEPTH_CHOICES']).DEPTH_CHOICES,
             depth_settings=depth_settings)
         fields=build(Widget(),Widget(),Widget(),lambda name:{'sdxl':name=='sdxl'})
         callback=gr.on.call_args.kwargs['fn']
@@ -145,7 +146,7 @@ class DepthTests(unittest.TestCase):
 
     def test_custom_preset_save_keeps_all_depth_options(self):
         saved=Mock()
-        save=function('modules/ui/ui_controlnet.py','cn_save',
+        save=function('ruinedfooocus/features/image_editing/ui.py','cn_save',
             control_types=lambda features:['Depth'],checkpoint_features=lambda *args:{'sdxl':True},
             load_cnsettings=lambda:{},save_cnsettings=saved,powerup_choices=lambda **kwargs:[],
             gr=SimpleNamespace(update=lambda **kwargs:kwargs))

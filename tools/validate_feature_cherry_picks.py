@@ -86,18 +86,23 @@ raise SystemExit(not result.wasSuccessful())
 def python_contracts(folder):
     """Check syntax, local modules and named imports without executing app code."""
     trees = {}
-    for path in folder.rglob('*.py'):
-        rel = path.relative_to(folder).as_posix()
-        if rel.startswith(('repositories/', '.git/')):
-            continue
-        trees[rel] = ast.parse(path.read_text(encoding='utf-8-sig'), filename=rel)
+    excluded = {'.git', 'repositories', 'venv', 'tmp', 'cache', 'models', 'outputs', '.codex', '.claude', '__pycache__'}
+    for directory, children, files in os.walk(folder):
+        children[:] = [name for name in children if name != '__pycache__'
+                       and (Path(directory) != folder or name not in excluded)]
+        for name in files:
+            if not name.endswith('.py'):
+                continue
+            path = Path(directory) / name
+            rel = path.relative_to(folder).as_posix()
+            trees[rel] = ast.parse(path.read_text(encoding='utf-8-sig'), filename=rel)
     failures = []
     for path, tree in trees.items():
         for node in ast.walk(tree):
-            if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith('modules.'):
+            if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith(('modules.', 'ruinedfooocus.')):
                 modules = [(node.module, node.names)]
             elif isinstance(node, ast.Import):
-                modules = [(alias.name, []) for alias in node.names if alias.name.startswith('modules.')]
+                modules = [(alias.name, []) for alias in node.names if alias.name.startswith(('modules.', 'ruinedfooocus.'))]
             else:
                 continue
             for name, imports in modules:
@@ -109,7 +114,9 @@ def python_contracts(folder):
                     continue
                 exports = module_exports(trees[target])
                 for alias in imports:
-                    if alias.name != '*' and alias.name not in exports:
+                    submodule = name.replace('.', '/') + '/' + alias.name
+                    if (alias.name != '*' and alias.name not in exports
+                            and submodule + '.py' not in trees and submodule + '/__init__.py' not in trees):
                         failures.append(f'{path}:{node.lineno}: {name} has no {alias.name}')
     if failures:
         raise ValueError('\n'.join(failures))

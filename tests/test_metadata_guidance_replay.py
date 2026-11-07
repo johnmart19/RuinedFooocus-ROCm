@@ -1,3 +1,4 @@
+from ruinedfooocus.core.paths import asset_path, resource_path
 """CPU-only replay of the production metadata importer and guidance policy."""
 import ast
 import json
@@ -6,20 +7,20 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from modules.image_guidance import resolve_guidance
+from ruinedfooocus.features.image_editing.image_guidance import resolve_guidance
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def replay(parameters, family='QwenImage'):
-    tree = ast.parse((ROOT / 'modules/prompt_processing.py').read_text(encoding='utf-8'))
+    tree = ast.parse((ROOT / 'ruinedfooocus/features/prompting/prompt_processing.py').read_text(encoding='utf-8'))
     function = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == 'process_metadata')
-    scope = {'json': json}
+    scope = {'asset_path': asset_path, 'resource_path': resource_path, 'json': json}
     exec(compile(ast.Module(body=[function], type_ignores=[]), 'metadata_replay', 'exec'), scope)
     models = SimpleNamespace(get_models_by_path=lambda *args, **kwargs: {},
         get_model_base=lambda info: family, get_file=lambda *args: Path('model.safetensors'),
         detect_checkpoint_base=lambda path: family)
-    with patch.dict('sys.modules', {'shared': SimpleNamespace(models=models)}):
+    with patch.dict('sys.modules', {'ruinedfooocus.app.state': SimpleNamespace(models=models)}):
         return scope['process_metadata']({'base_model_name': 'model.safetensors',
             'prompt': json.dumps({'prompt': 'edit', **parameters})})
 
@@ -49,7 +50,7 @@ class EffectiveShiftReplayTests(unittest.TestCase):
             'effective_sampling_shift': 5.0, 'cfg_norm_strength': 1.25,
             'image_resize_mode': 'crop', 'vae_tiled':True, 'vae_tile_size':256, 'vae_overlap':32}}, family='MOSSImage')
         values = resolve_guidance(imported, {}, 'MOSSImage')
-        from modules.image_guidance import FIELD_SCHEMA
+        from ruinedfooocus.features.image_editing.image_guidance import FIELD_SCHEMA
         self.assertEqual(values, {**{key:spec['default'] for key,spec in FIELD_SCHEMA.items()},
             'hidream_o1_seam_smoothing':False, 'moss_image_edit_format': 'Moss-Image-Edit',
             'moss_image_edit_strength': 2.5, 'moss_image_slg': True,

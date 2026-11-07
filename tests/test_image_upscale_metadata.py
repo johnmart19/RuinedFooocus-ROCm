@@ -1,3 +1,4 @@
+from ruinedfooocus.core.paths import asset_path, resource_path
 """PNG dimensions must replay the sampled image, without applying upscale twice."""
 import ast
 import io
@@ -11,7 +12,7 @@ import numpy as np
 from PIL import Image
 from PIL.PngImagePlugin import PngInfo
 
-from modules.image_guidance import capabilities, resolve_guidance, restore_guidance_metadata
+from ruinedfooocus.features.image_editing.image_guidance import capabilities, resolve_guidance, restore_guidance_metadata
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -24,7 +25,7 @@ def function(path, name, scope):
 
 
 def saved_parameters(selected, native=None, scale=2):
-    tree = ast.parse((ROOT / 'modules/async_worker.py').read_text(encoding='utf-8'))
+    tree = ast.parse((ROOT / 'ruinedfooocus/app/async_worker.py').read_text(encoding='utf-8'))
     process = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == '_process')
     loop = next(n for n in ast.walk(process) if isinstance(n, ast.For) and ast.unparse(n.iter) == 'imgs')
     start = next(i for i, n in enumerate(loop.body) if isinstance(n, ast.Assign) and
@@ -40,7 +41,7 @@ def saved_parameters(selected, native=None, scale=2):
     if scale > 1:
         data.update(automatic_upscale_model=f'RealESRGAN_x{scale}plus.pth',
                     automatic_upscale=f'{scale}× General (RealESRGAN)')
-    scope = dict(gen_data=data, width=selected[0], height=selected[1], x=output,
+    scope = dict(asset_path=asset_path, resource_path=resource_path, gen_data=data, width=selected[0], height=selected[1], x=output,
         p_txt='Keep the original framing.', n_txt='', steps=8, seed=71, start_step=0, denoise=.25,
         used_loras=[], settings=SimpleNamespace(default_settings={}),
         pipeline=SimpleNamespace(pipeline_type=['sdxl']))
@@ -55,23 +56,23 @@ def saved_parameters(selected, native=None, scale=2):
 
 
 def replay(parameters):
-    run = function('modules/prompt_processing.py', 'process_metadata', {'json': json})
+    run = function('ruinedfooocus/features/prompting/prompt_processing.py', 'process_metadata', {'json': json})
     models = SimpleNamespace(get_models_by_path=lambda *a, **k: {}, get_model_base=lambda info: 'SDXL',
                              get_file=lambda *a: None)
-    with patch.dict('sys.modules', {'shared': SimpleNamespace(models=models)}):
+    with patch.dict('sys.modules', {'ruinedfooocus.app.state': SimpleNamespace(models=models)}):
         return run({'prompt': json.dumps(parameters)})
 
 
 def gallery(parameters):
-    tree = ast.parse((ROOT / 'modules/ui/ui_image_gallery.py').read_text(encoding='utf-8'))
+    tree = ast.parse((ROOT / 'ruinedfooocus/features/gallery/ui.py').read_text(encoding='utf-8'))
     controls = next(n.value for n in tree.body if isinstance(n, ast.Assign) and
                     any(isinstance(t, ast.Name) and t.id == 'METADATA_CONTROLS' for t in n.targets))
-    scope = dict(json=json, gr=SimpleNamespace(update=lambda **kw: kw, Info=Mock()),
+    scope = dict(asset_path=asset_path, resource_path=resource_path, json=json, gr=SimpleNamespace(update=lambda **kw: kw, Info=Mock()),
         get_ctrl=lambda name: name, METADATA_CONTROLS=ast.literal_eval(controls),
         capabilities=capabilities, resolve_guidance=resolve_guidance, restore_guidance_metadata=restore_guidance_metadata)
-    run = function('modules/ui/ui_image_gallery.py', 'apply_metadata', scope)
+    run = function('ruinedfooocus/features/gallery/ui.py', 'apply_metadata', scope)
     shared = SimpleNamespace(path_manager=SimpleNamespace(upscaler_filenames=[], DOWNLOADABLE_FILES={}))
-    with patch.dict('sys.modules', {'shared': shared, 'modules.ui.ui_image_guidance':
+    with patch.dict('sys.modules', {'ruinedfooocus.app.state': shared, 'ruinedfooocus.features.image_editing.ui_guidance':
                                    SimpleNamespace(family_for_checkpoint=lambda name: 'SDXL')}):
         return run(parameters, 'model.safetensors', None)
 

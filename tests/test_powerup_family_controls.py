@@ -1,3 +1,4 @@
+from ruinedfooocus.core.paths import asset_path, resource_path
 """Exercise production PowerUp family policy without starting Gradio or Torch."""
 import ast
 from pathlib import Path
@@ -6,7 +7,7 @@ import unittest
 from unittest.mock import Mock, MagicMock, patch
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / 'modules/ui/ui_controlnet.py'
+SOURCE = ROOT / 'ruinedfooocus/features/image_editing/ui.py'
 
 
 def functions():
@@ -20,15 +21,15 @@ def functions():
     controls = SimpleNamespace(controlnet_models=dict.fromkeys(('canny', 'depth', 'sketch', 'recolour', 'img2img', 'upscale', 'rembg')),
         cn_options={'Img2Img': {'type': 'img2img'}, 'Canny': {'type': 'canny'}, 'Depth': {'type': 'depth'},
         'Sketch': {'type': 'sketch'}, 'Recolour': {'type': 'recolour'}, 'Remove background': {'type': 'rembg'}})
-    namespace = {'shared': SimpleNamespace(models=models, settings=SimpleNamespace(default_settings={})), 'controlnet': controls,
+    namespace = {'asset_path': asset_path, 'resource_path': resource_path, 'shared': SimpleNamespace(models=models, settings=SimpleNamespace(default_settings={})), 'controlnet': controls,
                  'VIDEO_FPS': {}, 'NEWCN': 'New...', 't': lambda value: value,
                  'gr': SimpleNamespace(update=lambda **kwargs:kwargs)}
-    guidance = ast.parse((ROOT / 'modules/ui/ui_image_guidance.py').read_text(encoding='utf-8'))
+    guidance = ast.parse((ROOT / 'ruinedfooocus/features/image_editing/ui_guidance.py').read_text(encoding='utf-8'))
     family = next(n for n in guidance.body if isinstance(n, ast.FunctionDef) and n.name == 'family_for_checkpoint')
     family_scope = {}
     exec(compile(ast.Module(body=[family], type_ignores=[]), 'family_policy', 'exec'), family_scope)
     def resolve(name):
-        with patch.dict('sys.modules', {'shared': namespace['shared']}):
+        with patch.dict('sys.modules', {'ruinedfooocus.app.state': namespace['shared']}):
             return family_scope['family_for_checkpoint'](name)
     namespace['family_for_checkpoint'] = resolve
     exec(compile(ast.Module(body=nodes, type_ignores=[]), str(SOURCE), 'exec'), namespace)
@@ -62,10 +63,10 @@ class PowerUpFamilyTests(unittest.TestCase):
                          {'visible': True, 'value': 'old.pth'})
         self.assertTrue(all(update['visible'] in (False, 'hidden') for update in
                             scope['cn_type_changed']('Rembg', 'New...', 'model')))
-        function = next(node for node in ast.parse((ROOT / 'modules/controlnet.py').read_text(encoding='utf-8')).body
+        function = next(node for node in ast.parse((ROOT / 'ruinedfooocus/features/image_editing/controlnet.py').read_text(encoding='utf-8')).body
                         if isinstance(node, ast.FunctionDef) and node.name == 'get_settings')
         preset = {'type': 'upscale', 'upscaler': 'old.pth'}
-        namespace = {'controlnet_settings': {'Custom upscale': preset}, 'NEWCN': 'New...'}
+        namespace = {'asset_path': asset_path, 'resource_path': resource_path, 'controlnet_settings': {'Custom upscale': preset}, 'NEWCN': 'New...'}
         exec(compile(ast.Module(body=[function], type_ignores=[]), 'control_settings', 'exec'), namespace)
         result = namespace['get_settings']({'cn_selection': 'Custom upscale', 'cn_upscale': 'new.pth'})
         self.assertEqual(result['upscaler'], 'new.pth')
@@ -206,10 +207,10 @@ class PowerUpFamilyTests(unittest.TestCase):
         scope, _ = functions()
         choices = scope['powerup_choices'](False)
         self.assertNotIn('Checkpoint tools', {value for _, value in choices})
-        tree = ast.parse((ROOT / 'modules/ui/ui_checkpoint_tools.py').read_text(encoding='utf-8'))
+        tree = ast.parse((ROOT / 'ruinedfooocus/features/models/ui_checkpoint_tools.py').read_text(encoding='utf-8'))
         create = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == 'create_ui')
         gr = MagicMock()
-        namespace = {'gr': gr, 'shared': SimpleNamespace(models=SimpleNamespace(get_names=lambda category: ['model']))}
+        namespace = {'asset_path': asset_path, 'resource_path': resource_path, 'gr': gr, 'shared': SimpleNamespace(models=SimpleNamespace(get_names=lambda category: ['model']))}
         exec(compile(ast.Module(body=[create], type_ignores=[]), 'checkpoint_panel', 'exec'), namespace)
         namespace['create_ui'](SimpleNamespace(value='model', change=Mock()))
         gr.Column.assert_called_once_with(visible=True, elem_id='checkpoint-tools')
@@ -225,10 +226,10 @@ class PowerUpFamilyTests(unittest.TestCase):
         values = scope['cn_changed']('Canny', 'Canny', 'selected')
         self.assertEqual(values[6], {'visible': True, 'value': .15})
         self.assertEqual(values[7], {'visible': True, 'value': .75})
-        tree = ast.parse((ROOT / 'modules/controlnet.py').read_text(encoding='utf-8'))
+        tree = ast.parse((ROOT / 'ruinedfooocus/features/image_editing/controlnet.py').read_text(encoding='utf-8'))
         function = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == 'get_settings')
         preset = {'type': 'canny', 'edge_low': .15, 'edge_high': .75, 'strength': 1.}
-        namespace = {'controlnet_settings': {'Canny': preset}, 'NEWCN': 'New...'}
+        namespace = {'asset_path': asset_path, 'resource_path': resource_path, 'controlnet_settings': {'Canny': preset}, 'NEWCN': 'New...'}
         exec(compile(ast.Module(body=[function], type_ignores=[]), 'control_settings', 'exec'), namespace)
         result = namespace['get_settings']({'cn_selection': 'Canny', 'cn_edge_low': 0., 'cn_edge_high': .9})
         self.assertEqual(result['edge_low'], 0.)

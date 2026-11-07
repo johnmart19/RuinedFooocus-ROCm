@@ -194,8 +194,8 @@ def main():
         'app_commit': subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], text=True).strip(),
         'audit_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         'source_files': {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest() for name in (
-            'modules/image_pipeline.py', 'modules/prompt_processing.py', 'modules/prompt_scheduling.py',
-            'modules/shift_attention.py', 'repositories/ComfyUI/comfy/sd1_clip.py',
+            'ruinedfooocus/features/generation/image_pipeline.py', 'ruinedfooocus/features/prompting/prompt_processing.py', 'ruinedfooocus/features/prompting/prompt_scheduling.py',
+            'ruinedfooocus/features/image_editing/shift_attention.py', 'repositories/ComfyUI/comfy/sd1_clip.py',
             'repositories/ComfyUI/comfy/sdxl_clip.py',
             *(f'repositories/ComfyUI/comfy/text_encoders/{name}.py' for name in
               ('anima', 'krea2', 'qwen_image', 'qwen3vl', 'qwen35', 'mage_flow', 'moss_image')))},

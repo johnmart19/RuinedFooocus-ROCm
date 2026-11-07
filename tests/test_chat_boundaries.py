@@ -1,3 +1,4 @@
+from ruinedfooocus.core.paths import asset_path, resource_path
 """Synthetic checks: never load models or execute local command handlers."""
 
 import ast
@@ -9,8 +10,9 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-import modules
-from modules import api_runtime
+import ruinedfooocus.app as app_modules
+import ruinedfooocus.features.generation as generation_modules
+import ruinedfooocus.app.api_runtime as api_runtime
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -34,14 +36,14 @@ class PromptBoundaryTests(unittest.TestCase):
         models = SimpleNamespace(get_file=lambda *args: Path("synthetic.safetensors"),
                                  get_models_by_path=lambda *args: None,
                                  get_model_base=lambda *args: "SDXL")
-        namespace = {
+        namespace = {'asset_path': asset_path, 'resource_path': resource_path, 
             **factories, "state": {"pipeline": None}, "Path": Path,
             "shared": SimpleNamespace(models=models), "VIDEO_PIPELINES": {},
             "NoPipeLine": lambda: SimpleNamespace(pipeline_type=[]),
             "controlnet": SimpleNamespace(get_settings=lambda data: {}),
         }
-        isolated_function('modules/pipelines.py', 'selected_pipeline', namespace)
-        update = isolated_function('modules/pipelines.py', 'update', namespace)
+        isolated_function('ruinedfooocus/features/generation/pipelines.py', 'selected_pipeline', namespace)
+        update = isolated_function('ruinedfooocus/features/generation/pipelines.py', 'update', namespace)
         return update(dict(base_model_name="synthetic.safetensors", **data)).pipeline_type[0]
 
     def test_tool_and_api_prompts_cannot_select_command_handlers(self):
@@ -57,7 +59,7 @@ class PromptBoundaryTests(unittest.TestCase):
                 self.assertEqual(self.select_pipeline({"task_type": "process", "prompt": prompt}), expected)
 
     def test_tool_and_api_json_prompts_cannot_override_generation_settings(self):
-        from modules.image_guidance import FIELD_SCHEMA
+        from ruinedfooocus.features.image_editing.image_guidance import FIELD_SCHEMA
         class ReachedPipeline(Exception):
             pass
 
@@ -67,18 +69,18 @@ class PromptBoundaryTests(unittest.TestCase):
             captured.append(dict(data))
             raise ReachedPipeline
 
-        parse_metadata = isolated_function("modules/prompt_processing.py", "process_metadata", {"json": __import__("json")})
+        parse_metadata = isolated_function("ruinedfooocus/features/prompting/prompt_processing.py", "process_metadata", {"json": __import__("json")})
         metadata = Mock(side_effect=parse_metadata)
         shared = SimpleNamespace(
             models=SimpleNamespace(get_models_by_path=lambda *args: None, get_model_base=lambda *args: "SDXL"),
             performance_settings=SimpleNamespace(apply=lambda data, family: data))
-        process = isolated_function("modules/async_worker.py", "_process", {
+        process = isolated_function("ruinedfooocus/app/async_worker.py", "_process", {
             "check_interrupt": lambda data: None, "shared": shared, "process_metadata": metadata,
-            "modules": SimpleNamespace(pipelines=SimpleNamespace(update=stop_at_pipeline)),
+            "pipelines": SimpleNamespace(update=stop_at_pipeline),
         })
         video = SimpleNamespace(VIDEO_FPS={}, constrain_video_settings=lambda data, family: data)
-        with patch.dict(sys.modules, {"modules.video_settings": video, "shared": shared,
-                                     "modules.image_guidance": SimpleNamespace(FIELD_SCHEMA=FIELD_SCHEMA,
+        with patch.dict(sys.modules, {"ruinedfooocus.features.video.video_settings": video, "ruinedfooocus.app.state": shared,
+                                     "ruinedfooocus.features.image_editing.image_guidance": SimpleNamespace(FIELD_SCHEMA=FIELD_SCHEMA,
                                          restore_guidance_metadata=lambda *args, **kwargs: {})}):
             for source in ({"task_type": "tool_call"}, {"_api_job": object()}, {"task_type": "process"}):
                 with self.subTest(source=source), self.assertRaises(ReachedPipeline):
@@ -95,12 +97,12 @@ class LegacyApiTests(unittest.TestCase):
             chat=Mock(return_value="chat job"), legacy_images=Mock(return_value="image job"),
             wait_for_result=Mock(side_effect=[
                 {"choices": [{"message": {"content": "reply"}}]}, ["result.png"]]))
-        register = isolated_function("modules/api.py", "add_api", {
+        register = isolated_function("ruinedfooocus/app/api.py", "add_api", {
             "gr": SimpleNamespace(api=lambda function, api_name: endpoints.update({api_name: function})),
             "settings": SimpleNamespace(default_settings={}),
             "get_last_image": lambda: "image.png",
         })
-        with patch.object(modules, "api_runtime", backend):
+        with patch.object(app_modules, "api_runtime", backend):
             register()
         self.assertEqual(endpoints["llama"]("system", "question"), "reply")
         self.assertEqual(endpoints["generate_image"]("scene"),
@@ -115,7 +117,7 @@ class LegacyApiTests(unittest.TestCase):
             get_model_base=Mock(return_value="Unknown"))
         shared = SimpleNamespace(settings=SimpleNamespace(default_settings={"base_model": "downloadable"}), models=models)
         operation = Mock(return_value=["result.png"])
-        with patch.dict(sys.modules, {"shared": shared}), \
+        with patch.dict(sys.modules, {"ruinedfooocus.app.state": shared}), \
                 patch.object(api_runtime, "image_defaults", {}), \
                 patch.object(api_runtime, "submit", side_effect=lambda run: run) as submit, \
                 patch.object(api_runtime, "_image_operation", return_value=operation) as prepare:
@@ -129,14 +131,14 @@ class LegacyApiTests(unittest.TestCase):
 
     def test_legacy_chat_keeps_configured_or_default_undownloaded_model(self):
         shared = SimpleNamespace(settings=SimpleNamespace(default_settings={}))
-        with patch.dict(sys.modules, {"shared": shared, "modules.llama_models": SimpleNamespace(DEFAULT_MODEL="default.gguf")}):
+        with patch.dict(sys.modules, {"ruinedfooocus.app.state": shared, "ruinedfooocus.features.chat.llama_models": SimpleNamespace(DEFAULT_MODEL="default.gguf")}):
             self.assertEqual(api_runtime.configured_chat_model(), ("chat/default.gguf", {"path": "default.gguf"}))
             shared.settings.default_settings["llama_localfile"] = "custom.gguf"
             self.assertEqual(api_runtime.configured_chat_model(), ("chat/custom.gguf", {"path": "custom.gguf"}))
 
     def test_submission_uses_serial_worker_and_releases_slot_after_failure(self):
         worker = SimpleNamespace(add_task=Mock())
-        with patch.object(modules, "async_worker", worker, create=True):
+        with patch.object(app_modules, "async_worker", worker, create=True):
             job = api_runtime.submit(lambda job, task_id: task_id)
         worker.add_task.assert_called_once_with({"task_type": "external_api", "_api_job": job})
         job.run(42)
@@ -144,7 +146,7 @@ class LegacyApiTests(unittest.TestCase):
         worker.add_task.side_effect = RuntimeError("queue failed")
         slots = threading.BoundedSemaphore(1)
         with patch.object(api_runtime, "slots", slots), \
-                patch.object(modules, "async_worker", worker, create=True):
+                patch.object(app_modules, "async_worker", worker, create=True):
             with self.assertRaisesRegex(RuntimeError, "queue failed"):
                 api_runtime.submit(lambda *args: None)
             self.assertTrue(slots.acquire(blocking=False))
@@ -185,9 +187,9 @@ class CustomVisionTests(unittest.TestCase):
         memory = SimpleNamespace(unload_all_models=Mock(), soft_empty_cache=Mock())
         payload = {"model": "chat/custom.gguf", "messages": [{"role": "user", "content": [
             {"type": "image_url", "image_url": {"url": "data:image/png;base64,synthetic"}}]}]}
-        with patch.dict(sys.modules, {"modules.pipelines": registry, "comfy": SimpleNamespace(model_management=memory),
+        with patch.dict(sys.modules, {"ruinedfooocus.features.generation.pipelines": registry, "comfy": SimpleNamespace(model_management=memory),
                                      "comfy.model_management": memory}), \
-                patch.object(modules, "pipelines", registry, create=True), \
+                patch.object(generation_modules, "pipelines", registry, create=True), \
                 patch.object(api_runtime, "submit", side_effect=lambda operation: operation(object(), 1)), \
                 patch.object(api_runtime, "chat_completion", return_value="completed") as completion:
             result = api_runtime.chat(payload, {"path": "custom.gguf"})

@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from modules.model_recommendations import ModelRecommendations, example_settings, extract
+from ruinedfooocus.features.models.model_recommendations import ModelRecommendations, example_settings, extract
 
 
 SAMPLERS = ["euler", "euler_ancestral"]
@@ -41,7 +41,7 @@ class RecommendationTests(unittest.TestCase):
                 checked=time.time(),status='Public version metadata refreshed.',recommended=dict(cfg=0),override=dict(cfg=2))}))
             remote=dict(description='guidance_scale = 0,\nnum_inference_steps = 28,',source='Hugging Face example',
                         source_url='https://huggingface.co/HiDream-ai/example')
-            with patch('modules.model_sources.huggingface_recommendations',return_value=remote) as fetch:
+            with patch('ruinedfooocus.features.models.model_sources.huggingface_recommendations',return_value=remote) as fetch:
                 store.refresh('o1_dev.safetensors',SAMPLERS,SCHEDULERS)
                 fetch.assert_called_once()
             details=store.details('o1_dev.safetensors',SAMPLERS,SCHEDULERS)
@@ -49,7 +49,7 @@ class RecommendationTests(unittest.TestCase):
             self.assertEqual(store.recipe('o1_dev.safetensors',SAMPLERS,SCHEDULERS)[0]['cfg'],2)
 
     def test_moss_family_fills_missing_scheduler_without_replacing_checkpoint_recipe(self):
-        from modules.performance import PerformanceSettings
+        from ruinedfooocus.features.models.performance import PerformanceSettings
 
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
@@ -69,7 +69,7 @@ class RecommendationTests(unittest.TestCase):
                              (50, 3, "er_sde", "simple"))
 
     def _performance(self, root):
-        from modules.performance import PerformanceSettings
+        from ruinedfooocus.features.models.performance import PerformanceSettings
         performance = PerformanceSettings.__new__(PerformanceSettings)
         performance.performance_options = json.loads(
             PerformanceSettings.DEFAULT_PERFORMANCE_FILE.read_text(encoding="utf-8"))
@@ -138,7 +138,7 @@ class RecommendationTests(unittest.TestCase):
                                              encoding="utf-8")
             performance = self._performance(root)
             with patch.dict(sys.modules, {"comfy.samplers": registry}), patch(
-                    "modules.model_sources.civitai_metadata",
+                    "ruinedfooocus.features.models.model_sources.civitai_metadata",
                     side_effect=lambda path: version if path == "model-versions/7" else None) as fetch:
                 first = performance.get_perf_options("Model Defaults", "model.safetensors")
                 calls = fetch.call_count
@@ -192,7 +192,7 @@ class RecommendationTests(unittest.TestCase):
             for image in images:
                 image['meta']['additionalResources'] = [{'type': 'lora', 'name': 'Lightning'}]
             remote = dict(id=123, images=images)
-            with patch('modules.model_sources.civitai_metadata', return_value=remote) as fetch:
+            with patch('ruinedfooocus.features.models.model_sources.civitai_metadata', return_value=remote) as fetch:
                 store.refresh('model.safetensors', SAMPLERS, SCHEDULERS)
                 fetch.assert_called_once()
             details = store.details('model.safetensors', SAMPLERS, SCHEDULERS)
@@ -214,7 +214,7 @@ class RecommendationTests(unittest.TestCase):
             remote = dict(id=123, modelId=456, baseModel="Example", generationConfig={"steps": 10},
                           images=examples())
             card = dict(id=456, modelVersions=[remote], generationConfig={"cfgScale": 7, "steps": 20})
-            with patch("modules.model_sources.civitai_metadata", side_effect=[remote, card]) as fetch:
+            with patch("ruinedfooocus.features.models.model_sources.civitai_metadata", side_effect=[remote, card]) as fetch:
                 store.refresh("model.safetensors", SAMPLERS, SCHEDULERS)
                 self.assertEqual(fetch.call_count, 2)
             details = store.details("model.safetensors", SAMPLERS, SCHEDULERS)
@@ -237,11 +237,11 @@ class RecommendationTests(unittest.TestCase):
             root = Path(folder)
             (root / "model.json").write_text('{"id":123}', encoding="utf-8")
             store = ModelRecommendations(root, root / "settings.json")
-            with patch("modules.model_sources.civitai_metadata", return_value=dict(id=999, images=examples())):
+            with patch("ruinedfooocus.features.models.model_sources.civitai_metadata", return_value=dict(id=999, images=examples())):
                 store.refresh("model.safetensors", SAMPLERS, SCHEDULERS)
             self.assertEqual(store.details("model.safetensors", SAMPLERS, SCHEDULERS)["recommended"], {})
             store.offline = True
-            with patch("modules.model_sources.civitai_metadata") as fetch:
+            with patch("ruinedfooocus.features.models.model_sources.civitai_metadata") as fetch:
                 store.refresh("model.safetensors", SAMPLERS, SCHEDULERS, force=True)
                 fetch.assert_not_called()
 

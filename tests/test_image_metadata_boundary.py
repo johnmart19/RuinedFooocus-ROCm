@@ -1,3 +1,4 @@
+from ruinedfooocus.core.paths import asset_path, resource_path
 """Imported image settings are renderer data, never command or job-control instructions."""
 import ast
 import io
@@ -22,10 +23,10 @@ def function(path, name, scope):
 
 
 def replay(parameters, **request):
-    importer = function('modules/prompt_processing.py', 'process_metadata', {'json': json})
+    importer = function('ruinedfooocus/features/prompting/prompt_processing.py', 'process_metadata', {'json': json})
     models = SimpleNamespace(get_models_by_path=lambda *a, **k: {}, get_model_base=lambda info: 'SDXL',
                              get_file=lambda *a: None)
-    with patch.dict('sys.modules', {'shared': SimpleNamespace(models=models)}):
+    with patch.dict('sys.modules', {'ruinedfooocus.app.state': SimpleNamespace(models=models)}):
         return importer(dict(base_model_name='model.safetensors', prompt=parameters, **request))
 
 
@@ -36,26 +37,26 @@ def route(data):
                  for name in names}
     models = SimpleNamespace(get_file=lambda *a: Path('model.safetensors'),
         get_models_by_path=lambda *a: {}, get_model_base=lambda *a: 'SDXL')
-    scope = dict(state=state, shared=SimpleNamespace(models=models), Path=Path, VIDEO_PIPELINES={},
+    scope = dict(asset_path=asset_path, resource_path=resource_path, state=state, shared=SimpleNamespace(models=models), Path=Path, VIDEO_PIPELINES={},
         controlnet=SimpleNamespace(get_settings=lambda job: job.get('controlnet') or {}),
         selected_pipeline=lambda: state['pipeline'], NoPipeLine=lambda: SimpleNamespace(pipeline_type=[]), **factories)
-    run = function('modules/pipelines.py', 'update', scope)
+    run = function('ruinedfooocus/features/generation/pipelines.py', 'update', scope)
     selected = run({'base_model_name': 'model.safetensors', **data}).pipeline_type[0]
     return selected, factories
 
 
 def gallery(metadata):
-    from modules.image_guidance import capabilities, resolve_guidance, restore_guidance_metadata
-    tree = ast.parse((ROOT / 'modules/ui/ui_image_gallery.py').read_text(encoding='utf-8'))
+    from ruinedfooocus.features.image_editing.image_guidance import capabilities, resolve_guidance, restore_guidance_metadata
+    tree = ast.parse((ROOT / 'ruinedfooocus/features/gallery/ui.py').read_text(encoding='utf-8'))
     mapping = next(n.value for n in tree.body if isinstance(n, ast.Assign) and
                    any(isinstance(t, ast.Name) and t.id == 'METADATA_CONTROLS' for t in n.targets))
-    run = function('modules/ui/ui_image_gallery.py', 'apply_metadata', dict(json=json,
+    run = function('ruinedfooocus/features/gallery/ui.py', 'apply_metadata', dict(json=json,
         gr=SimpleNamespace(update=lambda **kw: kw, Error=ValueError, Info=Mock()), get_ctrl=lambda name: name,
         METADATA_CONTROLS=ast.literal_eval(mapping), capabilities=capabilities,
         resolve_guidance=resolve_guidance, restore_guidance_metadata=restore_guidance_metadata))
-    with patch.dict('sys.modules', {'modules.ui.ui_image_guidance':
+    with patch.dict('sys.modules', {'ruinedfooocus.features.image_editing.ui_guidance':
             SimpleNamespace(family_for_checkpoint=lambda name: 'SDXL')}), \
-            patch('modules.automatic_upscale.choices', return_value=['Off']):
+            patch('ruinedfooocus.features.generation.automatic_upscale.choices', return_value=['Off']):
         return run(metadata, 'model.safetensors', '')
 
 
@@ -67,9 +68,9 @@ class MetadataBoundaryTests(unittest.TestCase):
                 request = {name: value['value'] if isinstance(value, dict) else value for name, value in updates.items()}
                 request['image_number'] = 2
                 queue = Mock(return_value=23)
-                submit = function('webui.py', 'append_work', dict(
-                    use_random_prompt=function('modules/prompt_processing.py', 'use_random_prompt', {}),
-                    get_promptlist=function('modules/prompt_processing.py', 'get_promptlist', {}),
+                submit = function('ruinedfooocus/ui/app.py', 'append_work', dict(
+                    use_random_prompt=function('ruinedfooocus/features/prompting/prompt_processing.py', 'use_random_prompt', {}),
+                    get_promptlist=function('ruinedfooocus/features/prompting/prompt_processing.py', 'get_promptlist', {}),
                     worker=SimpleNamespace(add_task=queue)))
                 submit(request)
                 queued = queue.call_args.args[0]
@@ -84,8 +85,8 @@ class MetadataBoundaryTests(unittest.TestCase):
                 gallery({'prompt': prompt})
 
     def test_every_worker_exported_render_field_can_be_imported(self):
-        from modules.image_metadata import read_metadata, render_values
-        tree = ast.parse((ROOT / 'modules/async_worker.py').read_text(encoding='utf-8'))
+        from ruinedfooocus.features.gallery.image_metadata import read_metadata, render_values
+        tree = ast.parse((ROOT / 'ruinedfooocus/app/async_worker.py').read_text(encoding='utf-8'))
         producer = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == '_process')
         keys = set()
         for node in ast.walk(producer):
@@ -144,7 +145,7 @@ class MetadataBoundaryTests(unittest.TestCase):
         self.assertEqual(route(imported)[0], 'image_pipeline')
 
     def test_json_prompt_delimiters_do_not_split_the_metadata_document(self):
-        split = function('modules/prompt_processing.py', 'get_promptlist', {'json': json})
+        split = function('ruinedfooocus/features/prompting/prompt_processing.py', 'get_promptlist', {'json': json})
         for value in ({'prompt': 'first --- second\n"quoted"', 'steps': 8},
                       json.dumps({'prompt': 'first --- second\n"quoted"', 'steps': 8})):
             with self.subTest(kind=type(value).__name__):
@@ -152,10 +153,10 @@ class MetadataBoundaryTests(unittest.TestCase):
         self.assertEqual(split({'prompt': 'first---second'}), ['first', 'second'])
 
     def test_submit_and_prompt_policy_preserve_explicit_metadata(self):
-        policy = function('modules/prompt_processing.py', 'use_random_prompt', {})
-        split = function('modules/prompt_processing.py', 'get_promptlist', {'json': json})
+        policy = function('ruinedfooocus/features/prompting/prompt_processing.py', 'use_random_prompt', {})
+        split = function('ruinedfooocus/features/prompting/prompt_processing.py', 'get_promptlist', {'json': json})
         queue = Mock(return_value=23)
-        submit = function('webui.py', 'append_work', dict(use_random_prompt=policy, get_promptlist=split,
+        submit = function('ruinedfooocus/ui/app.py', 'append_work', dict(use_random_prompt=policy, get_promptlist=split,
                                                         worker=SimpleNamespace(add_task=queue)))
         text = json.dumps({'prompt': 'first --- second', 'steps': 8})
         request = dict(prompt=text, image_number=2, obp_assume_direct_control=True,

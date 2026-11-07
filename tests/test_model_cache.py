@@ -1,3 +1,4 @@
+from ruinedfooocus.core.paths import asset_path, resource_path
 """Exercise production loader caches with local files and mocked native loaders."""
 import ast
 import builtins
@@ -11,8 +12,8 @@ from types import MethodType, SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-from modules import model_identity
-from modules.config_io import save_json
+import ruinedfooocus.features.models.model_identity as model_identity
+from ruinedfooocus.core.config_io import save_json
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -20,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def method(source, name, scope):
     tree = ast.parse((ROOT / source).read_text(encoding='utf-8'))
     node = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == name)
-    namespace = dict(vars(model_identity), **scope)
+    namespace = dict(vars(model_identity), asset_path=asset_path, resource_path=resource_path, **scope)
     exec(compile(ast.Module(body=[node], type_ignores=[]), source, 'exec'), namespace)
     return namespace[name]
 
@@ -67,7 +68,7 @@ class ModelCacheTests(unittest.TestCase):
             get_clip_and_vae=Mock(return_value=dict(options={}, clip_names=['encoder.safetensors'],
                 vae_name='vae.safetensors', clip_type='native')))
         import torch
-        run = method('modules/image_pipeline.py', 'load_base_model', dict(
+        run = method('ruinedfooocus/features/generation/image_pipeline.py', 'load_base_model', dict(
             settings=SimpleNamespace(default_settings={} if defaults is None else defaults), shared=SimpleNamespace(models=files),
             Path=Path, os=os, gc=Mock(), comfy=backend, torch=torch,
             load_checkpoint_guess_config=loader, load_diffusion_model=diffusion,
@@ -76,7 +77,7 @@ class ModelCacheTests(unittest.TestCase):
                 get_folder_file_path=lambda folder, name, **kwargs:self.root / name)))
         owner.load_base_model = MethodType(run, owner)
         attention = SimpleNamespace(configure_qwen_attention=Mock())
-        context = patch.dict('sys.modules', {'modules.model_attention': attention})
+        context = patch.dict('sys.modules', {'ruinedfooocus.backends.comfy.model_attention': attention})
         context.start()
         self.addCleanup(context.stop)
         def load():
@@ -127,7 +128,7 @@ class ModelCacheTests(unittest.TestCase):
 
     def hash_reader(self):
         owner = SimpleNamespace(cache_paths={'checkpoints': self.root / 'cache/checkpoints'})
-        run = method('modules/model_handler.py', 'model_sha256', dict(
+        run = method('ruinedfooocus/features/models/model_handler.py', 'model_sha256', dict(
             hashlib=hashlib, json=json, save_json=save_json,
             t=lambda text, mapping: text.format(**mapping)))
         return lambda path: run(owner, path)
@@ -197,7 +198,7 @@ class ModelCacheTests(unittest.TestCase):
         owner = SimpleNamespace(xl_base_patched_hash=None,
             xl_base=SimpleNamespace(unet='base unet', clip='base clip', vae='vae', clip_vision=None),
             StableDiffusionModel=lambda **values: SimpleNamespace(**values))
-        run = method('modules/image_pipeline.py', 'load_loras', dict(
+        run = method('ruinedfooocus/features/generation/image_pipeline.py', 'load_loras', dict(
             shared=SimpleNamespace(models=SimpleNamespace(get_model_path=resolve)),
             comfy=SimpleNamespace(utils=SimpleNamespace(load_torch_file=reader),
                 sd=SimpleNamespace(load_lora_for_models=native))))
@@ -215,15 +216,15 @@ class ModelCacheTests(unittest.TestCase):
         self.assertEqual(native.call_count, 2)
 
     def test_automatic_upscale_checks_the_shared_loader_on_each_image(self):
-        from modules.automatic_upscale import upscale_decoded
+        from ruinedfooocus.features.generation.automatic_upscale import upscale_decoded
         model = SimpleNamespace(scale=2)
         loader = SimpleNamespace(load_upscaler_model=Mock(return_value=model))
         execute = Mock(return_value=['upscaled'])
         native = SimpleNamespace(ImageUpscaleWithModel=SimpleNamespace(execute=execute))
         with patch.dict('sys.modules', {
-            'modules.upscale_pipeline': SimpleNamespace(pipeline=lambda:loader,
+            'ruinedfooocus.features.image_processing.upscale_pipeline': SimpleNamespace(pipeline=lambda:loader,
                 InterruptibleUpscaler=lambda model, data:model),
-            'modules.async_worker': Mock(), 'comfy_extras.nodes_upscale_model':native}):
+            'ruinedfooocus.app.async_worker': Mock(), 'comfy_extras.nodes_upscale_model':native}):
             owner = SimpleNamespace()
             data = dict(automatic_upscale='2× General (RealESRGAN)', task_id=1)
             self.assertEqual(upscale_decoded(owner, 'pixels', data), 'upscaled')
@@ -233,8 +234,8 @@ class ModelCacheTests(unittest.TestCase):
     def test_controlnet_cache_reloads_replaced_weights(self):
         path = self.file('depth.safetensors')
         native = Mock(return_value=object())
-        run = method('modules/image_pipeline.py', 'refresh_controlnet', dict(
-            modules=SimpleNamespace(controlnet=SimpleNamespace(get_model=lambda name:path)),
+        run = method('ruinedfooocus/features/generation/image_pipeline.py', 'refresh_controlnet', dict(
+            control_tools=SimpleNamespace(get_model=lambda name:path),
             comfy=SimpleNamespace(controlnet=SimpleNamespace(load_controlnet=native))))
         owner = SimpleNamespace(xl_controlnet=None, xl_controlnet_hash=None)
         run(owner, 'depth')
@@ -247,7 +248,7 @@ class ModelCacheTests(unittest.TestCase):
     def test_upscaler_cache_reloads_replaced_weights(self):
         path = self.file('upscaler.pth')
         native = Mock(return_value=[object()])
-        run = method('modules/upscale_pipeline.py', 'load_upscaler_model', dict(
+        run = method('ruinedfooocus/features/image_processing/upscale_pipeline.py', 'load_upscaler_model', dict(
             path_manager=SimpleNamespace(get_file_path=lambda *args, **kwargs:path,
                 model_paths={'upscaler_path': str(self.root)}),
             folder_paths=Mock(), Path=Path, os=os))

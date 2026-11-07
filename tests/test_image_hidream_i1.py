@@ -1,3 +1,4 @@
+from ruinedfooocus.core.paths import asset_path, resource_path
 """HiDream I1 variant recipes and request shift precedence, without weights."""
 import ast
 import json
@@ -8,9 +9,9 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from modules.image_guidance import request_model, resolve_guidance
-from modules.model_recommendations import ModelRecommendations
-from modules.performance import PerformanceSettings
+from ruinedfooocus.features.image_editing.image_guidance import request_model, resolve_guidance
+from ruinedfooocus.features.models.model_recommendations import ModelRecommendations
+from ruinedfooocus.features.models.performance import PerformanceSettings
 from test_image_shift_defaults import Patcher, native_nodes
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -38,11 +39,11 @@ class HiDreamI1Tests(unittest.TestCase):
             return self.performance.apply(dict(performance_selection='Model Defaults', base_model_name=checkpoint, **values), 'HiDream')
 
     def route(self, data, startup=None):
-        tree = ast.parse((ROOT / 'modules/image_pipeline.py').read_text(encoding='utf-8'))
+        tree = ast.parse((ROOT / 'ruinedfooocus/features/generation/image_pipeline.py').read_text(encoding='utf-8'))
         process = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == 'process')
         fallback = next(n for n in process.body if isinstance(n, ast.If) and ast.unparse(n.test).startswith("gen_data.get('sampling_shift'"))
         base = Patcher(1)
-        scope = dict(gen_data=data, settings=SimpleNamespace(default_settings={}),
+        scope = dict(asset_path=asset_path, resource_path=resource_path, gen_data=data, settings=SimpleNamespace(default_settings={}),
             self=SimpleNamespace(model_info={'sampling_shift': startup}))
         exec(compile(ast.Module(body=[fallback], type_ignores=[]), 'hidream_i1_shift', 'exec'), scope)
         options = resolve_guidance(data, {}, 'HiDream')

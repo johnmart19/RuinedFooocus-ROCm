@@ -6,11 +6,11 @@ from unittest.mock import patch
 
 from PIL import Image
 
-from modules.image_components import native_edit_supported
+from ruinedfooocus.features.models.image_components import native_edit_supported
 
 
 def queued_control(family, name="local.safetensors", controlnet=None, moss_format="Disabled"):
-    from modules import api_runtime
+    import ruinedfooocus.app.api_runtime as api_runtime
     perf = SimpleNamespace(CUSTOM_PERFORMANCE='Own settings',
         choices_for_model=lambda *args: ['Own settings'],
         selection_for_model=lambda *args: 'Own settings',
@@ -25,7 +25,7 @@ def queued_control(family, name="local.safetensors", controlnet=None, moss_forma
     payload = dict(prompt='make it blue', size='512x512', input_image='upload')
     if controlnet:
         payload['controlnet'] = controlnet
-    with patch.dict(sys.modules, {'shared': shared, 'comfy.samplers': samplers}), \
+    with patch.dict(sys.modules, {'ruinedfooocus.app.state': shared, 'comfy.samplers': samplers}), \
          patch.object(api_runtime, 'image_defaults', defaults), \
          patch.object(api_runtime, 'decode_image', return_value=Image.new('RGB', (64, 64))), \
          patch.object(api_runtime, 'submit', side_effect=lambda run: run):

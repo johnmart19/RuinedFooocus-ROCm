@@ -1,3 +1,4 @@
+from ruinedfooocus.core.paths import asset_path, resource_path
 """Exercise pinned native guidance callbacks on CPU, without loading models."""
 import ast
 from pathlib import Path
@@ -8,7 +9,7 @@ from unittest.mock import Mock
 
 import torch
 
-from modules.image_guidance import request_model, resolve_guidance, restore_guidance_metadata, validate_guidance
+from ruinedfooocus.features.image_editing.image_guidance import request_model, resolve_guidance, restore_guidance_metadata, validate_guidance
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -40,7 +41,7 @@ def native_execute(filename, cls, **scope):
     node = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == cls)
     function = next(n for n in node.body if isinstance(n, ast.FunctionDef) and n.name == 'execute')
     function.decorator_list = []
-    namespace = dict(torch=torch, re=re, io=SimpleNamespace(NodeOutput=lambda *values:values), **scope)
+    namespace = dict(asset_path=asset_path, resource_path=resource_path, torch=torch, re=re, io=SimpleNamespace(NodeOutput=lambda *values:values), **scope)
     exec(compile(ast.Module(body=[function], type_ignores=[]), filename, 'exec'), namespace)
     return lambda **kwargs:namespace['execute'](None, **kwargs)
 
@@ -107,7 +108,7 @@ class NativeGuidanceOptionsTests(unittest.TestCase):
         self.assertFalse(values['moss_image_slg'])
         self.assertEqual(values['moss_image_slg_single_layers'], '22')
         self.assertEqual(validate_guidance({'moss_image_slg_double_layers':'  '}), {'moss_image_slg_double_layers':''})
-        from modules.openai_api import ImageRequest
+        from ruinedfooocus.integrations.openai_api import ImageRequest
         from pydantic import ValidationError
         for values in ({'moss_image_slg_start':-0.1}, {'moss_image_slg_end':1.1},
                        {'moss_image_slg_single_layers':'1' * 1025}):

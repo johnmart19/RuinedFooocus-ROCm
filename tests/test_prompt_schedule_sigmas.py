@@ -1,3 +1,4 @@
+from ruinedfooocus.core.paths import asset_path, resource_path
 """Select switched conditioning at native scheduler sigmas, entirely on CPU."""
 import ast
 from pathlib import Path
@@ -7,7 +8,7 @@ from unittest.mock import Mock, patch
 
 import torch
 
-from modules.prompt_scheduling import bind_prompt_steps
+from ruinedfooocus.features.prompting.prompt_scheduling import bind_prompt_steps
 
 NATIVE = Path(__file__).resolve().parents[1] / 'repositories/ComfyUI'
 
@@ -28,7 +29,7 @@ class PromptSigmaTests(unittest.TestCase):
                 for i in range(count)]
 
     def test_native_nodes_and_midpoints_select_one_interval_for_normal_karras_flow_and_denoise(self):
-        scope = {'torch': torch}
+        scope = {'asset_path': asset_path, 'resource_path': resource_path, 'torch': torch}
         native_function('comfy/k_diffusion/sampling.py', 'append_zero', scope)
         karras = native_function('comfy/k_diffusion/sampling.py', 'get_sigmas_karras', scope)
         eligible = native_function('comfy/samplers.py', 'get_area_and_mult', {}, prefix=5)

@@ -1,10 +1,11 @@
+from ruinedfooocus.core.paths import asset_path, resource_path
 """PNG preset guidance restoration without UI startup or generation."""
 import ast
 from pathlib import Path
 import unittest
 from unittest.mock import patch
 
-from modules.image_guidance import FIELD_SCHEMA, restore_guidance_metadata
+from ruinedfooocus.features.image_editing.image_guidance import FIELD_SCHEMA, restore_guidance_metadata
 
 
 class PresetImageGuidanceTests(unittest.TestCase):
@@ -39,7 +40,7 @@ class PresetImageGuidanceTests(unittest.TestCase):
             'moss_image_edit_format': 'unknown', 'moss_image_slg': 'false'}), {})
 
     def test_generate_clicked_restores_guidance_only_when_sampling_preset_bit_enabled(self):
-        source = (Path(__file__).resolve().parents[1] / 'webui.py').read_text(encoding='utf-8')
+        source = (Path(__file__).resolve().parents[1] / 'ruinedfooocus/ui/app.py').read_text(encoding='utf-8')
         tree = ast.parse(source)
         generate = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == 'generate_clicked')
         branch = next(node for node in ast.walk(generate) if isinstance(node, ast.If)
@@ -49,9 +50,9 @@ class PresetImageGuidanceTests(unittest.TestCase):
                       image_guidance={'moss_image_edit_format': 'Moss-Image-Edit',
                                       'sampling_shift': None, 'effective_sampling_shift': 5})
         for mode in (0, 2):
-            namespace = dict(settings={'preset_mode': mode}, preset_data=recipe,
+            namespace = dict(asset_path=asset_path, resource_path=resource_path, settings={'preset_mode': mode}, preset_data=recipe,
                              gen_data={'base_model_name': 'moss', 'moss_image_edit_format': 'Disabled'})
-            with patch('modules.ui.ui_image_guidance.family_for_checkpoint', return_value='MOSSImage'):
+            with patch('ruinedfooocus.features.image_editing.ui_guidance.family_for_checkpoint', return_value='MOSSImage'):
                 exec(compile(ast.Module(body=[branch], type_ignores=[]), 'preset_sampling', 'exec'), namespace)
             if mode:
                 self.assertEqual(namespace['gen_data']['moss_image_edit_format'], 'Moss-Image-Edit')

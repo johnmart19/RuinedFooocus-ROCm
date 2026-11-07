@@ -1,3 +1,4 @@
+from ruinedfooocus.core.paths import asset_path, resource_path
 """Resolve requested wildcards literally and terminate cycles without model imports."""
 import ast
 from contextlib import redirect_stdout
@@ -20,10 +21,10 @@ class WildcardTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.folder = Path(self.temp.name)
         self.expand = Mock(return_value=r'blue (cup)\1\g<name>')
-        self.scope = dict(os=os, re=re, random=random, build_dynamic_prompt=self.expand,
+        self.scope = dict(asset_path=asset_path, resource_path=resource_path, os=os, re=re, random=random, build_dynamic_prompt=self.expand,
                           available_styles={}, STYLE_ALIASES={},
                           path_manager=SimpleNamespace(paths={'path_wildcards': [str(self.folder)]}))
-        tree = ast.parse((ROOT / 'modules/prompt_processing.py').read_text(encoding='utf-8'))
+        tree = ast.parse((ROOT / 'ruinedfooocus/features/prompting/prompt_processing.py').read_text(encoding='utf-8'))
         nodes = [node for node in tree.body if isinstance(node, ast.FunctionDef)
                  and node.name in ('process_wildcards', 'use_random_prompt', 'process_prompt')]
         exec(compile(ast.Module(body=nodes, type_ignores=[]), 'prompt_processing', 'exec'), self.scope)

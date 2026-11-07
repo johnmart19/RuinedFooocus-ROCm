@@ -37,7 +37,7 @@ def _local(filename):
 @contextmanager
 def _catalog(files, control_type=None, controlnet=None):
     """Temporarily expose local assets through the application's own catalogs."""
-    import shared
+    import ruinedfooocus.app.state as shared
     with _values(shared.models.model_dirs, {
         category: list(shared.models.model_dirs[category]) + [path.parent]
         for category, path in files.items()
@@ -73,7 +73,7 @@ def _gen(source_image, positive, negative, seed, steps, cfg, sampler, scheduler,
 
 
 def _run(owner, gen_data, output_png, control=False, inpaint=False):
-    import modules.image_pipeline as app
+    import ruinedfooocus.features.generation.image_pipeline as app
     from tools.comfy_feature_reference import _save
     observed = {}
     sample = app.comfy.sample.sample
@@ -115,13 +115,13 @@ def sdxl_controlnet(checkpoint, controlnet, source_image, output_png,
                     low_threshold=0.4, high_threshold=0.8, lora=None, lora_strength=1.0,
                     control_type=None):
     """Run the application's actual SDXL control route with explicit settings."""
-    from modules.image_pipeline import pipeline
+    from ruinedfooocus.features.generation.image_pipeline import pipeline
     checkpoint, controlnet = _local(checkpoint), _local(controlnet)
     files = {'checkpoints': checkpoint}
     if lora:
         files['loras'] = _local(lora)
     if control_type is None:
-        import modules.controlnet as controls
+        import ruinedfooocus.features.image_editing.controlnet as controls
         matches = [kind for kind, name in controls.controlnet_models.items() if name == controlnet.name]
         if len(matches) != 1:
             raise ValueError('Specify a catalog ControlNet model and control_type')
@@ -152,7 +152,7 @@ def sdxl_inpaint(checkpoint, source_image, mask_image, output_png,
     """Exercise production layer-alpha inpainting with the real sampler/decode."""
     import numpy as np
     from PIL import Image
-    from modules.image_pipeline import pipeline
+    from ruinedfooocus.features.generation.image_pipeline import pipeline
     checkpoint = _local(checkpoint)
     source_image = _local(source_image)
     with Image.open(source_image) as source:
@@ -190,7 +190,7 @@ def image_edit(family, diffusion_model, text_encoder, vae_model, source_image,
     Optional shift, CFGNorm and MOSS controls use the production request fields.
     Omitted shifts retain the production default; MOSS normally uses shift 5.
     """
-    import shared
+    import ruinedfooocus.app.state as shared
     families = {'qwen': ('QwenImage', 'clip_qwen25', 'vae_qwen_image', 'qwen_image'),
                 'mage': ('MageFlow', 'clip_qwen3vl_4b', 'vae_mage_flow', 'mage'),
                 'moss': ('MOSSImage', 'clip_qwen35_9b', 'vae_flux2', 'moss_image')}
@@ -209,7 +209,7 @@ def image_edit(family, diffusion_model, text_encoder, vae_model, source_image,
                'moss_image_edit_format': edit_format if family == 'moss' else 'Disabled',
                'moss_image_edit_strength': image_strength, 'moss_image_slg': moss_slg}
     with _values(shared.settings.default_settings, updates), _catalog(files):
-        from modules.image_pipeline import pipeline
+        from ruinedfooocus.features.generation.image_pipeline import pipeline
         owner = pipeline()
         owner.load_base_model(str(diffusion_model), unet_only=True)
         owner.load_loras([{'name': str(files['loras']), 'weight': lora_strength}] if lora else [])

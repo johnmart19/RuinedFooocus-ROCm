@@ -4,8 +4,8 @@ import unittest
 from unittest.mock import Mock, patch
 
 import torch
-from modules import caption_runtime as runtime
-from modules import interrogate
+import ruinedfooocus.features.image_processing.caption_runtime as runtime
+import ruinedfooocus.features.image_processing.interrogate as interrogate
 
 
 class CaptionRuntimeTests(unittest.TestCase):
@@ -57,7 +57,7 @@ class CaptionRuntimeTests(unittest.TestCase):
         self.addCleanup(interrogate.caption_model.cache_clear)
         api = SimpleNamespace(AutoProcessor=Mock(), BlipForConditionalGeneration=Mock(),
                               Florence2ForConditionalGeneration=Mock())
-        with patch.dict('sys.modules', {'transformers': api, 'argparser': SimpleNamespace(args=SimpleNamespace(offline=True))}):
+        with patch.dict('sys.modules', {'transformers': api, 'ruinedfooocus.app.arguments': SimpleNamespace(args=SimpleNamespace(offline=True))}):
             first = interrogate.caption_model('florence')
             self.assertIs(first, interrogate.caption_model('florence'))
         api.AutoProcessor.from_pretrained.assert_called_once_with(
@@ -72,7 +72,7 @@ class CaptionRuntimeTests(unittest.TestCase):
                                 caption_model=Mock(), clip_model=Mock())
         api = SimpleNamespace(Config=config, Interrogator=Mock(return_value=model))
         shared = SimpleNamespace(path_manager=SimpleNamespace(model_paths={'clip_path': 'cache'}))
-        with scope, patch.dict('sys.modules', {'clip_interrogator': api, 'shared': shared}):
+        with scope, patch.dict('sys.modules', {'clip_interrogator': api, 'ruinedfooocus.app.state': shared}):
             self.assertEqual(interrogate.clip_look(Mock(), '', None), 'CLIP caption')
         self.assertEqual(config.call_args.kwargs['device'].type, 'cpu')
         model.caption_model.to.assert_called_once_with('cpu')
@@ -88,7 +88,7 @@ class CaptionRuntimeTests(unittest.TestCase):
         config = Mock(side_effect=lambda **kw: SimpleNamespace(apply_low_vram_defaults=Mock()))
         api = SimpleNamespace(Config=config, Interrogator=Mock(side_effect=[failed, recovered]))
         shared = SimpleNamespace(path_manager=SimpleNamespace(model_paths={'clip_path': 'cache'}))
-        with scope, patch.dict('sys.modules', {'clip_interrogator': api, 'shared': shared}):
+        with scope, patch.dict('sys.modules', {'clip_interrogator': api, 'ruinedfooocus.app.state': shared}):
             self.assertEqual(interrogate.clip_look(Mock(), '', None), 'CPU CLIP caption')
         self.assertEqual([call.kwargs['device'].type for call in config.call_args_list], ['cuda', 'cpu'])
         failed.caption_model.to.assert_called_once_with('cpu')
@@ -100,7 +100,7 @@ class CaptionRuntimeTests(unittest.TestCase):
         image = SimpleNamespace(info={'parameters': '{"Prompt": "fox"}'})
         gr = SimpleNamespace(Info=Mock())
         captioner = Mock(return_value='worker caption')
-        with patch.dict('sys.modules', {'modules.api_runtime': api}), patch.dict(interrogate.looks, {'florence': captioner}):
+        with patch.dict('sys.modules', {'ruinedfooocus.app.api_runtime': api}), patch.dict(interrogate.looks, {'florence': captioner}):
             self.assertEqual(interrogate.look(image, 'florence:', gr), 'caption')
             captioner.assert_not_called()
             operation = api.submit.call_args.args[0]

@@ -1,3 +1,4 @@
+from ruinedfooocus.core.paths import asset_path, resource_path
 """Exercise native image-edit routing without loading diffusion weights."""
 import ast
 from pathlib import Path
@@ -8,9 +9,9 @@ from unittest.mock import Mock
 import numpy as np
 from PIL import Image
 import torch
-from modules.settings_validation import validate_settings, MOSS_EDIT_FORMATS
-from modules.image_guidance import reference_image_map
-from modules.image_geometry import prepare_reference
+from ruinedfooocus.core.settings_validation import validate_settings, MOSS_EDIT_FORMATS
+from ruinedfooocus.features.image_editing.image_guidance import reference_image_map
+from ruinedfooocus.features.image_editing.image_geometry import prepare_reference
 
 
 class ImageEditTests(unittest.TestCase):
@@ -28,7 +29,7 @@ class ImageEditTests(unittest.TestCase):
             validate_settings({"moss_image_edit_format": "unknown"})
 
     def encode(self, architecture, moss_format="Disabled", references=None, mode='crop', control=None):
-        tree = ast.parse((Path(__file__).resolve().parents[1] / "modules/image_pipeline.py").read_text())
+        tree = ast.parse((Path(__file__).resolve().parents[1] / "ruinedfooocus/features/generation/image_pipeline.py").read_text())
         cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "pipeline")
         process = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == "process")
         branch = next(n for n in process.body if isinstance(n, ast.If) and ast.unparse(n.test) == "image_edit and input_images > 0")
@@ -47,7 +48,7 @@ class ImageEditTests(unittest.TestCase):
                                 xl_base=SimpleNamespace(vae="vae"))
         image = Image.new("RGBA", (64, 112))
         pixels, frame = prepare_reference(image, (512, 384), mode)
-        namespace = dict(callback=None, clean_prompt_cond_caches=lambda: {"+": {}, "-": {}},
+        namespace = dict(asset_path=asset_path, resource_path=resource_path, callback=None, clean_prompt_cond_caches=lambda: {"+": {}, "-": {}},
                          TextEncodeMageFlowEdit=lambda: mage, TextEncodeFibo2=lambda: mage,
                          TextEncodeQwenImageEdit=lambda: qwen,
                          TextEncodeMOSSImageEdit=lambda: moss, np=np, torch=torch,
@@ -90,7 +91,7 @@ class ImageEditTests(unittest.TestCase):
         self.assertTrue(set(args).issubset({arg.arg for arg in execute.args.args}))
 
     def test_edit_capabilities_use_upstream_options_for_all_native_families(self):
-        tree = ast.parse((Path(__file__).resolve().parents[1] / 'modules/image_pipeline.py').read_text(encoding='utf-8'))
+        tree = ast.parse((Path(__file__).resolve().parents[1] / 'ruinedfooocus/features/generation/image_pipeline.py').read_text(encoding='utf-8'))
         info = next(node.value for node in ast.walk(tree) if isinstance(node, ast.Assign)
                     and any(isinstance(target, ast.Name) and target.id == 'known_model_info' for target in node.targets))
         for key, value in zip(info.keys, info.values):
@@ -100,12 +101,12 @@ class ImageEditTests(unittest.TestCase):
                 self.assertNotIn('flags', fields)
 
     def test_explicit_img2img_validates_denoise_for_native_and_ordinary_models(self):
-        tree = ast.parse((Path(__file__).resolve().parents[1] / 'modules/image_pipeline.py').read_text(encoding='utf-8'))
+        tree = ast.parse((Path(__file__).resolve().parents[1] / 'ruinedfooocus/features/generation/image_pipeline.py').read_text(encoding='utf-8'))
         process = next(node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name == 'process')
         validation = next(node for node in process.body if isinstance(node, ast.If)
-                          and 'control_type in modules.controlnet.controlnet_models' in ast.unparse(node.test))
-        scope = dict(control_type='img2img', input_image=object(), controlnet={'strength': 2}, gen_data={},
-                     modules=SimpleNamespace(controlnet=SimpleNamespace(controlnet_models={'img2img': None})))
+                          and 'control_type in control_tools.controlnet_models' in ast.unparse(node.test))
+        scope = dict(asset_path=asset_path, resource_path=resource_path, control_type='img2img', input_image=object(), controlnet={'strength': 2}, gen_data={},
+                     control_tools=SimpleNamespace(controlnet_models={'img2img': None}))
         code = compile(ast.Module(body=[validation], type_ignores=[]), 'edit_preflight', 'exec')
         for native in (True, False):
             with self.assertRaisesRegex(ValueError, 'denoise'):
@@ -124,7 +125,7 @@ class ImageEditTests(unittest.TestCase):
             self.assertEqual(tuple(image.shape), (1, 112, 64, 3))
 
     def test_native_img2img_samples_the_source_latent_instead_of_the_empty_edit_target(self):
-        tree = ast.parse((Path(__file__).resolve().parents[1] / 'modules/image_pipeline.py').read_text())
+        tree = ast.parse((Path(__file__).resolve().parents[1] / 'ruinedfooocus/features/generation/image_pipeline.py').read_text())
         process = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == 'process')
         branch = next(n for n in process.body if isinstance(n, ast.If) and
                       ast.unparse(n.test).startswith('edit_latent is not None'))
@@ -134,7 +135,7 @@ class ImageEditTests(unittest.TestCase):
         owner = SimpleNamespace(xl_base_patched=SimpleNamespace(
             vae=SimpleNamespace(spacial_compression_decode=lambda: 16)))
         pixels = torch.zeros(1, 112, 64, 3)
-        scope = dict(self=owner, edit_latent=edit_target, img2img_mode=True,
+        scope = dict(asset_path=asset_path, resource_path=resource_path, self=owner, edit_latent=edit_target, img2img_mode=True,
                      input_image=pixels, controlnet={'type': 'img2img', 'denoise': .25}, gen_data={},
                      VAEEncode=lambda: SimpleNamespace(encode=encoder))
         code = compile(ast.Module(body=[branch], type_ignores=[]), 'edit_sampling', 'exec')
@@ -150,12 +151,12 @@ class ImageEditTests(unittest.TestCase):
         encoder.assert_not_called()
 
     def test_repeated_preserved_frames_do_not_shrink_the_batch_pixel_budget(self):
-        tree = ast.parse((Path(__file__).resolve().parents[1] / 'modules/image_pipeline.py').read_text())
+        tree = ast.parse((Path(__file__).resolve().parents[1] / 'ruinedfooocus/features/generation/image_pipeline.py').read_text())
         process = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == 'process')
         preprocess = next(n for n in process.body if isinstance(n, ast.If) and ast.unparse(n.test) == 'input_image')
         original = Image.new('RGB', (928, 1664))
         data = {'width': 1152, 'height': 896}
-        scope = dict(gen_data=data, image_edit=True, hidream_edit=False, control_type='img2img', architecture='QwenImage',
+        scope = dict(asset_path=asset_path, resource_path=resource_path, gen_data=data, image_edit=True, hidream_edit=False, control_type='img2img', architecture='QwenImage',
                      prepare_reference=prepare_reference, guidance={'image_resize_mode': 'preserve'})
         code = compile(ast.Module(body=[preprocess], type_ignores=[]), 'reference_batch', 'exec')
         frames = []
@@ -196,13 +197,13 @@ class ImageEditTests(unittest.TestCase):
                 self.assertEqual(call.kwargs["vae"], "vae")
 
     def test_mage_target_survives_latent_initialization(self):
-        tree = ast.parse((Path(__file__).resolve().parents[1] / "modules/image_pipeline.py").read_text())
+        tree = ast.parse((Path(__file__).resolve().parents[1] / "ruinedfooocus/features/generation/image_pipeline.py").read_text())
         cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "pipeline")
         process = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == "process")
         branch = next(n for n in process.body if isinstance(n, ast.If) and ast.unparse(n.test) == "edit_latent is not None and (not img2img_mode)")
         function = ast.parse("def initialize(edit_latent, img2img_mode=False): pass").body[0]
         function.body = [branch] + ast.parse("return latent, denoise").body
-        namespace = {}
+        namespace = {'asset_path': asset_path, 'resource_path': resource_path, }
         exec(compile(ast.fix_missing_locations(ast.Module(body=[function], type_ignores=[])), "target_latent", "exec"), namespace)
         latent = {"samples": torch.zeros(1, 128, 24, 32)}
         result, denoise = namespace["initialize"](latent)

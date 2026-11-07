@@ -17,7 +17,7 @@ const context = {
         return {ok: true, arrayBuffer: async () => new ArrayBuffer(4)};
     }
 };
-vm.runInNewContext(fs.readFileSync('html/chat_python_theme.js', 'utf8'), context);
+vm.runInNewContext(fs.readFileSync('ruinedfooocus/ui/assets/chat_python_theme.js', 'utf8'), context);
 const relay = listeners.at(-1);
 (async () => {
     for (const name of ['../config.json', 'https://evil.invalid/code.js', '/private', 'file..js']) {

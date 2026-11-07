@@ -1,3 +1,4 @@
+from ruinedfooocus.core.paths import asset_path, resource_path
 """Prompt expansion budgets/whitelists and UTF-8 styles without loading models."""
 import ast
 import csv
@@ -34,7 +35,7 @@ class ExpansionTests(unittest.TestCase):
                                 generate=Mock(return_value=torch.arange(length + 2).reshape(1, -1)))
         owner = SimpleNamespace(tokenizer=tokenizer, model=model,
                                 patcher=SimpleNamespace(load_device='cpu'), logits_processor=object())
-        execute = function('modules/prompt_expansion.py', '__call__', {
+        execute = function('ruinedfooocus/features/prompting/prompt_expansion.py', '__call__', {
             'torch': torch, 'os': os, 'SEED_LIMIT_NUMPY': 2**32, 'set_seed': Mock(),
             'safe_str': lambda text: text.strip(), 'fooocus_expansion_path': 'unused',
             'neg_inf': -8192., 'LogitsProcessorList': lambda processors: processors})
@@ -69,7 +70,7 @@ class ExpansionTests(unittest.TestCase):
             generate=lambda input_ids, **kwargs: torch.cat((input_ids, torch.tensor([suffix_ids])), dim=1))
         owner = SimpleNamespace(tokenizer=tokenizer, model=model,
             patcher=SimpleNamespace(load_device='cpu'), logits_processor=object())
-        execute = function('modules/prompt_expansion.py', '__call__', {
+        execute = function('ruinedfooocus/features/prompting/prompt_expansion.py', '__call__', {
             'torch': torch, 'os': os, 'SEED_LIMIT_NUMPY': 2**32, 'set_seed': Mock(),
             'safe_str': lambda text: text.strip(' ,.'), 'fooocus_expansion_path': 'unused',
             'neg_inf': -8192., 'LogitsProcessorList': lambda processors: processors})
@@ -81,7 +82,7 @@ class ExpansionTests(unittest.TestCase):
     def test_style_wrapper_forwards_original_prefix_without_normalization(self):
         original = ' , Київ <|endoftext|>  red cup.  '
         expansion = Mock(return_value=original + ', beautiful light')
-        execute = function('modules/prompt_expansion.py', 'expand_prompt', {
+        execute = function('ruinedfooocus/features/prompting/prompt_expansion.py', 'expand_prompt', {
             'FooocusExpansion': lambda: expansion,
             'remove_empty_str': lambda items, default: [item for item in items if item != ''] or [default],
             'random': SimpleNamespace(randint=lambda *args: 123)})
@@ -96,7 +97,7 @@ class StyleEncodingTests(unittest.TestCase):
             custom = Path(folder) / 'styles.csv'
             default.write_text('name,prompt,negative_prompt\nКиїв,猫 біля чашки,без шуму\n', encoding='utf-8-sig')
             custom.write_text('name,prompt,negative_prompt\nCustom,світло café,текст\n', encoding='utf-8-sig')
-            execute = function('modules/sdxl_styles.py', 'load_styles', {
+            execute = function('ruinedfooocus/features/prompting/sdxl_styles.py', 'load_styles', {
                 'DEFAULT_STYLES_FILE': default, 'STYLES_FILE': custom, 'exists': os.path.exists,
                 'csv': csv, 'DictReader': csv.DictReader, 'locale': __import__('locale'), 'STYLE_ALIASES': {}})
             styles = execute()
@@ -113,7 +114,7 @@ class StyleEncodingTests(unittest.TestCase):
             default.write_text(text, encoding='utf-8')
             original = text.encode('cp1251')
             custom.write_bytes(original)
-            execute = function('modules/sdxl_styles.py', 'load_styles', {
+            execute = function('ruinedfooocus/features/prompting/sdxl_styles.py', 'load_styles', {
                 'DEFAULT_STYLES_FILE': default, 'STYLES_FILE': custom, 'exists': os.path.exists,
                 'csv': csv, 'DictReader': csv.DictReader,
                 'locale': SimpleNamespace(getpreferredencoding=lambda flag: 'cp1251'), 'STYLE_ALIASES': {}})

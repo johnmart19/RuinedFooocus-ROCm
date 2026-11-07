@@ -8,7 +8,7 @@ from unittest.mock import Mock
 from unittest.mock import patch
 import sys
 
-from modules.image_guidance import (FIELD_SCHEMA, capabilities, resolve_guidance,
+from ruinedfooocus.features.image_editing.image_guidance import (FIELD_SCHEMA, capabilities, resolve_guidance,
                                     request_model, effective_guidance, validate_guidance,
                                     normalize_reference_images)
 
@@ -96,7 +96,7 @@ class ImageGuidanceTests(unittest.TestCase):
         self.assertEqual(normalize_reference_images([reference], primary, 'Fibo2')[0].mode, 'RGB')
 
     def test_api_schema_and_null_patch_switches(self):
-        from modules.openai_api import ImageRequest
+        from ruinedfooocus.integrations.openai_api import ImageRequest
         from pydantic import ValidationError
         request = ImageRequest(prompt='edit', moss_image_edit_format='ai-toolkit',
             moss_image_edit_strength=0, moss_image_slg=True, sampling_shift=3, cfg_norm_strength=None)
@@ -110,7 +110,7 @@ class ImageGuidanceTests(unittest.TestCase):
         with self.assertRaises(ValidationError): ImageRequest(reference_images=['a'] * 16)
 
     def test_api_guidance_snapshot_reaches_queued_worker_data_without_generation(self):
-        from modules import api_runtime
+        import ruinedfooocus.app.api_runtime as api_runtime
         perf = SimpleNamespace(CUSTOM_PERFORMANCE='Own settings',
             choices_for_model=lambda *args: ['Own settings'],
             selection_for_model=lambda *args: 'Own settings',
@@ -121,7 +121,7 @@ class ImageGuidanceTests(unittest.TestCase):
         defaults = dict(base_model_name='local.safetensors', performance_selection='Own settings', moss_image_edit_format='ai-toolkit',
                         moss_image_edit_strength=2, moss_image_slg=True, cfg_norm_strength=1,
                         reference_images=['must never inherit these'])
-        with patch.dict(sys.modules, {'shared': shared, 'comfy.samplers': fake_samplers}), \
+        with patch.dict(sys.modules, {'ruinedfooocus.app.state': shared, 'comfy.samplers': fake_samplers}), \
              patch.object(api_runtime, 'image_defaults', defaults), \
              patch.object(api_runtime, 'submit', side_effect=lambda run: run):
             operation = api_runtime.images(dict(prompt='edit', size='512x512', cfg_norm_strength=None,
@@ -145,7 +145,7 @@ class ImageGuidanceTests(unittest.TestCase):
             ('1, 3', '8, 9', 0.2, 0.8, True))
         from PIL import Image
         image = Image.new('RGB', (32, 24))
-        with patch.dict(sys.modules, {'shared': shared, 'comfy.samplers': fake_samplers}), \
+        with patch.dict(sys.modules, {'ruinedfooocus.app.state': shared, 'comfy.samplers': fake_samplers}), \
              patch.object(api_runtime, 'image_defaults', defaults), \
              patch.object(api_runtime, 'decode_image', side_effect=lambda value, **kwargs: image), \
              patch.object(api_runtime, 'submit', side_effect=lambda run: run):
@@ -156,7 +156,7 @@ class ImageGuidanceTests(unittest.TestCase):
         self.assertEqual(len(cells['data']['reference_images']), 1)
         self.assertEqual(cells['data']['reference_images'][0].mode, 'RGB')
         self.assertEqual(cells['data']['input_image'].size, image.size)
-        with patch.dict(sys.modules, {'shared': shared, 'comfy.samplers': fake_samplers}), \
+        with patch.dict(sys.modules, {'ruinedfooocus.app.state': shared, 'comfy.samplers': fake_samplers}), \
              patch.object(api_runtime, 'image_defaults', defaults), \
              patch.object(api_runtime, 'decode_image', return_value=image), \
              patch.object(api_runtime, 'submit', side_effect=lambda run: run):
@@ -171,7 +171,7 @@ class ImageGuidanceTests(unittest.TestCase):
                 self.assertEqual(queued['input_image'].size, image.size)
 
     def test_api_cross_model_ignores_ui_guidance_but_same_model_inherits(self):
-        from modules import api_runtime
+        import ruinedfooocus.app.api_runtime as api_runtime
         perf = SimpleNamespace(CUSTOM_PERFORMANCE='Own settings',
             choices_for_model=lambda *args: ['Model Defaults'],
             selection_for_model=lambda *args: 'Model Defaults',
@@ -181,7 +181,7 @@ class ImageGuidanceTests(unittest.TestCase):
         samplers = SimpleNamespace(KSampler=SimpleNamespace(SAMPLERS=['euler'], SCHEDULERS=['normal']))
         defaults = dict(base_model_name='moss.safetensors', sampling_shift=3, cfg_norm_strength=2,
                         moss_image_edit_format='ai-toolkit', moss_image_slg=True)
-        with patch.dict(sys.modules, {'shared': shared, 'comfy.samplers': samplers}), \
+        with patch.dict(sys.modules, {'ruinedfooocus.app.state': shared, 'comfy.samplers': samplers}), \
              patch.object(api_runtime, 'image_defaults', defaults), \
              patch.object(api_runtime, 'submit', side_effect=lambda run: run):
             def queued(name, family, **extra):
@@ -208,8 +208,8 @@ class ImageGuidanceTests(unittest.TestCase):
             self.assertEqual(main['moss_image_edit_format'], 'Disabled')
 
     def test_production_sampler_uses_request_clone_and_metadata_uses_effective_recipe(self):
-        pipeline = (ROOT / 'modules/image_pipeline.py').read_text(encoding='utf-8')
-        worker = (ROOT / 'modules/async_worker.py').read_text(encoding='utf-8')
+        pipeline = (ROOT / 'ruinedfooocus/features/generation/image_pipeline.py').read_text(encoding='utf-8')
+        worker = (ROOT / 'ruinedfooocus/app/async_worker.py').read_text(encoding='utf-8')
         tree = ast.parse(pipeline)
         cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == 'pipeline')
         process = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == 'process')

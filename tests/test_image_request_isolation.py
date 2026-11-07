@@ -1,3 +1,4 @@
+from ruinedfooocus.core.paths import asset_path, resource_path
 """Real request-routing/cache methods against inert CPU dependencies."""
 import ast
 import copy
@@ -11,15 +12,16 @@ import unittest
 from unittest.mock import Mock
 
 from PIL import Image
-from modules.model_identity import file_signature
-from modules.image_guidance import normalize_reference_images
-from modules import llama_vision, chat_tools
+from ruinedfooocus.features.models.model_identity import file_signature
+from ruinedfooocus.features.image_editing.image_guidance import normalize_reference_images
+import ruinedfooocus.features.chat.llama_vision as llama_vision
+import ruinedfooocus.features.chat.chat_tools as chat_tools
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def method(name, scope):
-    tree = ast.parse((ROOT/'modules/image_pipeline.py').read_text(encoding='utf-8'))
+    tree = ast.parse((ROOT/'ruinedfooocus/features/generation/image_pipeline.py').read_text(encoding='utf-8'))
     node = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == name)
     node.decorator_list = []
     exec(compile(ast.Module(body=[node],type_ignores=[]),name,'exec'), scope)
@@ -28,7 +30,7 @@ def method(name, scope):
 
 class ImageSourceTests(unittest.TestCase):
     def route(self, control, image, native=False, references=None):
-        tree = ast.parse((ROOT/'modules/image_pipeline.py').read_text(encoding='utf-8'))
+        tree = ast.parse((ROOT/'ruinedfooocus/features/generation/image_pipeline.py').read_text(encoding='utf-8'))
         process = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == 'process')
         start = next(i for i,n in enumerate(process.body) if isinstance(n,ast.Assign)
                      and ast.unparse(n.targets[0]) == 'controlnet')
@@ -37,7 +39,7 @@ class ImageSourceTests(unittest.TestCase):
         data = {'input_image':image,'reference_images':references}
         controls = SimpleNamespace(get_settings=lambda data:dict(control),
             controlnet_models={k:None for k in ('img2img','edit','canny','depth','sketch','recolour')})
-        scope = dict(gen_data=data, modules=SimpleNamespace(controlnet=controls), architecture='MOSSImage' if native else 'SDXL',
+        scope = dict(asset_path=asset_path, resource_path=resource_path, gen_data=data, control_tools=controls, architecture='MOSSImage' if native else 'SDXL',
             image_edit=native, hidream_edit=False, guidance={'moss_image_edit_format':'Independent'},
             normalize_reference_images=normalize_reference_images)
         exec(compile(ast.Module(body=process.body[start:stop],type_ignores=[]),'source_route','exec'),scope)
@@ -120,7 +122,7 @@ class CacheTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             paths={name:Path(folder)/name for name in ('A','B')}
             for path in paths.values(): path.write_bytes(b'model')
-            scope=dict(file_signature=file_signature,shared=SimpleNamespace(models=SimpleNamespace(
+            scope=dict(asset_path=asset_path, resource_path=resource_path, file_signature=file_signature,shared=SimpleNamespace(models=SimpleNamespace(
                 get_model_path=lambda kind,name,hash=None:paths[name])),
                 comfy=SimpleNamespace(utils=SimpleNamespace(load_torch_file=lambda path,safe_load:Path(path).name),
                     sd=SimpleNamespace(load_lora_for_models=apply)))
@@ -145,11 +147,11 @@ class CacheTests(unittest.TestCase):
 
 class ChatSourceTests(unittest.TestCase):
     def test_review_enabled_does_not_implicitly_attach_previous_images(self):
-        tree=ast.parse((ROOT/'modules/llama_pipeline.py').read_text(encoding='utf-8'))
+        tree=ast.parse((ROOT/'ruinedfooocus/features/chat/llama_pipeline.py').read_text(encoding='utf-8'))
         cls=next(n for n in tree.body if isinstance(n,ast.ClassDef) and n.name=='pipeline')
         process=next(n for n in cls.body if isinstance(n,ast.FunctionDef) and n.name=='process')
         attach,feedback=Mock(),Mock()
-        scope=dict(re=re,json=json,Path=Path,DEFAULT_MODEL='vision.gguf',
+        scope=dict(asset_path=asset_path, resource_path=resource_path, re=re,json=json,Path=Path,DEFAULT_MODEL='vision.gguf',
             settings=SimpleNamespace(default_settings={'enable_llm_tools':True}),
             worker=SimpleNamespace(add_result=Mock()),TimeIt=lambda label:nullcontext(),
             model_has_vision=lambda model:True,selected_image_reference=llama_vision.selected_image_reference,

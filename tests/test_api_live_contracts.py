@@ -12,8 +12,8 @@ from unittest.mock import AsyncMock, Mock
 
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
-from modules.openai_api import ChatRequest, create_apps
-from modules.web_access import PrivateResponses, require_ui_login
+from ruinedfooocus.integrations.openai_api import ChatRequest, create_apps
+from ruinedfooocus.integrations.web_access import PrivateResponses, require_ui_login
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -120,7 +120,7 @@ class ApiLiveContracts(unittest.TestCase):
             self.assertEqual(base64.b64decode(response.json()['data'][0]['b64_json']), path.read_bytes())
 
     def test_explicit_auto_nulls_reach_image_backend_but_omissions_stay_missing(self):
-        from modules.image_guidance import FIELD_SCHEMA
+        from ruinedfooocus.features.image_editing.image_guidance import FIELD_SCHEMA
         auto = {key:None for key,spec in FIELD_SCHEMA.items() if spec['default'] is None}
         self.backend.images.side_effect = lambda *args: job(('result', []))
         for overrides in (auto, {}):
@@ -217,12 +217,12 @@ class ModelIdTests(unittest.TestCase):
     def test_subfolder_model_ids_are_portable_and_accept_windows_separators(self):
         import sys
         from unittest.mock import patch
-        from modules import api_runtime
+        import ruinedfooocus.app.api_runtime as api_runtime
         native = r"LTX25\ltx-2.5.safetensors"
         catalogue = {"video/LTX25/ltx-2.5.safetensors": {"name": native, "kind": "video"}}
         llama = SimpleNamespace(DEFAULT_MODEL="chat.gguf")
         with patch.object(api_runtime, "models", return_value=catalogue), \
-                patch.dict(sys.modules, {"shared": SimpleNamespace(), "modules.llama_models": llama}):
+                patch.dict(sys.modules, {"ruinedfooocus.app.state": SimpleNamespace(), "ruinedfooocus.features.chat.llama_models": llama}):
             for requested in ("video/LTX25/ltx-2.5.safetensors", "video/" + native, native):
                 with self.subTest(requested=requested):
                     model, selected = api_runtime.resolve_model(requested, "video")

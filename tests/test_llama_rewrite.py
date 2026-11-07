@@ -1,3 +1,4 @@
+from ruinedfooocus.core.paths import asset_path, resource_path
 """Prompt-rewrite presets and their output handling, without loading a model."""
 import ast
 from pathlib import Path
@@ -8,9 +9,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def helpers():
-    tree = ast.parse((ROOT / "modules/llama_pipeline.py").read_text(encoding="utf-8"))
+    tree = ast.parse((ROOT / "ruinedfooocus/features/chat/llama_pipeline.py").read_text(encoding="utf-8"))
     nodes = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in ("clean_rewrite", "restore_tags")]
-    scope = {"re": re}
+    scope = {'asset_path': asset_path, 'resource_path': resource_path, "re": re}
     exec(compile(ast.Module(body=nodes, type_ignores=[]), "llama_pipeline", "exec"), scope)
     return scope["clean_rewrite"], scope["restore_tags"]
 
@@ -36,11 +37,11 @@ class RewriteOutputTests(unittest.TestCase):
 class RewriteReasoningTests(unittest.TestCase):
     def test_setting_maps_to_template_kwargs_and_rejects_unknown_values(self):
         from types import SimpleNamespace
-        from modules.settings_validation import validate_settings
-        tree = ast.parse((ROOT / "modules/llama_pipeline.py").read_text(encoding="utf-8"))
+        from ruinedfooocus.core.settings_validation import validate_settings
+        tree = ast.parse((ROOT / "ruinedfooocus/features/chat/llama_pipeline.py").read_text(encoding="utf-8"))
         node = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "rewrite_template_kwargs")
         settings = SimpleNamespace(default_settings={})
-        scope = {"settings": settings}
+        scope = {'asset_path': asset_path, 'resource_path': resource_path, "settings": settings}
         exec(compile(ast.Module(body=[node], type_ignores=[]), "llama_pipeline", "exec"), scope)
         cases = {None: ("low", False), "Low": ("low", False), "Medium": ("medium", True),
                  "High": ("high", True), "bogus": ("low", False)}
@@ -56,7 +57,7 @@ class RewriteReasoningTests(unittest.TestCase):
 
 class PresetFileTests(unittest.TestCase):
     def test_presets_have_a_name_rules_and_fit_the_context(self):
-        presets = sorted((ROOT / "llamas").glob("*.txt"))
+        presets = sorted((ROOT / "ruinedfooocus/resources/prompt_presets").glob("*.txt"))
         self.assertTrue(presets)
         names = set()
         for path in presets:

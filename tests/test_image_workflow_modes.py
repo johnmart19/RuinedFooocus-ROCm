@@ -1,3 +1,4 @@
+from ruinedfooocus.core.paths import asset_path, resource_path
 """Image tool arbitration, preview ownership and early routing checks; no models."""
 import ast
 from pathlib import Path
@@ -58,7 +59,7 @@ class ImageWorkflowModeTests(unittest.TestCase):
         self.assertTrue(values[0]['visible'])
 
     def test_exactly_one_preview_is_visible_for_each_edit_inpaint_and_upscale_mode(self):
-        run = function('webui.py', 'switch_upscale_view', dict(gr=SimpleNamespace(update=lambda **kw:kw), t=lambda s:s))
+        run = function('ruinedfooocus/ui/app.py', 'switch_upscale_view', dict(gr=SimpleNamespace(update=lambda **kw:kw), t=lambda s:s))
         for scale in ('Off', '2× General (RealESRGAN)'):
             for target in ('Generated image', 'Input image only'):
                 for inpaint in (False, True):
@@ -83,13 +84,13 @@ class ImageWorkflowModeTests(unittest.TestCase):
                                         ('rembg_pipeline','rembg'),('llama_pipeline','llama'))}
         models = SimpleNamespace(get_file=lambda *args:Path('model.safetensors'),
             get_models_by_path=lambda *args:{}, get_model_base=lambda *args:'SDXL')
-        scope = dict(state=state, shared=SimpleNamespace(models=models), Path=Path, VIDEO_PIPELINES={},
+        scope = dict(asset_path=asset_path, resource_path=resource_path, state=state, shared=SimpleNamespace(models=models), Path=Path, VIDEO_PIPELINES={},
             controlnet=SimpleNamespace(get_settings=lambda data:control), selected_pipeline=lambda:state['pipeline'],
             NoPipeLine=lambda:SimpleNamespace(pipeline_type=[]), **factories)
-        return function('modules/pipelines.py', 'update', scope), state, factories
+        return function('ruinedfooocus/features/generation/pipelines.py', 'update', scope), state, factories
 
     def test_edit_shortcut_uses_session_input_instead_of_shared_global_state(self):
-        toggle = function('webui.py', 'toggle_edit_mode', {})
+        toggle = function('ruinedfooocus/ui/app.py', 'toggle_edit_mode', {})
         self.assertFalse(toggle(True))
         self.assertFalse(toggle(True))  # Another session starts independently.
         self.assertTrue(toggle(False))

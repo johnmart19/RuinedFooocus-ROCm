@@ -2,6 +2,18 @@
   "base": "cd7abb27064155f62dea002f745a8ce1b040c990",
   "features": [
     {
+      "id": "feature-package-layout",
+      "subject": "Organize source by feature with preserved user resource overrides",
+      "requires": [
+        "checkpoint-exclusive-publication",
+        "image-prompt-label-validation",
+        "app-cleanup-validation"
+      ],
+      "tests": [
+        "test_*.py"
+      ]
+    },
+    {
       "id": "checkpoint-exclusive-publication",
       "subject": "Prevent checkpoint copy overwrites on no-link filesystems",
       "requires": [

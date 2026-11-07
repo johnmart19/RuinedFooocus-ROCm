@@ -1,3 +1,4 @@
+from ruinedfooocus.core.paths import asset_path, resource_path
 """Image UI regression checks; no server, model loading or generation."""
 import ast
 import json
@@ -9,9 +10,9 @@ from unittest.mock import Mock, patch
 import numpy as np
 from PIL import Image
 
-from modules.inpaint_utils import editor_payload, source_and_mask
-from modules.image_guidance import FIELD_SCHEMA, capabilities, resolve_guidance, restore_guidance_metadata
-from modules.ui.ui_image_guidance import preset_control_state
+from ruinedfooocus.features.image_editing.inpaint_utils import editor_payload, source_and_mask
+from ruinedfooocus.features.image_editing.image_guidance import FIELD_SCHEMA, capabilities, resolve_guidance, restore_guidance_metadata
+from ruinedfooocus.features.image_editing.ui_guidance import preset_control_state
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -26,7 +27,7 @@ def function_body(path, name, namespace):
 
 class ImageUIAuditTests(unittest.TestCase):
     def setUp(self):
-        stub = patch.dict('sys.modules', {'argparser': SimpleNamespace(args=SimpleNamespace(offline=True))})
+        stub = patch.dict('sys.modules', {'ruinedfooocus.app.arguments': SimpleNamespace(args=SimpleNamespace(offline=True))})
         stub.start()
         self.addCleanup(stub.stop)
 
@@ -35,7 +36,7 @@ class ImageUIAuditTests(unittest.TestCase):
             get_vocab=lambda: {'<start>': 0, 'word': 1, '<end>': 2},
             tokenize=lambda text: ['original'], convert_tokens_to_string=lambda tokens: ' '.join(tokens))
         import random
-        randomize = function_body('modules/ui/ui_evolve.py', 'tokenize_and_randomize',
+        randomize = function_body('ruinedfooocus/features/prompting/ui_evolve.py', 'tokenize_and_randomize',
                                   dict(evolve_tokenizer=lambda offline: tokenizer, random=random,
                                        os=SimpleNamespace(environ={})))
         self.assertEqual(randomize('prompt', 100), 'word')
@@ -43,14 +44,14 @@ class ImageUIAuditTests(unittest.TestCase):
         self.assertEqual(randomize('prompt', 100), 'original')
 
     def test_token_evolution_without_tokenizer_has_clear_error_and_other_modes_work(self):
-        randomize = function_body('modules/ui/ui_evolve.py', 'tokenize_and_randomize',
+        randomize = function_body('ruinedfooocus/features/prompting/ui_evolve.py', 'tokenize_and_randomize',
                                   dict(evolve_tokenizer=Mock(side_effect=OSError('not cached')),
                                        os=SimpleNamespace(environ={}), gr=SimpleNamespace(Error=ValueError)))
         with self.assertRaisesRegex(ValueError, 'Token evolution requires the tokenizer'):
             randomize('prompt', 100)
         words = Mock(return_value='word variant')
         obp = Mock(return_value='obp variant')
-        evolve = function_body('modules/ui/ui_evolve.py', 'four_evolved_prompts',
+        evolve = function_body('ruinedfooocus/features/prompting/ui_evolve.py', 'four_evolved_prompts',
                               dict(tokenize_and_randomize=randomize, randomize_words=words,
                                    createpromptvariant=obp))
         self.assertEqual(evolve('prompt', 'Words', 50), ['word variant'] * 4)
@@ -96,7 +97,7 @@ class ImageUIAuditTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 source_and_mask(image, editor)
         gr = SimpleNamespace(update=lambda **values: values, Warning=Mock())
-        callback = function_body('modules/ui/ui_controlnet.py', 'inpaint_checked',
+        callback = function_body('ruinedfooocus/features/image_editing/ui.py', 'inpaint_checked',
             dict(gr=gr, editor_payload=editor_payload, main_view='main', inpaint_view='editor', inpaint_toggle='toggle'))
         result = callback(True, None)
         self.assertEqual(result['toggle'], {'value': False})
@@ -107,28 +108,28 @@ class ImageUIAuditTests(unittest.TestCase):
         gr.Warning.assert_called_once()
 
     def metadata_callback(self):
-        tree = ast.parse((ROOT / 'modules/ui/ui_image_gallery.py').read_text(encoding='utf-8'))
+        tree = ast.parse((ROOT / 'ruinedfooocus/features/gallery/ui.py').read_text(encoding='utf-8'))
         mapping = next(node.value for node in tree.body if isinstance(node, ast.Assign)
                        and any(isinstance(target, ast.Name) and target.id == 'METADATA_CONTROLS' for target in node.targets))
-        namespace = dict(json=json, gr=SimpleNamespace(update=lambda **values: values, Error=ValueError, Info=Mock()),
+        namespace = dict(asset_path=asset_path, resource_path=resource_path, json=json, gr=SimpleNamespace(update=lambda **values: values, Error=ValueError, Info=Mock()),
             get_ctrl=lambda key: key, METADATA_CONTROLS=ast.literal_eval(mapping), FIELD_SCHEMA=FIELD_SCHEMA,
             capabilities=capabilities, resolve_guidance=resolve_guidance, restore_guidance_metadata=restore_guidance_metadata)
-        return function_body('modules/ui/ui_image_gallery.py', 'apply_metadata', namespace)
+        return function_body('ruinedfooocus/features/gallery/ui.py', 'apply_metadata', namespace)
 
     def test_browser_metadata_restores_guidance_without_private_references(self):
         callback = self.metadata_callback()
         metadata = dict(prompt='fox', image_guidance=dict(moss_image_edit_format='ai-toolkit',
             moss_image_edit_strength=2, moss_image_slg=True, sampling_shift=None, effective_sampling_shift=5,
             cfg_norm_strength=None, reference_images=['private.png']))
-        with patch('modules.ui.ui_image_guidance.family_for_checkpoint', return_value='MOSSImage'), \
-             patch('modules.automatic_upscale.choices', return_value=['Off']):
+        with patch('ruinedfooocus.features.image_editing.ui_guidance.family_for_checkpoint', return_value='MOSSImage'), \
+             patch('ruinedfooocus.features.generation.automatic_upscale.choices', return_value=['Off']):
             updates = callback(metadata, 'moss', '')
         self.assertEqual(updates['sampling_shift'], {'value': 5})
         self.assertEqual(updates['moss_image_edit_format']['value'], 'ai-toolkit')
         self.assertEqual(updates['cfg_norm_strength'], {'value': None})
         self.assertNotIn('reference_images', updates)
-        with patch('modules.ui.ui_image_guidance.family_for_checkpoint', return_value='Krea2'), \
-             patch('modules.automatic_upscale.choices', return_value=['Off']):
+        with patch('ruinedfooocus.features.image_editing.ui_guidance.family_for_checkpoint', return_value='Krea2'), \
+             patch('ruinedfooocus.features.generation.automatic_upscale.choices', return_value=['Off']):
             updates = callback(metadata, 'krea', '')
         self.assertIsNone(updates['sampling_shift']['value'])
         self.assertEqual(updates['moss_image_edit_format']['value'], 'Disabled')

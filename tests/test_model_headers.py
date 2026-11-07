@@ -1,3 +1,4 @@
+from ruinedfooocus.core.paths import asset_path, resource_path
 """Shared bounded header inspection for metadata and component UI callers."""
 import ast
 import json
@@ -5,17 +6,17 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from modules.model_identity import read_safetensors_header
+from ruinedfooocus.features.models.model_identity import read_safetensors_header
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class ModelHeaderTests(unittest.TestCase):
     def model_browser_reader(self):
-        tree = ast.parse((ROOT / 'modules/model_handler.py').read_text(encoding='utf-8'))
+        tree = ast.parse((ROOT / 'ruinedfooocus/features/models/model_handler.py').read_text(encoding='utf-8'))
         node = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == 'read_safetensors_header')
         node.decorator_list = []
-        scope = {}
+        scope = {'asset_path': asset_path, 'resource_path': resource_path, }
         exec(compile(ast.Module(body=[node], type_ignores=[]), 'metadata_reader', 'exec'), scope)
         return scope['read_safetensors_header']
 

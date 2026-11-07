@@ -7,7 +7,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from modules import runtime_support
+import ruinedfooocus.packaging.runtime_support as runtime_support
 
 
 class InstalledRuntimeTests(unittest.TestCase):

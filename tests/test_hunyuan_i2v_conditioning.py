@@ -1,3 +1,4 @@
+from ruinedfooocus.core.paths import asset_path, resource_path
 """Execute the production I2V branch with native-node mocks, without a GPU."""
 import ast
 from pathlib import Path
@@ -15,10 +16,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class HunyuanImageConditioningTests(unittest.TestCase):
     def test_hunyuan_vision_override_lists_vision_files_in_settings(self):
-        tree = ast.parse((ROOT / 'modules/ui/ui_settings.py').read_text(encoding='utf-8'))
+        tree = ast.parse((ROOT / 'ruinedfooocus/ui/ui_settings.py').read_text(encoding='utf-8'))
         function = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == 'resource_choices')
         manager = SimpleNamespace(get_folder_list=Mock(return_value=['llava_llama3_vision.safetensors']))
-        namespace = dict(RESOURCE_DEFAULTS={'clip_hunyuan_vision': 'llava_llama3_vision.safetensors'}, path_manager=manager)
+        namespace = dict(asset_path=asset_path, resource_path=resource_path, RESOURCE_DEFAULTS={'clip_hunyuan_vision': 'llava_llama3_vision.safetensors'}, path_manager=manager)
         exec(compile(ast.Module(body=[function], type_ignores=[]), 'settings_choices', 'exec'), namespace)
         choices = namespace['resource_choices']('clip_hunyuan_vision', all_files=True)
         manager.get_folder_list.assert_called_once_with('clip_vision')
@@ -37,7 +38,7 @@ class HunyuanImageConditioningTests(unittest.TestCase):
         self.assertIs(artifact['positive'][0][1]['clip_vision_output']['image_embeds'], vision.image_embeds)
 
     def branch(self):
-        tree = ast.parse((ROOT / 'modules/hunyuan_video_pipeline.py').read_text())
+        tree = ast.parse((ROOT / 'ruinedfooocus/features/video/hunyuan_video_pipeline.py').read_text())
         cls = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == 'pipeline')
         process = next(node for node in cls.body if isinstance(node, ast.FunctionDef) and node.name == 'process')
         branch = next(node for node in process.body if isinstance(node, ast.If)
@@ -54,7 +55,7 @@ class HunyuanImageConditioningTests(unittest.TestCase):
         text.execute.return_value = ('image-aware prompt',)
         latent = Mock()
         latent.encode.return_value = ('conditioned positive', 'video latent')
-        namespace = dict(self=owner, gen_data={'input_image': Image.new('RGB', (32, 32)),
+        namespace = dict(asset_path=asset_path, resource_path=resource_path, self=owner, gen_data={'input_image': Image.new('RGB', (32, 32)),
             'width': 32, 'height': 32, 'original_image_number': 25}, np=np, torch=torch,
             comfy=SimpleNamespace(clip_vision=SimpleNamespace(load=loader)),
             resource_name=Mock(return_value='llava_llama3_vision.safetensors'),

@@ -3,7 +3,7 @@ from types import ModuleType, SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-from modules.model_attention import configure_qwen_attention
+from ruinedfooocus.backends.comfy.model_attention import configure_qwen_attention
 
 
 class QwenAttentionPolicyTests(unittest.TestCase):
@@ -20,7 +20,7 @@ class QwenAttentionPolicyTests(unittest.TestCase):
         modules = {'torch': SimpleNamespace(version=SimpleNamespace(hip=hip)), 'comfy': comfy,
                    'comfy.cli_args': SimpleNamespace(args=SimpleNamespace(**({'cpu': False} | flags))),
                    'comfy.ldm.modules.attention': attention}
-        with patch.dict('sys.modules', modules), patch('modules.model_attention.platform.system', return_value=os_name):
+        with patch.dict('sys.modules', modules), patch('ruinedfooocus.backends.comfy.model_attention.platform.system', return_value=os_name):
             result = configure_qwen_attention(patcher)
             factor = model.memory_usage_factor
             configure_qwen_attention(patcher)

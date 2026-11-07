@@ -1,3 +1,4 @@
+from ruinedfooocus.core.paths import asset_path, resource_path
 """Image component status/download policy without model loading or network access."""
 import ast
 import json
@@ -8,8 +9,8 @@ import unittest
 from unittest.mock import Mock
 from unittest.mock import patch
 
-from modules.image_components import IMAGE_COMPONENTS, inventory, download_missing
-from modules.model_identity import file_signature
+from ruinedfooocus.features.models.image_components import IMAGE_COMPONENTS, inventory, download_missing
+from ruinedfooocus.features.models.model_identity import file_signature
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -34,10 +35,10 @@ class ImageComponentTests(unittest.TestCase):
             models = SimpleNamespace(get_names=lambda category: ['moss.safetensors'],
                 get_file_from_name=lambda category, name: model, cache_paths={'checkpoints': cache})
             # Execute the real cache-selection function without importing Gradio/shared runtime.
-            tree = ast.parse((ROOT / 'modules/ui/ui_model_components.py').read_text(encoding='utf-8'))
+            tree = ast.parse((ROOT / 'ruinedfooocus/features/models/ui_model_components.py').read_text(encoding='utf-8'))
             selected = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == 'selected')
-            namespace = dict(Path=Path, json=json, file_signature=file_signature)
-            with patch.dict('sys.modules', {'shared': SimpleNamespace(models=models)}):
+            namespace = dict(asset_path=asset_path, resource_path=resource_path, Path=Path, json=json, file_signature=file_signature)
+            with patch.dict('sys.modules', {'ruinedfooocus.app.state': SimpleNamespace(models=models)}):
                 exec(compile(ast.Module(body=[selected], type_ignores=[]), 'component_selection', 'exec'), namespace)
                 path, family = namespace['selected']('moss.safetensors')
             self.assertEqual(family, 'MOSS Image')
@@ -46,7 +47,7 @@ class ImageComponentTests(unittest.TestCase):
             self.assertEqual([row['key'] for row in state['rows']], ['clip_qwen35_9b', 'vae_flux2'])
             # An already-initialized backend's shape detection wins over stale/friendly metadata.
             with patch.dict('sys.modules', {'comfy.model_detection': SimpleNamespace()}), \
-                 patch('modules.model_architecture.detect_tensor_architecture', return_value='MOSSImage') as detect:
+                 patch('ruinedfooocus.features.models.model_architecture.detect_tensor_architecture', return_value='MOSSImage') as detect:
                 self.assertEqual(inventory(path, 'Qwen Image', {}, paths)['architecture'], 'MOSSImage')
             detect.assert_called_once()
             paths.download_file.assert_not_called()
@@ -63,7 +64,7 @@ class ImageComponentTests(unittest.TestCase):
                     self.assertEqual(inventory(model, family, {}, paths)['architecture'], canonical)
 
     def test_registry_matches_every_production_image_architecture(self):
-        tree = ast.parse((ROOT / 'modules/image_pipeline.py').read_text(encoding='utf-8'))
+        tree = ast.parse((ROOT / 'ruinedfooocus/features/generation/image_pipeline.py').read_text(encoding='utf-8'))
         cls = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == 'pipeline')
         table = next(node.value for node in cls.body if isinstance(node, ast.Assign)
                      and any(isinstance(target, ast.Name) and target.id == 'known_model_info' for target in node.targets))
@@ -166,7 +167,7 @@ class ImageComponentTests(unittest.TestCase):
             # Initialized backend shapes are authoritative even over an inaccurate GGUF tag.
             with patch.dict('sys.modules', {'gguf': SimpleNamespace(GGUFReader=lambda path: reader),
                                             'comfy.model_detection': SimpleNamespace()}), \
-                 patch('modules.model_architecture.detect_tensor_architecture', return_value='QwenImage') as detect:
+                 patch('ruinedfooocus.features.models.model_architecture.detect_tensor_architecture', return_value='QwenImage') as detect:
                 self.assertEqual(inventory(model, 'MageFlow', {}, paths)['architecture'], 'QwenImage')
             self.assertEqual(detect.call_args.args[0]['shared_block_modulation.weight']['shape'], [18432, 3072])
             reader.get_field = lambda key: SimpleNamespace(contents=lambda: 'lumina2')

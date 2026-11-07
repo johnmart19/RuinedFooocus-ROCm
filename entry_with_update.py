@@ -10,7 +10,7 @@ os.chdir(root)
 offline = os.environ.get("RF_OFFLINE") == "1" or "--offline" in sys.argv
 
 if not offline:
-    from modules.dependency_cache import needed, record
+    from ruinedfooocus.core.dependency_cache import needed, record
     # Bootstrap before importing application helpers, which require packaging.
     reinstall_bootstrap = ["--force-reinstall"] if (root / "reinstall").exists() else []
     if needed(root, 'bootstrap', force=bool(reinstall_bootstrap)):
@@ -21,7 +21,7 @@ if not offline:
         )
         record(root, 'bootstrap')
     sys._rf_bootstrap_checked = True
-    # launch.py must not replace pygit2/cffi after the updater loads their DLLs.
+    # ruinedfooocus/app/bootstrap.py must not replace pygit2/cffi after the updater loads their DLLs.
 
     bupdated = False
     try:
@@ -68,4 +68,4 @@ if not offline:
         os.execv(sys.executable, [sys.executable, *sys.argv])
 else:
     print("Offline mode. No update.")
-from launch import *
+from ruinedfooocus.app.bootstrap import *

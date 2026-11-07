@@ -8,9 +8,9 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from modules.comfy_args import add_comfy_arguments
-from modules.image_compute import apply_compute, explicit_options, load_compute, validate_compute
-from modules.settings_validation import validate_settings
+from ruinedfooocus.backends.comfy.comfy_args import add_comfy_arguments
+from ruinedfooocus.backends.comfy.image_compute import apply_compute, explicit_options, load_compute, validate_compute
+from ruinedfooocus.core.settings_validation import validate_settings
 
 
 class ComputePreferencesTests(unittest.TestCase):
@@ -75,9 +75,9 @@ class ComputePreferencesTests(unittest.TestCase):
 
     def test_only_selected_settings_profile_is_loaded_before_backend_import(self):
         parser = self.parser()
-        with tempfile.TemporaryDirectory() as folder, patch('modules.image_compute.Path', wraps=Path) as paths:
+        with tempfile.TemporaryDirectory() as folder, patch('ruinedfooocus.backends.comfy.image_compute.data_path') as paths:
             # Patch only the settings root; no shared state or backend is imported.
-            paths.side_effect = lambda value: Path(folder) / value
+            paths.side_effect = lambda *parts: Path(folder).joinpath(*parts)
             root = Path(folder) / 'settings'
             (root / 'portable').mkdir(parents=True)
             (root / 'settings.json').write_text(json.dumps({'image_vram_headroom': 1}))
@@ -90,15 +90,15 @@ class ComputePreferencesTests(unittest.TestCase):
                 self.assertEqual(args.vram_headroom, expected)
 
     def test_application_parser_applies_preferences_at_startup(self):
-        source = Path(__file__).resolve().parents[1] / 'argparser.py'
+        source = Path(__file__).resolve().parents[1] / 'ruinedfooocus/app/arguments.py'
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder) / 'settings'
             root.mkdir()
             (root / 'settings.json').write_text(json.dumps({
                 'image_vram_headroom': 2, 'image_dynamic_vram': 'Disabled',
                 'image_async_offload': '4', 'image_preview_method': 'taesd'}))
-            with patch('modules.image_compute.Path', side_effect=lambda value: Path(folder) / value), \
-                 patch.object(sys, 'argv', ['argparser.py', '--vram-headroom=0', '--preview-method=none']):
+            with patch('ruinedfooocus.backends.comfy.image_compute.data_path', side_effect=lambda *parts: Path(folder).joinpath(*parts)), \
+                 patch.object(sys, 'argv', ['ruinedfooocus/app/arguments.py', '--vram-headroom=0', '--preview-method=none']):
                 args = runpy.run_path(str(source))['args']
             self.assertEqual((args.vram_headroom, args.preview_method, args.async_offload), (0, 'none', 4))
             self.assertTrue(args.disable_dynamic_vram)

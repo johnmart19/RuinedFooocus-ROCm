@@ -115,9 +115,9 @@ def initialize(runtime_args):
     sys.path.append(str(ROOT / "repositories"))
     os.environ.update(RF_OFFLINE="1", HF_HUB_OFFLINE="1", TRANSFORMERS_OFFLINE="1",
                       HF_HUB_DISABLE_TELEMETRY="1", GRADIO_ANALYTICS_ENABLED="False")
-    sys.argv = [str(ROOT / "launch.py"), "--offline", *runtime_args]
-    from argparser import args
-    from modules.comfy_compat import configure_device_environment, initialize_backend
+    sys.argv = [str(ROOT / "ruinedfooocus/app/bootstrap.py"), "--offline", *runtime_args]
+    from ruinedfooocus.app.arguments import args
+    from ruinedfooocus.backends.comfy.comfy_compat import configure_device_environment, initialize_backend
     configure_device_environment(args)
     initialize_backend(args)
 
@@ -132,8 +132,8 @@ def revision(path):
 
 def provenance(root=ROOT):
     files = set(root.glob("modules/**/*.py")) | set(root.glob("tools/*.py"))
-    files.update(root / name for name in ("shared.py", "argparser.py", "webui.py", "launch.py",
-        "entry_with_update.py", "settings/performance.default", "pip/modules.txt", "requirements_versions.txt"))
+    files.update(root / name for name in ("ruinedfooocus/app/state.py", "ruinedfooocus/app/arguments.py", "ruinedfooocus/ui/app.py", "ruinedfooocus/app/bootstrap.py",
+        "entry_with_update.py", "ruinedfooocus/resources/defaults/performance.default", "pip/modules.txt", "requirements_versions.txt"))
     hashes = {path.relative_to(root).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
               for path in sorted(files) if path.is_file()}
     tree = hashlib.sha256(json.dumps(hashes, sort_keys=True, separators=(",", ":")).encode()).hexdigest()

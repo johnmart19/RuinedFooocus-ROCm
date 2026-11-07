@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from modules.launch_util import requirements_met
+from ruinedfooocus.packaging.launch_util import requirements_met
 
 
 class InstalledRequirementTests(unittest.TestCase):
@@ -17,8 +17,8 @@ class InstalledRequirementTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parents[1]) as directory:
             path = Path(directory) / 'requirements.txt'
             path.write_text(text)
-            with patch('modules.launch_util.importlib.metadata.version', side_effect=version), patch(
-                    'modules.launch_util.importlib.metadata.requires', side_effect=lambda name: dependencies.get(name, [])):
+            with patch('ruinedfooocus.packaging.launch_util.importlib.metadata.version', side_effect=version), patch(
+                    'ruinedfooocus.packaging.launch_util.importlib.metadata.requires', side_effect=lambda name: dependencies.get(name, [])):
                 return requirements_met(path)
 
     def test_missing_or_incompatible_requested_extra_requires_repair(self):

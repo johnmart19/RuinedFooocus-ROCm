@@ -144,7 +144,7 @@ class ValidationAssetTests(unittest.TestCase):
                 (stage / 'test.bin').write_bytes(b'goodgood')
                 self.assertEqual(download.remaining_bytes(asset), 0)
                 with patch('requests.get', side_effect=AssertionError('No HTTP expected')), \
-                     patch.dict('sys.modules', {'modules.hub_download': None}):
+                     patch.dict('sys.modules', {'ruinedfooocus.core.hub_download': None}):
                     self.assertEqual(download.acquire(asset)['status'], 'verified')
                 self.assertEqual((root / 'models/test.bin').read_bytes(), b'goodgood')
 
@@ -183,7 +183,7 @@ class ValidationAssetTests(unittest.TestCase):
                 path.write_bytes(partial.read_bytes() + b'od')
                 partial.unlink()
             fake_hub = type('Hub', (), {'download_hub_file': staticmethod(resumable_download)})
-            with patch.object(download, 'ROOT', root), patch.dict('sys.modules', {'modules.hub_download': fake_hub}):
+            with patch.object(download, 'ROOT', root), patch.dict('sys.modules', {'ruinedfooocus.core.hub_download': fake_hub}):
                 with self.assertRaises(TimeoutError):
                     download.acquire(asset)
                 stage = root / 'models/.validation-downloads' / asset['sha256']
@@ -231,7 +231,7 @@ class ValidationAssetTests(unittest.TestCase):
                          file='nested/test.bin', sha256=digest, bytes=4)
             fake_hub = type('Hub', (), {'download_hub_file': staticmethod(lambda url, path: path.write_bytes(b'good'))})
             with patch.object(download, 'ROOT', root), \
-                 patch.dict('sys.modules', {'modules.hub_download': fake_hub}), \
+                 patch.dict('sys.modules', {'ruinedfooocus.core.hub_download': fake_hub}), \
                  patch.object(download, 'verify', wraps=download.verify) as verify:
                 result = download.acquire(asset)
             verify.assert_called_once()
@@ -250,7 +250,7 @@ class ValidationAssetTests(unittest.TestCase):
                 path.write_bytes(b'good')
                 (root / 'models/test.bin').write_bytes(b'other owner')
             fake_hub = type('Hub', (), {'download_hub_file': staticmethod(competing_download)})
-            with patch.object(download, 'ROOT', root), patch.dict('sys.modules', {'modules.hub_download': fake_hub}):
+            with patch.object(download, 'ROOT', root), patch.dict('sys.modules', {'ruinedfooocus.core.hub_download': fake_hub}):
                 with self.assertRaises(FileExistsError):
                     download.acquire(asset)
             self.assertEqual((root / 'models/test.bin').read_bytes(), b'other owner')

@@ -1,3 +1,4 @@
+from ruinedfooocus.core.paths import asset_path, resource_path
 """Native preview selection/fallback and image-upscale error boundaries."""
 import ast
 from pathlib import Path
@@ -21,13 +22,13 @@ def function(path, name, scope):
 
 class NativeImageHelperTests(unittest.TestCase):
     def test_component_variants_use_native_config_without_reading_state_dicts(self):
-        from modules.image_components import IMAGE_COMPONENTS
-        from modules.resource_defaults import resource_name
-        tree = ast.parse((ROOT / 'modules/image_pipeline.py').read_text(encoding='utf-8'))
+        from ruinedfooocus.features.models.image_components import IMAGE_COMPONENTS
+        from ruinedfooocus.features.models.resource_defaults import resource_name
+        tree = ast.parse((ROOT / 'ruinedfooocus/features/generation/image_pipeline.py').read_text(encoding='utf-8'))
         cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == 'pipeline')
         nodes = [n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == 'get_clip_and_vae'
                  or isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id == 'known_model_info' for t in n.targets)]
-        scope = dict(comfy=Mock(), settings=SimpleNamespace(default_settings={}))
+        scope = dict(asset_path=asset_path, resource_path=resource_path, comfy=Mock(), settings=SimpleNamespace(default_settings={}))
         exec(compile(ast.Module(body=nodes, type_ignores=[]), 'image_components', 'exec'), scope)
         owner = SimpleNamespace(known_model_info=scope['known_model_info'])
         for name, config, family in [('Lumina2', {'dim': 2304}, 'Lumina2'),
@@ -46,7 +47,7 @@ class NativeImageHelperTests(unittest.TestCase):
                 patcher.model_state_dict.assert_not_called()
 
     def test_silent_sampling_skips_preview_decode_but_keeps_progress_and_callbacks(self):
-        tree = ast.parse((ROOT / 'modules/image_pipeline.py').read_text(encoding='utf-8'))
+        tree = ast.parse((ROOT / 'ruinedfooocus/features/generation/image_pipeline.py').read_text(encoding='utf-8'))
         process = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == 'process')
         start = next(i for i, n in enumerate(process.body) if isinstance(n, ast.Assign)
                      and any(isinstance(t, ast.Name) and t.id == 'previewer' for t in n.targets))
@@ -59,7 +60,7 @@ class NativeImageHelperTests(unittest.TestCase):
         def sample(**kwargs):
             kwargs['callback'](1, 'latent', None, 2)
             return 'result'
-        scope = dict(get_previewer=load, device='gpu', worker=Mock(), cfg=4, sampler_name='euler',
+        scope = dict(asset_path=asset_path, resource_path=resource_path, get_previewer=load, device='gpu', worker=Mock(), cfg=4, sampler_name='euler',
             guidance={}, architecture='SDXL', checkpoint='checkpoint.safetensors',
             scheduler='simple', positive_cond=[], negative_conditioning=[], latent_image='latent',
             denoise=1, force_full_denoise=False, noise_mask=None, seed=1, sampling_model=object(), noise=object(),
@@ -69,7 +70,7 @@ class NativeImageHelperTests(unittest.TestCase):
                      'sampling', 'exec'), scope)
         owner = SimpleNamespace(xl_base_patched=SimpleNamespace(
             unet=SimpleNamespace(model=SimpleNamespace(latent_format='format'))))
-        with patch('modules.image_sampling.sample_lcm', sample):
+        with patch('ruinedfooocus.features.generation.image_sampling.sample_lcm', sample):
             for sampler_name in ('euler', 'lcm'):
                 scope['sampler_name'] = sampler_name
                 for silent, consumer in ((True, callback), (False, None), (False, callback)):
@@ -85,9 +86,9 @@ class NativeImageHelperTests(unittest.TestCase):
         args = SimpleNamespace(preview_method=method)
         paths = SimpleNamespace(add_model_folder_path=Mock(), get_filename_list=Mock(return_value=files))
         native = SimpleNamespace(get_previewer=Mock(), TAEHVPreviewerImpl=type('Temporal', (), {}))
-        scope = dict(args=args, LatentPreviewMethod=methods, folder_paths=paths,
+        scope = dict(asset_path=asset_path, resource_path=resource_path, args=args, LatentPreviewMethod=methods, folder_paths=paths,
                      latent_preview=native, logging=Mock())
-        run = function('modules/pipeline_utils.py', 'get_previewer', scope)
+        run = function('ruinedfooocus/features/generation/pipeline_utils.py', 'get_previewer', scope)
         return run, args, paths, native
 
     def test_disabled_preview_never_loads_or_registers_a_decoder(self):
@@ -105,7 +106,7 @@ class NativeImageHelperTests(unittest.TestCase):
                 return selected
             native.get_previewer.side_effect = load
             shared = SimpleNamespace(path_manager=SimpleNamespace(model_paths={'vae_approx_path':'custom-previews'}))
-            with patch.dict('sys.modules', {'shared': shared}):
+            with patch.dict('sys.modules', {'ruinedfooocus.app.state': shared}):
                 previewer = run('cpu', SimpleNamespace(taesd_decoder_name='taesdxl'))
             self.assertIs(previewer, selected)
             self.assertEqual(args.preview_method, 'Auto')
@@ -124,7 +125,7 @@ class NativeImageHelperTests(unittest.TestCase):
                 return None
             native.get_previewer.side_effect = load
             shared = SimpleNamespace(path_manager=SimpleNamespace(model_paths={'vae_approx_path':'previews'}))
-            with patch.dict('sys.modules', {'shared': shared}):
+            with patch.dict('sys.modules', {'ruinedfooocus.app.state': shared}):
                 if fallback_fails:
                     with self.assertRaisesRegex(ValueError, 'bad decoder'):
                         run('cpu', SimpleNamespace(taesd_decoder_name='taesdxl'))
@@ -134,11 +135,11 @@ class NativeImageHelperTests(unittest.TestCase):
             self.assertEqual(native.get_previewer.call_count, 2)
 
     def test_upscale_errors_reach_worker_and_success_preserves_rgba(self):
-        scope = dict(torch=torch, np=np, worker=Mock(),
-                     modules=SimpleNamespace(controlnet=SimpleNamespace(get_settings=lambda data:
-                         {'upscaler': 'installed-model'})),
+        scope = dict(asset_path=asset_path, resource_path=resource_path, torch=torch, np=np, worker=Mock(),
+                     controlnet=SimpleNamespace(get_settings=lambda data:
+                         {'upscaler': 'installed-model'}),
                      InterruptibleUpscaler=lambda model, data: model)
-        run = function('modules/upscale_pipeline.py', 'process', scope)
+        run = function('ruinedfooocus/features/image_processing/upscale_pipeline.py', 'process', scope)
         owner = SimpleNamespace(load_upscaler_model=Mock(return_value='native model'))
         source = Image.new('RGBA', (3, 2), (255, 128, 0, 64))
         data = dict(input_image=source, task_id=1)
@@ -161,7 +162,7 @@ class NativeImageHelperTests(unittest.TestCase):
 
 class ReferenceCanvasTests(unittest.TestCase):
     def test_model_grid_padding_preserves_every_source_pixel(self):
-        from modules.image_geometry import prepare_reference, restore_reference_frame
+        from ruinedfooocus.features.image_editing.image_geometry import prepare_reference, restore_reference_frame
         source = np.arange(1017 * 1023 * 3, dtype=np.uint8).reshape(1017, 1023, 3)
         pixels, plan = prepare_reference(Image.fromarray(source), (1152, 1152))
         self.assertEqual(tuple(pixels.shape), (1, 1024, 1024, 3))

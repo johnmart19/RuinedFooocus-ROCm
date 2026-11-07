@@ -6,8 +6,8 @@ import types
 import unittest
 from unittest.mock import Mock, patch
 
-from modules import comfy_compat
-from modules.comfy_args import add_comfy_arguments, PerformanceFeature
+import ruinedfooocus.backends.comfy.comfy_compat as comfy_compat
+from ruinedfooocus.backends.comfy.comfy_args import add_comfy_arguments, PerformanceFeature
 
 
 class CpuStartupTests(unittest.TestCase):
@@ -27,7 +27,7 @@ class CpuStartupTests(unittest.TestCase):
             inspect_installed_cuda=Mock(return_value=None),select_torch_platform=Mock(return_value=selected))
         runtime=None if forbid_detection else types.ModuleType('torchruntime')
         with patch.dict(os.environ,{},clear=True),patch.dict(sys.modules,{'comfy':comfy,'comfy.cli_args':cli,
-                'modules.runtime_support':support,'torchruntime':runtime}), \
+                'ruinedfooocus.packaging.runtime_support':support,'torchruntime':runtime}), \
                 patch.object(comfy_compat,'_runtime_platform',None),patch.object(comfy_compat.platform,'system',return_value='Windows'), \
                 patch.object(comfy_compat,'configure_torch_allocator') as allocator, \
                 patch.object(comfy_compat,'configure_torch_compatibility') as compatibility, \

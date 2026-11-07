@@ -99,7 +99,8 @@ The main window has the prompt box and Generate button above the **Generation**,
   description for Anima, and natural language for Flux, Qwen and similar models.
   The bundled **Weird Hats** preset keeps existing saved selections and custom edits under its old spelling.
   If both spellings already contain custom presets, each saved selection keeps its own values.
-* **Rewrite prompt** and prompt enhancement use the local chat model; rewrite presets are text files in `llamas`.
+* **Rewrite prompt** and prompt enhancement use the selected local chat model. Rewrite instructions are bundled
+  under `ruinedfooocus/resources/prompt_presets`; add your own in `prompt_presets`. Legacy `llamas` entries still work.
 * Evolve creates variations of the current prompt (in **Image tools**).
 
 ### Image tools
@@ -121,7 +122,9 @@ The main window has the prompt box and Generate button above the **Generation**,
 
 ### Chat bots
 * Local GGUF chat models on llama.cpp, using Vulkan, ROCm, CUDA or CPU (Settings > llama.cpp backend).
-* Bots are folders in `chatbots` with an `info.json` and `avatar.png`; SillyTavern character cards work too.
+* Assistants are folders with an `info.json` and `avatar.png`, or SillyTavern character cards. Add them in
+  `assistants`; legacy `chatbots` entries still work. Bundled assistants live under `ruinedfooocus/resources/assistants`.
+  Select **General chat** for a conversation without a character persona.
 * Chat can generate images, with an optional reference image that is edited natively when the checkpoint can.
 * Optional vision review and a browser Python runner for code from the chat.
 
@@ -137,9 +140,13 @@ The main window has the prompt box and Generate button above the **Generation**,
 
 ## Thanks
 
+For source locations, UI entry points, backend ownership and user-data compatibility, see the
+[application map](docs/architecture.md). `RF_DATA_DIR` selects a separate writable data root; the default
+continues to use this clone's data. Source upgrades preserve existing models, outputs and customization.
+
 This codebase is a fork from the original amazing work by [lllyasviel](https://github.com/lllyasviel/Fooocus/discussions/117)
 The wonderful [MoonRide](https://github.com/MoonRide303/) who also maintains an amazing fork!
-The codebase starts from an odd mixture of [Automatic1111](https://github.com/AUTOMATIC1111/stable-diffusion-webui) and [ComfyUI](https://github.com/comfyanonymous/ComfyUI). (And they both use GPL license.)
+The codebase starts from an odd mixture of [Automatic1111](https://github.com/AUTOMATIC1111/stable-diffusion-ruinedfooocus.ui.app) and [ComfyUI](https://github.com/comfyanonymous/ComfyUI). (And they both use GPL license.)
 
 ## Discord Support Server
 You can join our discord support server [Here](https://discord.gg/CvpAFya9Rr)

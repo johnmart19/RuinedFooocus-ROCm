@@ -1,3 +1,4 @@
+from ruinedfooocus.core.paths import asset_path, resource_path
 """Short/large prompt transport and preprocessing, without loading models."""
 import ast
 from pathlib import Path
@@ -6,7 +7,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock
 from pydantic import ValidationError
-from modules.openai_api import ImageRequest, MAX_IMAGE_PROMPT_CHARS, create_apps
+from ruinedfooocus.integrations.openai_api import ImageRequest, MAX_IMAGE_PROMPT_CHARS, create_apps
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -55,7 +56,7 @@ class PromptLengthTests(unittest.TestCase):
 
     def test_preprocessing_keeps_short_and_long_text_without_expansion(self):
         expand = Mock(side_effect=AssertionError('Unexpected prompt expansion'))
-        process = function_from('modules/prompt_processing.py', 'process_prompt', {
+        process = function_from('ruinedfooocus/features/prompting/prompt_processing.py', 'process_prompt', {
             're': re, 'build_dynamic_prompt': expand, 'build_dynamic_negative': expand,
             'apply_style': lambda styles, prompt, negative, keywords, **kwargs: (prompt, negative)})
         for prompt in ('f', 'fox', '\u732b', LONG):
@@ -66,10 +67,10 @@ class PromptLengthTests(unittest.TestCase):
 
     def test_image_prompt_requires_its_own_random_prompt_opt_in(self):
         expand = Mock(return_value='random replacement')
-        process = function_from('modules/prompt_processing.py', 'process_prompt', {
+        process = function_from('ruinedfooocus/features/prompting/prompt_processing.py', 'process_prompt', {
             're': re, 'build_dynamic_prompt': expand, 'build_dynamic_negative': expand,
             'apply_style': lambda styles, prompt, negative, keywords, **kwargs: (prompt, negative)})
-        tree = ast.parse((ROOT / 'modules/prompt_processing.py').read_text(encoding='utf-8'))
+        tree = ast.parse((ROOT / 'ruinedfooocus/features/prompting/prompt_processing.py').read_text(encoding='utf-8'))
         fields = {node.slice.value for node in ast.walk(tree) if isinstance(node, ast.Subscript)
                   and isinstance(node.value, ast.Name) and node.value.id == 'gen_data'
                   and isinstance(node.slice, ast.Constant) and isinstance(node.slice.value, str)}
@@ -89,7 +90,7 @@ class PromptLengthTests(unittest.TestCase):
         encode = Mock(side_effect=lambda **kwargs: [kwargs['text']])
         pipeline = SimpleNamespace(conditions={'+': {'text': None, 'cache': None}},
                                    xl_base_patched=SimpleNamespace(clip=object()))
-        textencode = function_from('modules/image_pipeline.py', 'textencode', {
+        textencode = function_from('ruinedfooocus/features/generation/image_pipeline.py', 'textencode', {
             're': re, 'CLIPTextEncode': lambda: SimpleNamespace(encode=encode)})
         for prompt in (LONG, 'f', LONG.replace('VIOLET', 'ORANGE')):
             textencode(pipeline, '+', prompt, 1)

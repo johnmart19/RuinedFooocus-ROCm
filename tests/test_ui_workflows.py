@@ -1,3 +1,4 @@
+from ruinedfooocus.core.paths import asset_path, resource_path
 """Workflow validation without starting model workers or downloading files."""
 import ast
 from functools import lru_cache
@@ -19,9 +20,9 @@ def function_from(path, name, namespace):
 
 class WorkflowControlsTests(unittest.TestCase):
     def test_image_submission_preserves_prompt_before_it_reaches_the_worker(self):
-        policy = function_from('modules/prompt_processing.py', 'use_random_prompt', {})
+        policy = function_from('ruinedfooocus/features/prompting/prompt_processing.py', 'use_random_prompt', {})
         add = Mock(return_value='task')
-        submit = function_from('webui.py', 'append_work', {
+        submit = function_from('ruinedfooocus/ui/app.py', 'append_work', {
             'use_random_prompt': policy, 'worker': SimpleNamespace(add_task=add),
             'get_promptlist': lambda data: data['prompt'].split('---')})
         config = dict(prompt='Keep the black hair and neon street.', image_number=2,
@@ -38,9 +39,9 @@ class WorkflowControlsTests(unittest.TestCase):
         self.assertEqual(config['prompt'], 'Keep the black hair and neon street.')
 
     def test_evolve_tokenizer_is_lazy_cached_and_respects_offline_mode(self):
-        tree = ast.parse((ROOT / 'modules/ui/ui_evolve.py').read_text(encoding='utf-8'))
+        tree = ast.parse((ROOT / 'ruinedfooocus/features/prompting/ui_evolve.py').read_text(encoding='utf-8'))
         node = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'evolve_tokenizer')
-        scope = dict(lru_cache=lru_cache)
+        scope = dict(asset_path=asset_path, resource_path=resource_path, lru_cache=lru_cache)
         transformer = SimpleNamespace(CLIPTokenizer=SimpleNamespace(from_pretrained=Mock()))
         with patch.dict('sys.modules', {'transformers': transformer}):
             exec(compile(ast.Module(body=[node], type_ignores=[]), 'evolve_tokenizer', 'exec'), scope)
@@ -57,11 +58,11 @@ class WorkflowControlsTests(unittest.TestCase):
         tokenizer = SimpleNamespace(all_special_tokens=['SPECIAL'], get_vocab=lambda: ['word', 'SPECIAL'],
                                     tokenize=lambda prompt: ['word'], convert_tokens_to_string=lambda tokens: 'word</w>')
         loader = Mock(return_value=tokenizer)
-        scope = dict(gr=SimpleNamespace(Error=ValueError), evolve_tokenizer=loader,
+        scope = dict(asset_path=asset_path, resource_path=resource_path, gr=SimpleNamespace(Error=ValueError), evolve_tokenizer=loader,
                      os=SimpleNamespace(environ={}), random=SimpleNamespace(random=lambda: 1.0))
-        run = function_from('modules/ui/ui_evolve.py', 'tokenize_and_randomize', scope)
+        run = function_from('ruinedfooocus/features/prompting/ui_evolve.py', 'tokenize_and_randomize', scope)
         args = SimpleNamespace(offline=False)
-        with patch.dict('sys.modules', {'argparser': SimpleNamespace(args=args)}):
+        with patch.dict('sys.modules', {'ruinedfooocus.app.arguments': SimpleNamespace(args=args)}):
             for offline, environment, expected in [(False, {}, False), (True, {}, True), (False, {'RF_OFFLINE':'1'}, True)]:
                 args.offline = offline
                 scope['os'].environ = environment
@@ -72,7 +73,7 @@ class WorkflowControlsTests(unittest.TestCase):
                 run('word', 0)
 
     def submit(self, custom=False):
-        return function_from('modules/ui/ui_llama_chat.py', 'llama_get_text', {
+        return function_from('ruinedfooocus/features/chat/ui.py', 'llama_get_text', {
             'gr': SimpleNamespace(Error=ValueError), 'custom_file': custom, 'selected_file': 'custom.gguf'})
 
     def test_empty_and_stale_model_messages_are_rejected_before_submission(self):
@@ -90,7 +91,7 @@ class WorkflowControlsTests(unittest.TestCase):
 
     def test_invalid_submit_leaves_conversation_untouched_and_never_calls_worker(self):
         warning, respond = Mock(), Mock()
-        submit = function_from('modules/ui/ui_llama_chat.py', 'submit_message', {
+        submit = function_from('ruinedfooocus/features/chat/ui.py', 'submit_message', {
             'gr': SimpleNamespace(Warning=warning, skip=lambda: 'skip'), 'llama_msg': 'message',
             'llama_get_text': self.submit(), 'llama_respond': respond})
         self.assertEqual(list(submit('', False, 'a', '', '', [], 'a', False, False, None, False)), [{'message': 'skip'}])
@@ -98,7 +99,7 @@ class WorkflowControlsTests(unittest.TestCase):
         respond.assert_not_called()
 
     def test_reset_produces_a_fresh_sandbox_document_for_identical_history(self):
-        from modules.chat_code import python_runner
+        from ruinedfooocus.features.chat.chat_code import python_runner
         first, second = python_runner([]), python_runner([])
         self.assertNotEqual(first, second)
         self.assertIn('sandbox="allow-scripts"', second)
@@ -106,7 +107,7 @@ class WorkflowControlsTests(unittest.TestCase):
 
     def test_missing_chat_reference_preserves_message_without_submitting_or_loading(self):
         warning, respond = Mock(), Mock()
-        submit = function_from('modules/ui/ui_llama_chat.py', 'submit_message', {
+        submit = function_from('ruinedfooocus/features/chat/ui.py', 'submit_message', {
             'gr': SimpleNamespace(Warning=warning, skip=lambda:'skip'), 'llama_msg':'message',
             'llama_get_text':self.submit(), 'llama_respond':respond})
         for mode in ('Uploaded image','Previous generated image'):
@@ -117,7 +118,7 @@ class WorkflowControlsTests(unittest.TestCase):
         respond.assert_not_called()
 
     def test_search_single_page_has_no_phantom_second_page(self):
-        search = function_from('modules/imagebrowser.py', 'search_metadata', {
+        search = function_from('ruinedfooocus/features/gallery/imagebrowser.py', 'search_metadata', {
             'gr': SimpleNamespace(update=lambda **values: values), 'Tuple': tuple, 'List': list})
         browser = SimpleNamespace(load_images=lambda page: (['image.png'], ''),
                                   num_images_pages=lambda: (1, 1))

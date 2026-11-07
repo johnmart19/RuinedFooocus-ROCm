@@ -7,12 +7,12 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from modules.performance import PerformanceSettings
+from ruinedfooocus.features.models.performance import PerformanceSettings
 
 
 class LTXPerformanceDefaultsTests(unittest.TestCase):
     def test_model_defaults_select_each_video_generation_and_preserve_legacy(self):
-        defaults = Path(__file__).resolve().parents[1] / 'settings/performance.default'
+        defaults = Path(__file__).resolve().parents[1] / 'ruinedfooocus/resources/defaults/performance.default'
         registry = SimpleNamespace(KSampler=SimpleNamespace(SAMPLERS=[], SCHEDULERS=[]))
         with tempfile.TemporaryDirectory(dir=defaults.parents[1]) as directory:
             local = Path(directory) / 'performance.json'

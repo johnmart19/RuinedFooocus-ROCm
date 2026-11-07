@@ -1,3 +1,4 @@
+from ruinedfooocus.core.paths import asset_path, resource_path
 """Exercise real Gradio preprocessing configured by both app upload controls."""
 import ast
 from pathlib import Path
@@ -25,10 +26,10 @@ class TransparentUploadTests(unittest.TestCase):
         palette = rgba.quantize(method=Image.Quantize.FASTOCTREE)
         self.assertEqual(palette.palette.mode, 'RGBA')
         self.assertNotIn('transparency', palette.info)
-        tree = ast.parse((ROOT / 'modules/upscale_pipeline.py').read_text(encoding='utf-8'))
+        tree = ast.parse((ROOT / 'ruinedfooocus/features/image_processing/upscale_pipeline.py').read_text(encoding='utf-8'))
         process = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == 'process')
-        scope = dict(torch=torch, np=np, worker=Mock(), InterruptibleUpscaler=lambda model, data: model,
-            modules=SimpleNamespace(controlnet=SimpleNamespace(get_settings=lambda data: {'upscaler': 'test'})))
+        scope = dict(asset_path=asset_path, resource_path=resource_path, torch=torch, np=np, worker=Mock(), InterruptibleUpscaler=lambda model, data: model,
+            controlnet=SimpleNamespace(get_settings=lambda data: {'upscaler': 'test'}))
         exec(compile(ast.Module(body=[process], type_ignores=[]), 'upscale_conversion', 'exec'), scope)
         owner = SimpleNamespace(load_upscaler_model=Mock(return_value='native'))
         for image, mode in ((rgba, 'RGBA'), (palette, 'RGBA'), (rgba.convert('LA'), 'RGBA'),
@@ -50,8 +51,8 @@ class TransparentUploadTests(unittest.TestCase):
             [[0, 0, 255, 128], [255, 255, 255, 255]],
         ], dtype=np.uint8))
         images = [rgba, rgba.quantize(method=Image.Quantize.FASTOCTREE), rgba.convert('LA')]
-        for source, name in [('webui.py', 'upscale_upload'),
-                             ('modules/ui/ui_controlnet.py', 'input_image')]:
+        for source, name in [('ruinedfooocus/ui/app.py', 'upscale_upload'),
+                             ('ruinedfooocus/features/image_editing/ui.py', 'input_image')]:
             tree = ast.parse((ROOT / source).read_text(encoding='utf-8'))
             assignment = next(node for node in ast.walk(tree) if isinstance(node, ast.Assign)
                 and any(isinstance(target, ast.Name) and target.id == name for target in node.targets)
