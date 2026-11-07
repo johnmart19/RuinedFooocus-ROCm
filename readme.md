@@ -91,6 +91,8 @@ and is remembered by your browser; browser zoom and keyboard navigation remain a
 ### Prompts and styles
 
 - Styles from `settings/styles.csv`: combine several, send a style to the prompt, or add `<style:name>`.
+  Category headings are never styles. Custom rows override bundled styles by name; loading styles
+  does not rewrite your file, and empty templates keep your prompt intact.
 - Wildcards: type `__name__` to insert a random line from `wildcards/name.txt` (see `wildcards/colors.txt`).
 - LoRAs from **Models > LoRAs** or with `<lora:name:0.9>` in the prompt. Trigger words are read from a `.txt`
   file next to the LoRA or downloaded from Civitai; the `LoRA keywords` style adds them for you.

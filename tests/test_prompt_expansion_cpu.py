@@ -189,7 +189,11 @@ class StyleEncodingTests(unittest.TestCase):
                     "STYLE_ALIASES": {},
                 },
             )
-            self.assertEqual(execute()["Custom"], ("світло", "текст"))
+            with patch(
+                "ruinedfooocus.features.prompting.style_catalog.locale.getpreferredencoding",
+                return_value="cp1251",
+            ):
+                self.assertEqual(execute()["Custom"], ("світло", "текст"))
             self.assertEqual(custom.read_bytes(), original)
 
 

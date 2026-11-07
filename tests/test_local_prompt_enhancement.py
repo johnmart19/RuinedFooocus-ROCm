@@ -134,6 +134,7 @@ class LocalPromptTests(unittest.TestCase):
         style_scope = dict(
             re=re, STYLE_ALIASES=aliases, styles={}, default_style=("{prompt}", ""), allstyles=[]
         )
+        style_scope["load_styles"] = lambda: style_scope["styles"]
         apply = function(
             "ruinedfooocus/features/prompting/sdxl_styles.py", "apply_style", style_scope
         )
@@ -146,6 +147,7 @@ class LocalPromptTests(unittest.TestCase):
             apply_style=apply,
             use_random_prompt=lambda *args: random_prompt,
         )
+        scope["load_styles"] = lambda: scope["available_styles"]
         scope["build_dynamic_prompt"] = lambda **kwargs: kwargs["enhancer"](
             "original scene", "Anime Model", ""
         )

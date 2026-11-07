@@ -67,6 +67,7 @@ class PromptLengthTests(unittest.TestCase):
             "process_prompt",
             {
                 "re": re,
+                "load_styles": lambda: {},
                 "build_dynamic_prompt": expand,
                 "build_dynamic_negative": expand,
                 "apply_style": lambda styles, prompt, negative, keywords, **kwargs: (
@@ -89,6 +90,7 @@ class PromptLengthTests(unittest.TestCase):
             "process_prompt",
             {
                 "re": re,
+                "load_styles": lambda: {},
                 "build_dynamic_prompt": expand,
                 "build_dynamic_negative": expand,
                 "apply_style": lambda styles, prompt, negative, keywords, **kwargs: (

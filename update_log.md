@@ -1,5 +1,7 @@
 ### Unreleased (development)
 
+- Keep category headings out of style selections, preserve prompts with empty templates, and load custom style overrides without rewriting user files
+
 - Put image model selection directly above Saved settings (PNG) in Generation; explain reusable PNG recipes and name their selectable setting groups clearly
 
 - Image-first Create layout: preview above the prompt/Generate controls, image model selection at the top of the right sidebar, and stacked controls on narrow screens

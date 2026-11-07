@@ -29,10 +29,14 @@ class StylePayloadTests(unittest.TestCase):
                 "Outer": ("Outer {prompt}", ""),
                 "Keywords": ("{prompt} {lora_keywords}", ""),
                 "Negative only": (None, "noise"),
+                "Empty": ("", ""),
+                "Negative empty positive": ("", "noise"),
+                "Addition": ("paper collage", ""),
             },
             default_style=("{prompt}", ""),
             allstyles=[],
         )
+        scope["load_styles"] = lambda: scope["styles"]
         exec(compile(ast.Module(body=[node], type_ignores=[]), "style_payload", "exec"), scope)
         return scope["apply_style"](selected, prompt, "literal __negative__", keywords)
 
@@ -51,7 +55,7 @@ class StylePayloadTests(unittest.TestCase):
 
     def test_negative_only_and_empty_styles_leave_positive_payload_unchanged(self):
         prompt = " , Sign says {prompt}, , {lora_keywords}.  "
-        for selected in ([], ["Negative only"]):
+        for selected in ([], ["Negative only"], ["Empty"], ["Negative empty positive"]):
             positive, _ = self.apply(selected, prompt)
             self.assertEqual(positive, prompt)
         positive, _ = self.apply(["Frame", "Negative only"], prompt)
@@ -60,6 +64,23 @@ class StylePayloadTests(unittest.TestCase):
     def test_styles_without_negative_text_leave_negative_prompt_exact(self):
         _, negative = self.apply(["Frame"], "Two cups.")
         self.assertEqual(negative, "literal __negative__")
+
+    def test_legacy_headers_before_or_after_styles_never_erase_prompt(self):
+        prompt = 'Keep exactly two red apples and the text "Київ".'
+        for selection in (
+            [">>>>>> PAPERCRAFT"],
+            [">>>>>> PAPERCRAFT", "Frame"],
+            ["Frame", ">>>>>> PHOTO"],
+        ):
+            before = selection.copy()
+            positive, _ = self.apply(selection, prompt)
+            self.assertIn(prompt, positive)
+            self.assertEqual(selection, before)
+
+    def test_style_without_placeholder_adds_to_prompt_instead_of_replacing_it(self):
+        positive, _ = self.apply(["Addition"], "Two red apples.")
+        self.assertIn("Two red apples.", positive)
+        self.assertIn("paper collage", positive)
 
 
 if __name__ == "__main__":

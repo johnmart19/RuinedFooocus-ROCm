@@ -2,6 +2,19 @@
   "base": "cd7abb27064155f62dea002f745a8ce1b040c990",
   "features": [
     {
+      "id": "style-catalog-safety",
+      "subject": "Preserve prompts and custom styles with a read-only catalog",
+      "requires": ["png-preset-ui-clarity"],
+      "tests": [
+        "test_style_catalog.py",
+        "test_style_prompt_payloads.py",
+        "test_prompt_expansion_cpu.py",
+        "test_prompt_wildcards.py",
+        "test_local_prompt_enhancement.py",
+        "test_prompt_lengths.py"
+      ]
+    },
+    {
       "id": "png-preset-ui-clarity",
       "subject": "Place model selection above saved PNG settings and explain recipes",
       "requires": ["image-first-layout"],

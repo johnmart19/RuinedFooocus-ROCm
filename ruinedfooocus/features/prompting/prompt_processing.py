@@ -4,7 +4,7 @@ import random
 
 from ruinedfooocus.features.prompting.sdxl_styles import (
     apply_style,
-    styles as available_styles,
+    load_styles,
     STYLE_ALIASES,
 )
 from ruinedfooocus.features.prompting.prompt_scheduling import prompt_switch_per_step
@@ -342,6 +342,7 @@ def process_prompt(style, prompt, negative, gen_data=None):
         prompt = finalize(prompt, prompt_format)
 
     # styles
+    available_styles = load_styles()
     pattern = re.compile(r"<style:([^>]+)>")
     # Dropdown selections are staged for "Send Style to prompt". Generation
     # must not invisibly apply them again, including saved/default selections.

@@ -1,11 +1,7 @@
 from ruinedfooocus.core.paths import data_path, resource_path
 import random
 import re
-import csv
-import locale
-from os.path import exists
-from csv import DictReader
-from pathlib import Path
+from ruinedfooocus.features.prompting.style_catalog import STYLE_ALIASES
 from ruinedfooocus.features.prompting.prompt_expansion import PromptExpansion
 from ruinedfooocus.features.prompting.prompt_enhancement import enhance_prompt
 from ruinedfooocus.features.prompting.one_button import build_dynamic_prompt
@@ -13,88 +9,23 @@ from ruinedfooocus.features.prompting.one_button import build_dynamic_prompt
 DEFAULT_STYLES_FILE = resource_path("defaults", "styles.default")
 STYLES_FILE = data_path("settings", "styles.csv")
 
-STYLE_ALIASES = {"Erniehancer": "Local chat model", "Style: Erniehancer": "Local chat model"}
-
 prompt_expansion = PromptExpansion()
 
 
 def load_styles():
-    default_styles = []
-    styles = []
-    styles_encoding = "utf-8-sig"
+    from ruinedfooocus.features.prompting.style_catalog import style_templates
 
-    with open(DEFAULT_STYLES_FILE, encoding="utf-8-sig", newline="") as f:
-        csv_reader = csv.reader(f)
-        for row in csv_reader:
-            default_styles.append(row)
-
-    if exists(STYLES_FILE):
-        try:
-            with open(STYLES_FILE, encoding=styles_encoding, newline="") as f:
-                styles = list(csv.reader(f))
-        except UnicodeDecodeError:
-            # Earlier Windows releases wrote custom styles in the system locale.
-            styles_encoding = locale.getpreferredencoding(False)
-            with open(STYLES_FILE, encoding=styles_encoding, newline="") as f:
-                styles = list(csv.reader(f))
-
-    # Add any missing default styles
-    changed = False
-    for row in default_styles:
-        if row not in styles:
-            styles.append(row)
-            changed = True
-
-    if changed:
-        styles_encoding = "utf-8-sig"
-        with open(STYLES_FILE, "w", encoding="utf-8", newline="") as f:
-            csv_writer = csv.writer(f)
-            for row in styles:
-                csv_writer.writerow(row)
-
-    with STYLES_FILE.open("r", encoding=styles_encoding, newline="") as f:
-        reader = DictReader(f)
-        styles = list(reader)
-
-    default_style = {"name": "None", "prompt": "{prompt}", "negative_prompt": ""}
-    random_style = {
-        "name": "Style: Pick Random",
-        "prompt": "{prompt}",
-        "negative_prompt": "",
-    }
-    lora_keywords_style = {
-        "name": "LoRA keywords",
-        "prompt": "{prompt} {lora_keywords}",
-        "negative_prompt": "",
-    }
-    flufferizer_style = {
-        "name": "Flufferizer",
-        "prompt": "{prompt}",
-        "negative_prompt": "",
-    }
-    hyperprompt_style = {
-        "name": "Hyperprompt",
-        "prompt": "{prompt}",
-        "negative_prompt": "",
-    }
-    local_chat_style = {
-        "name": "Local chat model",
-        "prompt": "{prompt}",
-        "negative_prompt": "",
-    }
-
-    styles = [s for s in styles if s["name"] not in STYLE_ALIASES]
-    styles.insert(0, local_chat_style)
-    styles.insert(0, hyperprompt_style)
-    styles.insert(0, flufferizer_style)
-    styles.insert(0, lora_keywords_style)
-    styles.insert(0, random_style)
-    styles.insert(0, default_style)
-
-    return {s["name"]: (s["prompt"], s["negative_prompt"]) for s in styles}
+    return style_templates(DEFAULT_STYLES_FILE, STYLES_FILE)
 
 
 def apply_style(style, prompt, negative_prompt, lora_keywords, *, enhancer=None):
+    from ruinedfooocus.features.prompting.style_catalog import normalize_selection
+
+    style = normalize_selection(style)
+    styles = load_styles()
+    allstyles = [
+        name for name in styles if name.startswith("Style:") and name != "Style: Pick Random"
+    ]
     output_prompt = ""
     negative_parts = []
     temp_style_prompt = prompt
@@ -109,7 +40,7 @@ def apply_style(style, prompt, negative_prompt, lora_keywords, *, enhancer=None)
         return prompt, negative_prompt
 
     while "Style: Pick Random" in style:
-        style[style.index("Style: Pick Random")] = random.choice(allstyles)
+        style[style.index("Style: Pick Random")] = random.choice(allstyles) if allstyles else "None"
 
     for s in style.copy():
         _s = s.upper().strip()
@@ -142,7 +73,9 @@ def apply_style(style, prompt, negative_prompt, lora_keywords, *, enhancer=None)
     style = [x for x in style if x not in artifystylelist]
 
     for s in style:
-        p, n = styles.get(s, default_style)
+        if s not in styles:
+            continue
+        p, n = styles[s]
         if (
             s == "Style: sai-cinematic"
             and p
@@ -157,7 +90,10 @@ def apply_style(style, prompt, negative_prompt, lora_keywords, *, enhancer=None)
                 if tag.strip().lower()
                 not in {"", "anime", "cartoon", "graphic", "painting", "crayon"}
             )
-        if p is not None:
+        if p and s != "None":
+            # A style adds to the user's text; legacy empty/header rows cannot replace it.
+            if "{prompt}" not in p:
+                p = "{prompt}, " + p
             template = (p + ", ").replace(", ,", ", ")
 
             def substitute(match):
@@ -184,9 +120,3 @@ def apply_style(style, prompt, negative_prompt, lora_keywords, *, enhancer=None)
         output_prompt = (enhancer or enhance_prompt)(output_prompt)
 
     return output_prompt, ", ".join(negative_parts + ([negative_prompt] if negative_prompt else []))
-
-
-styles = load_styles()
-default_style = styles["None"]
-allstyles = [x for x in load_styles() if x.startswith("Style")]
-allstyles.remove("Style: Pick Random")

@@ -33,6 +33,7 @@ class WildcardTests(unittest.TestCase):
             STYLE_ALIASES={},
             path_manager=SimpleNamespace(paths={"path_wildcards": [str(self.folder)]}),
         )
+        self.scope["load_styles"] = lambda: self.scope["available_styles"]
         tree = ast.parse(
             (ROOT / "ruinedfooocus/features/prompting/prompt_processing.py").read_text(
                 encoding="utf-8"
