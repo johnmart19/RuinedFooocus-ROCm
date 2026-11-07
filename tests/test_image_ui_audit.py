@@ -25,6 +25,11 @@ def function_body(path, name, namespace):
 
 
 class ImageUIAuditTests(unittest.TestCase):
+    def setUp(self):
+        stub = patch.dict('sys.modules', {'argparser': SimpleNamespace(args=SimpleNamespace(offline=True))})
+        stub.start()
+        self.addCleanup(stub.stop)
+
     def test_prompt_evolution_filters_special_tokens_by_identity(self):
         tokenizer = SimpleNamespace(all_special_tokens=['<start>', '<end>'],
             get_vocab=lambda: {'<start>': 0, 'word': 1, '<end>': 2},

@@ -27,14 +27,16 @@ class ImageCleanupTests(unittest.TestCase):
                           and isinstance(node.value, ast.Call)
                           and isinstance(node.value.func, ast.Name) and node.value.func.id == 'conditioning_set_values'
                           and any(isinstance(target, ast.Name) and target.id == 'positive_switch' for target in node.targets))
-        scope = dict(conditioning_set_values=native, positive_switch=entries, start_perc=.25, end_perc=.75)
+        scope = dict(conditioning_set_values=native, positive_switch=entries, start_perc=.25, end_perc=.75, i=1)
         exec(compile(ast.Module(body=[assignment], type_ignores=[]), 'prompt_range', 'exec'), scope)
-        self.assertEqual(scope['positive_switch'], native(entries, {'start_percent': .25, 'end_percent': .75}))
+        self.assertEqual(scope['positive_switch'],
+                         native(entries, {'start_percent': .25, 'end_percent': .75, '_rf_prompt_step': 1}))
         for original, ranged in zip(entries, scope['positive_switch']):
             self.assertIs(original[0], ranged[0])
             self.assertNotIn('start_percent', original[1])
             self.assertEqual(ranged[1]['start_percent'], .25)
             self.assertEqual(ranged[1]['end_percent'], .75)
+            self.assertEqual(ranged[1]['_rf_prompt_step'], 1)
 
     def test_conditioning_cache_entries_and_requests_are_independent(self):
         factory = function('modules/pipeline_utils.py', 'clean_prompt_cond_caches', {})
