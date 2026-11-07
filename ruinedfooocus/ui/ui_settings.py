@@ -4,7 +4,7 @@ import json
 from ruinedfooocus.features.models.resource_defaults import RESOURCE_DEFAULTS, RESOURCE_LABELS
 from ruinedfooocus.core.settings_validation import validate_settings, MOSS_EDIT_FORMATS
 from ruinedfooocus.features.image_editing.image_guidance import STARTUP_SHIFT_LABELS
-from ruinedfooocus.core.paths import asset_path
+from ruinedfooocus.core.paths import asset_path, data_path
 from ruinedfooocus.features.image_processing.interrogate import looks
 
 from ruinedfooocus.app.state import (
@@ -820,13 +820,13 @@ def create_settings():
 
         # These files are checked in ruinedfooocus/app/bootstrap.py to trigger a --force-reinstall
         def trigger_reinstall_all():
-            Path("reinstall").touch()
+            data_path("reinstall").touch()
             gr.Info(
                 "Application Python packages and Torch will be reinstalled on the next online restart, using this Python environment. Overrides freezetorch."
             )
 
         def trigger_reinstall_torch():
-            Path("reinstalltorch").touch()
+            data_path("reinstalltorch").touch()
             gr.Info(
                 "Torch will be reinstalled for the selected GPU runtime on the next online restart. Overrides freezetorch."
             )

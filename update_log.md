@@ -1,5 +1,9 @@
 ### Unreleased (development)
 
+- Source ZIP builder records exact source/backend revisions and excludes user data and weights; archive launches skip Git updates, source updates preserve local work, and runtime caches/reinstall requests follow the writable data directory
+- Fresh installs show missing checkpoints clearly and provide an explicit default-model download; refreshing files updates the Create model selector without losing its current selection
+- Include the moved One Button presets/style dataset and preserve bundled PNG preset discovery with separate user data, without overwriting custom files
+
 - Prompt expansion downloads only when selected, reusing existing weights and custom tokenizer files; optional SuperPrompt runs on the shared worker, honors CPU/DirectML mode and releases device memory without deleting weights
 
 - Pinned developer formatting for owned Python, Markdown, JSON, CSS, HTML and JavaScript; executable Python and JSON values checked for preservation, with model/tokenizer/data/vendor files excluded

@@ -262,9 +262,11 @@ class pipeline:
                 path = context_file(content)
                 content = path.read_text(encoding="utf-8")
             elif kind == "url":
+                from ruinedfooocus.core.paths import data_path
+
                 filename = load_file_from_url(
                     content,
-                    model_dir="cache/embeds",
+                    model_dir=str(data_path("cache", "embeds")),
                     progress=True,
                     file_name=url_to_filename(content),
                 )

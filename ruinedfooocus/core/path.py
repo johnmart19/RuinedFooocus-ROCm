@@ -1,4 +1,4 @@
-from ruinedfooocus.core.paths import data_path, resource_path, legacy_model_path
+from ruinedfooocus.core.paths import APP_ROOT, data_path, resource_path, legacy_model_path
 from pathlib import Path
 from urllib.parse import urlparse
 import json
@@ -132,7 +132,9 @@ class PathManager:
             "cache_path": self.get_abspath_folder(self.paths["path_cache"], required=True),
             "llm_path": self.get_abspath_folder(self.paths["path_llm"]),
             "inbox_path": self.get_abspath_folder(self.paths["path_inbox"]),
-            "preset_path": self.get_abspath_folder(self.paths["path_presets"], required=True),
+            "preset_path": self.get_abspath_folder(
+                data_path(self.paths["path_presets"]), required=True
+            ),
         }
 
     def get_abspath_folder(self, path, required=False):
@@ -182,20 +184,14 @@ class PathManager:
         )
 
     def get_presets(self):
-        folder_path = data_path(self.paths["path_presets"])
-        if not folder_path.is_dir():
-            raise ValueError(f"{folder_path} is not a valid directory.")
-        filenames = []
-        for path in folder_path.rglob("*.png"):
-            filenames.append(path)
-        # Return a sorted list, prepend names with 0 if they are in a folder or 1
-        presets = sorted(
-            filenames,
-            key=lambda x: (
-                f"0{str(x).casefold()}" if not str(x.parent) == "." else f"1{str(x).casefold()}"
-            ),
-        )
-        return map(lambda x: (x, str(Path(x).with_suffix("").name)), presets)
+        presets = {}
+        # User presets override the bundled example without copying either file.
+        for folder in (APP_ROOT / "presets", data_path(self.paths["path_presets"])):
+            if folder.is_dir():
+                for path in folder.rglob("*.png"):
+                    presets[path.relative_to(folder)] = path
+        names = sorted(presets, key=lambda name: (len(name.parts) == 1, str(name).casefold()))
+        return [(presets[name], name.stem) for name in names]
 
     def get_file_path(self, file_key, default=None, progress=None):
         """

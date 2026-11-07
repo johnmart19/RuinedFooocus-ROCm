@@ -30,6 +30,13 @@ def asset_path(name):
     return ASSET_ROOT / name
 
 
+def startup_marker(name):
+    """Read legacy clone markers, but create new markers in writable data."""
+    writable = data_path(name)
+    legacy = APP_ROOT / name
+    return legacy if not writable.exists() and legacy.exists() else writable
+
+
 def legacy_model_path(value):
     path = Path(value).expanduser()
     return path if path.is_absolute() else (data_path() / "modules" / path).resolve()

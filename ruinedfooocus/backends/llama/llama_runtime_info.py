@@ -1,6 +1,7 @@
 """Inspect installed chat runtimes without downloading or loading models."""
 
 import json
+from ruinedfooocus.core.paths import data_path
 import os
 from pathlib import Path
 import shutil
@@ -42,7 +43,7 @@ def runtime_info():
     if override:
         binaries = [Path(shutil.which(override) or override)]
     else:
-        root = Path("cache/llama.cpp")
+        root = data_path("cache", "llama.cpp")
         executable = "llama-server.exe" if os.name == "nt" else "llama-server"
         binaries = sorted(
             path for path in root.glob(f"b*/**/{executable}") if "build-work" not in path.parts
@@ -69,7 +70,9 @@ def runtime_info():
 
                     env = windows_rocm_environment(env, install=False)
                 else:
-                    sites = Path("cache/llama.cpp/rocm-10.0").glob("lib/python*/site-packages")
+                    sites = data_path("cache", "llama.cpp", "rocm-10.0").glob(
+                        "lib/python*/site-packages"
+                    )
                     paths = [
                         str(site / package / "lib")
                         for site in sites

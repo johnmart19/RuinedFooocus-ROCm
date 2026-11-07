@@ -30,6 +30,7 @@ import re
 import traceback
 
 import version
+from ruinedfooocus.features.models.selection import checkpoint_choices
 
 if args.guest:
     from ruinedfooocus.ui.ui_guest import launch_guest
@@ -439,7 +440,9 @@ with shared.gradio_root as block:
         with gr.Column(scale=5, min_width=0, elem_id="generation-workspace"):
             base_model = gr.Dropdown(
                 label="Image model",
-                choices=shared.models.get_names("checkpoints"),
+                choices=checkpoint_choices(
+                    shared.models.get_names("checkpoints"), settings["base_model"]
+                ),
                 value=settings["base_model"],
                 interactive=True,
                 elem_id="create-model",
@@ -1007,6 +1010,11 @@ with shared.gradio_root as block:
             )
             with model_tab:
                 with gr.Tab(label=t("Model")):
+                    from ruinedfooocus.features.models.ui_download import (
+                        create_ui as create_download_ui,
+                    )
+
+                    create_download_ui(base_model)
                     model_current = gr.HTML(
                         value=f"{settings['base_model']}",
                     )
@@ -1433,7 +1441,7 @@ with shared.gradio_root as block:
 
             @model_refresh.click(
                 api_visibility="undocumented",
-                inputs=[lora_active_gallery],
+                inputs=[lora_active_gallery, base_model],
                 outputs=[
                     modelfilter,
                     model_gallery,
@@ -1441,9 +1449,10 @@ with shared.gradio_root as block:
                     lora_gallery,
                     style_selection,
                     preset_gallery,
+                    base_model,
                 ],
             )
-            def model_refresh_clicked(lora_active_gallery):
+            def model_refresh_clicked(lora_active_gallery, selected_model):
                 global civit_checkpoints, civit_loras, lora_active_selected
                 lora_active_selected = None
                 shared.models.update_all_models()
@@ -1455,6 +1464,11 @@ with shared.gradio_root as block:
                     lora_gallery: update_lora_filter("", lora_active_gallery),
                     style_selection: gr.update(choices=list(load_styles().keys())),
                     preset_gallery: gr.update(value=path_manager.get_presets()),
+                    base_model: gr.update(
+                        choices=checkpoint_choices(
+                            shared.models.get_names("checkpoints"), selected_model
+                        )
+                    ),
                 }
 
                 return results
@@ -1462,20 +1476,27 @@ with shared.gradio_root as block:
             # Refresh thumbnails when the background metadata scan finishes.
             model_revision = gr.State(-1)
 
-            def update_model_previews(revision, model_filter, lora_filter, active_loras):
+            def update_model_previews(
+                revision, model_filter, lora_filter, active_loras, selected_model
+            ):
                 current = shared.models.revision
                 if revision == current:
-                    return gr.skip(), gr.skip(), gr.skip()
+                    return gr.skip(), gr.skip(), gr.skip(), gr.skip()
                 return (
                     current,
                     update_model_filter(model_filter),
                     update_lora_filter(lora_filter, active_loras),
+                    gr.update(
+                        choices=checkpoint_choices(
+                            shared.models.get_names("checkpoints"), selected_model
+                        )
+                    ),
                 )
 
             cfg_timer.tick(
                 fn=update_model_previews,
-                inputs=[model_revision, modelfilter, lorafilter, lora_active_gallery],
-                outputs=[model_revision, model_gallery, lora_gallery],
+                inputs=[model_revision, modelfilter, lorafilter, lora_active_gallery, base_model],
+                outputs=[model_revision, model_gallery, lora_gallery, base_model],
                 api_visibility="undocumented",
                 queue=False,
             )

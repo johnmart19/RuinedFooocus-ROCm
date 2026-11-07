@@ -1,6 +1,7 @@
 """Official llama.cpp binaries, cached separately from models and Python packages."""
 
 import hashlib
+from ruinedfooocus.core.paths import data_path
 import json
 import os
 from pathlib import Path
@@ -139,7 +140,7 @@ def runtime_environment(gpu, reinstall=False, backend="Auto"):
     if not target or os.environ.get("LLAMA_SERVER"):
         return env
     # Native subprocess dependencies must not replace the app's working torch/ROCm.
-    directory = Path("cache/llama.cpp/rocm-10.0").resolve()
+    directory = data_path("cache", "llama.cpp", "rocm-10.0")
     python = directory / "bin/python"
     marker = directory / f"{target}.ready"
     if reinstall or not marker.exists():
@@ -190,7 +191,7 @@ def windows_rocm_environment(env, reinstall=False, install=True):
 
     libraries = None if reinstall else paths(sys.executable)
     if not libraries and not install:
-        python = Path("cache/llama.cpp/rocm-10.0-windows/Scripts/python.exe").resolve()
+        python = data_path("cache", "llama.cpp", "rocm-10.0-windows", "Scripts", "python.exe")
         libraries = paths(python) if python.exists() else None
         if not libraries:
             return env
@@ -200,7 +201,7 @@ def windows_rocm_environment(env, reinstall=False, install=True):
             raise RuntimeError(
                 "Cannot detect the AMD GPU target for ROCm 10. Select Vulkan or install a compatible ROCm SDK."
             )
-        directory = Path("cache/llama.cpp/rocm-10.0-windows").resolve()
+        directory = data_path("cache", "llama.cpp", "rocm-10.0-windows")
         python = directory / "Scripts/python.exe"
         libraries = paths(python) if python.exists() and not reinstall else None
         if not libraries:
@@ -228,7 +229,9 @@ def windows_rocm_environment(env, reinstall=False, install=True):
 
 
 def package_directory(package):
-    return Path("cache/llama.cpp") / VERSION / package.removesuffix(".zip").removesuffix(".tar.gz")
+    return data_path(
+        "cache", "llama.cpp", VERSION, package.removesuffix(".zip").removesuffix(".tar.gz")
+    )
 
 
 def server_path(gpu=True, backend="Auto"):

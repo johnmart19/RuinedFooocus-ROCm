@@ -1,4 +1,4 @@
-from ruinedfooocus.core.paths import APP_ROOT
+from ruinedfooocus.core.paths import data_path
 
 """Install the optional Windows GPU ONNX wheel without replacing CPU ONNX."""
 import hashlib
@@ -10,7 +10,7 @@ import sys
 import sysconfig
 
 VERSION = "1.30.0.202609102321"
-ROOT = APP_ROOT
+ROOT = data_path()
 WORKER = Path(__file__).with_name("onnx_worker.py")
 
 

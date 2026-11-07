@@ -1,7 +1,6 @@
 from ruinedfooocus.core.paths import data_path
 import json
 from pathlib import Path
-import shutil
 from ruinedfooocus.core.config_io import save_json
 
 
@@ -23,7 +22,7 @@ class OneButtonPresets:
             print(f"ERROR: Failed to load {self.DEFAULT_OBP_FILE}")
             default_data = {}
         try:
-            data = self._load_data(self.OBP_FILE)
+            data = self._load_data(self.OBP_FILE) if self.OBP_FILE.exists() else {}
         except:
             print(f"ERROR: Failed to load {self.OBP_FILE}")
             data = {}
@@ -59,8 +58,6 @@ class OneButtonPresets:
         return data
 
     def _load_data(self, file_path):
-        if not file_path.exists():
-            shutil.copy(self.DEFAULT_OBP_FILE, file_path)
         with open(file_path, encoding="utf-8") as file:
             return json.load(file)
 

@@ -10,7 +10,8 @@ RuinedFooocus needs Python 3.11–3.14 (3.10 still works but is deprecated) and 
 `venv` folder, install the right PyTorch build for your GPU and start the web UI. Package installation can
 download several GB. The optional default image model is
 [sd_xl_base_1.0_0.9vae.safetensors](https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/sd_xl_base_1.0_0.9vae.safetensors)
-and belongs in `models/checkpoints`. If you already have it, keep your existing copy. Optional prompt
+and belongs in `models/checkpoints`. Download it explicitly in **Models → Model → Download default image model**,
+or add another compatible checkpoint. If you already have it, keep your existing copy. Optional prompt
 expansion and SuperPrompt components download only when their feature is used; local weights are preserved.
 
 ### Windows
@@ -48,6 +49,12 @@ To switch PyTorch later, start with `TORCH_PLATFORM` set or with `--rocm10`, `--
 or an empty `freezetorch` file to stop the launcher from changing PyTorch (for example after installing it
 yourself). Deleting the `venv` folder gives a completely fresh install. The launchers replace the
 old portable setup helpers and Conda environment file; reinstall/freeze marker files are created locally.
+
+A source ZIP uses the same launchers and still requires Python and Git; it does not bundle a runtime or models.
+Set `RF_DATA_DIR` to keep settings, model paths, outputs and runtime caches in a separate writable folder.
+Reinstall/freeze markers can go there too; existing markers in the application folder remain supported.
+Git updates run only in a source checkout and skip local edits; upgrade a source ZIP by replacing application
+files while keeping user data. Bundled Windows/Linux CUDA/ROCm portable releases are a future build target.
 
 If you see **"MetadataIncompleteBuffer"**, a model file is incomplete or damaged; download it again. **Models > Model > Checkpoint tools** can check a checkpoint for damage.
 
@@ -149,7 +156,7 @@ continues to use this clone's data. Source upgrades preserve existing models, ou
 
 This codebase is a fork from the original amazing work by [lllyasviel](https://github.com/lllyasviel/Fooocus/discussions/117)
 The wonderful [MoonRide](https://github.com/MoonRide303/) who also maintains an amazing fork!
-The codebase starts from an odd mixture of [Automatic1111](https://github.com/AUTOMATIC1111/stable-diffusion-ruinedfooocus.ui.app) and [ComfyUI](https://github.com/comfyanonymous/ComfyUI). (And they both use GPL license.)
+The codebase starts from an odd mixture of [Automatic1111](https://github.com/AUTOMATIC1111/stable-diffusion-webui) and [ComfyUI](https://github.com/comfyanonymous/ComfyUI). (And they both use GPL license.)
 
 ## Discord Support Server
 

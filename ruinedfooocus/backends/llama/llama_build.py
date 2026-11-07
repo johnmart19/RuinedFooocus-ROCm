@@ -32,7 +32,9 @@ def build_capabilities():
 def build_root():
     from ruinedfooocus.backends.llama.llama_installer import VERSION
 
-    return Path("cache/llama.cpp").resolve() / VERSION / "local-cuda"
+    from ruinedfooocus.core.paths import data_path
+
+    return data_path("cache", "llama.cpp", VERSION, "local-cuda")
 
 
 def built_server():

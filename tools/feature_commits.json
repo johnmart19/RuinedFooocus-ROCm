@@ -2,6 +2,12 @@
   "base": "cd7abb27064155f62dea002f745a8ce1b040c990",
   "features": [
     {
+      "id": "source-archive-runtime",
+      "subject": "Support source archives with isolated writable runtime data",
+      "requires": ["lazy-prompt-resources"],
+      "tests": ["test_*.py"]
+    },
+    {
       "id": "lazy-prompt-resources",
       "subject": "Load optional prompt resources on demand with shared device ownership",
       "requires": ["owned-source-formatting"],

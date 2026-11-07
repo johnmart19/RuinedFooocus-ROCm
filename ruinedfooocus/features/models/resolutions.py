@@ -111,7 +111,7 @@ class ResolutionSettings:
         import re
         from ruinedfooocus.features.models.model_recommendations import FAMILY_PRESETS
 
-        with Path("ruinedfooocus/resources/defaults/performance.default").open() as f:
+        with resource_path("defaults", "performance.default").open() as f:
             recipes = json.load(f)
         recipe = recipes.get(FAMILY_PRESETS.get(family, family), {})
         if not recipe:

@@ -2,6 +2,8 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from ruinedfooocus.packaging.distribution import source_checkout
+from ruinedfooocus.core.paths import startup_marker
 
 root = Path(__file__).resolve().parent
 sys.path.append(str(root))
@@ -13,7 +15,7 @@ if not offline:
     from ruinedfooocus.core.dependency_cache import needed, record
 
     # Bootstrap before importing application helpers, which require packaging.
-    reinstall_bootstrap = ["--force-reinstall"] if (root / "reinstall").exists() else []
+    reinstall_bootstrap = ["--force-reinstall"] if startup_marker("reinstall").exists() else []
     if needed(root, "bootstrap", force=bool(reinstall_bootstrap)):
         print("Check pre-requirements", flush=True)
         subprocess.run(
@@ -33,6 +35,7 @@ if not offline:
     sys._rf_bootstrap_checked = True
     # ruinedfooocus/app/bootstrap.py must not replace pygit2/cffi after the updater loads their DLLs.
 
+if not offline and source_checkout(root):
     bupdated = False
     try:
         import pygit2
@@ -41,16 +44,19 @@ if not offline:
 
         repo_path = Path(__file__).resolve().parent
         repo = pygit2.Repository(str(repo_path))
-
+        if repo.status():
+            raise RuntimeError(
+                "Local source changes found. Keeping them; automatic update skipped."
+            )
+        if repo.head_is_detached:
+            raise RuntimeError("Detached source revision; automatic update skipped.")
+        expected_head = (repo.head.name, repo.head.target)
         branch_name = repo.head.shorthand
 
         remote_name = "origin"
         remote = repo.remotes[remote_name]
 
         remote.fetch()
-
-        local_branch_ref = f"refs/heads/{branch_name}"
-        local_branch = repo.lookup_reference(local_branch_ref)
 
         remote_reference = f"refs/remotes/{remote_name}/{branch_name}"
         remote_commit = repo.revparse_single(remote_reference)
@@ -60,10 +66,9 @@ if not offline:
         if merge_result & pygit2.GIT_MERGE_ANALYSIS_UP_TO_DATE:
             print("You have the latest version")
         elif merge_result & pygit2.GIT_MERGE_ANALYSIS_FASTFORWARD:
-            local_branch.set_target(remote_commit.id)
-            repo.head.set_target(remote_commit.id)
-            repo.checkout_tree(repo.get(remote_commit.id))
-            repo.reset(local_branch.target, pygit2.GIT_RESET_HARD)
+            from ruinedfooocus.packaging.source_updates import fast_forward
+
+            fast_forward(repo, remote_commit, expected_head)
             print("Updating Files")
             bupdated = True
         elif merge_result & pygit2.GIT_MERGE_ANALYSIS_NORMAL:
@@ -77,5 +82,9 @@ if not offline:
         # imports can hold native package DLLs open on Windows.
         os.execv(sys.executable, [sys.executable, *sys.argv])
 else:
-    print("Offline mode. No update.")
+    print(
+        "Offline mode. No update."
+        if offline
+        else "Archive installation: Git updates are disabled. Replace application files to upgrade."
+    )
 from ruinedfooocus.app.bootstrap import *

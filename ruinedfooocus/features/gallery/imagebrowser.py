@@ -169,8 +169,13 @@ def get_png_metadata(image_path: str) -> Dict:
         return {}
 
 
-def connect_database(path="cache/images.db"):
+def connect_database(path=None):
     # Connect to an SQLite database (or create it if it doesn't exist)
+    if path is None:
+        from ruinedfooocus.core.paths import data_path
+
+        path = data_path("cache", "images.db")
+        path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(path, check_same_thread=False)
 
     conn.cursor()

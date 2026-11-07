@@ -33,16 +33,18 @@ copy native model/sampler implementations into feature folders.
 `core/paths.py` owns root resolution. Resource discovery does not depend on the
 working directory. `resources` and `ui/assets` are bundled inputs. Writable data
 defaults to the clone root; `RF_DATA_DIR` selects another data directory for an
-extracted or read-only application. Existing absolute model paths remain valid.
+extracted application. Existing absolute model paths remain valid. Backend source
+and Python environments are installed separately from writable user data.
 Legacy `../models/...` path values retain their former `modules/` base semantics.
 
-| Bundled source                      | User override                                        |
-| ----------------------------------- | ---------------------------------------------------- |
-| `resources/prompt_presets/*.txt`    | `prompt_presets/`; legacy `llamas/` remains readable |
-| `resources/assistants/`             | `assistants/`; legacy `chatbots/` remains readable   |
-| `resources/defaults/`               | `settings/` and named settings profiles              |
-| One Button bundled datasets/presets | Existing `random_prompt/userfiles/`                  |
-| Model download catalogue            | `settings/model_settings.json` for recommendations   |
+| Bundled source                      | User override                                                    |
+| ----------------------------------- | ---------------------------------------------------------------- |
+| `resources/prompt_presets/*.txt`    | `prompt_presets/`; legacy `llamas/` remains readable             |
+| `resources/assistants/`             | `assistants/`; legacy `chatbots/` remains readable               |
+| `resources/defaults/`               | `settings/` and named settings profiles                          |
+| One Button bundled datasets/presets | Existing `random_prompt/userfiles/`                              |
+| Model download catalogue            | `settings/model_settings.json` for recommendations               |
+| `presets/*.png` generation examples | Configured preset folder; defaults to `presets/` under user data |
 
 New user folders override legacy folders, which override bundled entries with the
 same relative identity. Discovery never renames, copies or overwrites custom
@@ -80,5 +82,19 @@ an appropriate Python/runtime rather than copying a development venv. Drivers
 remain system prerequisites. Preserve writable data on upgrade, keep model
 downloads explicit, and bypass Git update behavior for archive builds. A source
 or CPU smoke check does not certify a portable GPU distribution.
+
+Build a source ZIP from a committed revision with:
+
+```sh
+python tools/build_source_archive.py --output dist/RuinedFooocus-source.zip
+```
+
+`--ref` selects another source revision. The ZIP excludes user data, environments
+and weights, and records the source revision and backend pins in `distribution.json`.
+It uses the existing launchers, with explicit model downloads in Models. Git updates
+are disabled without a root `.git`; source updates use a safe fast-forward and
+preserve local edits and ignored files. Reinstall requests and dependency, gallery,
+llama and ONNX caches follow `RF_DATA_DIR`. Existing source files must remain
+writable for online backend installation; a prebuilt portable runtime is separate.
 
 Task controls are saved with **Create → Save current defaults**; Settings contains persistent app preferences and advanced defaults. Prompt rewrite previews before applying. Model preloading is optional; browsing alone does not require weights to be loaded.

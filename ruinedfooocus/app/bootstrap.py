@@ -375,13 +375,13 @@ if int(py_ver[0]) == 3 and int(py_ver[1]) <= 10:
     time.sleep(3)
     # input("Press enter to continue...")
 
-REINSTALL_ALL = False
-if os.path.exists("reinstall"):
-    REINSTALL_ALL = True
-REINSTALL_TORCH = False
-if os.path.exists("reinstalltorch"):
-    REINSTALL_TORCH = True
-TORCH_FROZEN = os.path.exists("freezetorch") and not (REINSTALL_ALL or REINSTALL_TORCH)
+from ruinedfooocus.core.paths import startup_marker
+
+REINSTALL_ALL_PATH = startup_marker("reinstall")
+REINSTALL_TORCH_PATH = startup_marker("reinstalltorch")
+REINSTALL_ALL = REINSTALL_ALL_PATH.exists()
+REINSTALL_TORCH = REINSTALL_TORCH_PATH.exists()
+TORCH_FROZEN = startup_marker("freezetorch").exists() and not (REINSTALL_ALL or REINSTALL_TORCH)
 
 configure_device_environment(args)
 
@@ -403,9 +403,7 @@ if os.environ.get("TORCH_PLATFORM") == "cpu":
 elif os.environ.get("TORCH_PLATFORM") == "directml" and args.directml is None:
     args.directml = -1
 
-if args.rocm10 and (
-    offline or args.cpu or args.directml is not None or os.path.exists("freezetorch")
-):
+if args.rocm10 and (offline or args.cpu or args.directml is not None or TORCH_FROZEN):
     raise RuntimeError(
         "--rocm10 cannot be combined with offline, CPU, DirectML or freezetorch mode."
     )
@@ -423,14 +421,14 @@ if offline:
 
 prepare_environment(offline)
 
-if not offline and os.path.exists("reinstall"):
+if not offline and REINSTALL_ALL:
     try:
-        os.remove("reinstall")
+        REINSTALL_ALL_PATH.unlink(missing_ok=True)
     except:
         print("ERROR: Failed to remove 'reinstall'. Pleae remove manually.")
-if not offline and os.path.exists("reinstalltorch"):
+if not offline and REINSTALL_TORCH:
     try:
-        os.remove("reinstalltorch")
+        REINSTALL_TORCH_PATH.unlink(missing_ok=True)
     except:
         print("ERROR: Failed to remove 'reinstalltorch'. Pleae remove manually.")
 
