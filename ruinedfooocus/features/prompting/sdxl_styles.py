@@ -18,7 +18,7 @@ def load_styles():
     return style_templates(DEFAULT_STYLES_FILE, STYLES_FILE)
 
 
-def apply_style(style, prompt, negative_prompt, lora_keywords, *, enhancer=None):
+def apply_style(style, prompt, negative_prompt, lora_keywords, *, enhancer=None, provenance=None):
     from ruinedfooocus.features.prompting.style_catalog import normalize_selection
 
     style = normalize_selection(style)
@@ -36,11 +36,17 @@ def apply_style(style, prompt, negative_prompt, lora_keywords, *, enhancer=None)
     artifystylelist = []
     index = 0
 
-    if not style:
-        return prompt, negative_prompt
-
     while "Style: Pick Random" in style:
         style[style.index("Style: Pick Random")] = random.choice(allstyles) if allstyles else "None"
+
+    if provenance is not None:
+        provenance.update(
+            version=1,
+            selected=style.copy(),
+            templates={name: styles[name] for name in style if name in styles},
+        )
+    if not style:
+        return prompt, negative_prompt
 
     for s in style.copy():
         _s = s.upper().strip()

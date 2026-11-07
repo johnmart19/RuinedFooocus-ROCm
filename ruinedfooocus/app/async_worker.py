@@ -303,6 +303,9 @@ def _process(gen_data):
             prompt = {
                 "Prompt": p_txt,
                 "Negative": n_txt,
+                "raw_prompt": gen_data.get("raw_prompt", gen_data.get("prompt", p_txt)),
+                "raw_negative": gen_data.get("raw_negative", gen_data.get("negative", n_txt)),
+                "style_provenance": gen_data.get("style_provenance", {}),
                 "steps": steps,
                 "cfg": gen_data["cfg"],
                 # Pipelines update the size when img2img/edits keep the source aspect.

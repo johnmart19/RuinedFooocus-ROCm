@@ -40,6 +40,8 @@ def generation_defaults(values):
         for key, control in DEFAULT_CONTROLS.items()
         if control in values
     }
+    # Old styles were staged, not active. Only explicit new saves opt into applying them.
+    result["style_application"] = 1
     # Forever is an action, not a safe startup batch count.
     result["image_number"] = max(1, int(result.get("image_number", 1)))
     loras = []

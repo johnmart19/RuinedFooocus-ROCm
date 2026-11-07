@@ -5,6 +5,7 @@ from dataclasses import dataclass, replace
 from functools import lru_cache
 import locale
 from pathlib import Path
+import re
 
 from ruinedfooocus.core.paths import data_path, resource_path
 
@@ -105,3 +106,49 @@ def style_templates(default_file=None, user_file=None):
         name: (style.prompt, style.negative_prompt)
         for name, style in load_catalog(default_file, user_file).items()
     }
+
+
+def style_label(name):
+    label = name.removeprefix("Style: ").removeprefix("Artify: ")
+    for prefix in (
+        "sai-",
+        "ads-",
+        "artstyle-",
+        "futuristic-",
+        "game-",
+        "misc-",
+        "papercraft-",
+        "photo-",
+    ):
+        label = label.removeprefix(prefix)
+    return label[:1].upper() + label[1:]
+
+
+def merge_selection(current, scope, selected):
+    """Changing a filtered group must not drop selections hidden by the search."""
+    scope = set(scope)
+    selected = [name for name in normalize_selection(selected) if name in scope]
+    result = [
+        name for name in normalize_selection(current) if name not in scope or name in selected
+    ]
+    return result + [name for name in selected if name not in result]
+
+
+def resolve_inline_styles(prompt, selected, templates, *, deferred=()):
+    """Consume known directives once; unknown text and deferred tools stay literal."""
+    selected = normalize_selection(selected)
+
+    def inline(match):
+        name = STYLE_ALIASES.get(match.group(1), match.group(1))
+        if is_heading(name):
+            return ""
+        key = f"Style: {name}"
+        if key not in templates:
+            key = name
+        if key in templates and key not in deferred:
+            selected.append(key)
+            return ""
+        return match.group(0)
+
+    prompt = re.sub(r"<style:([^>]+)>", inline, prompt)
+    return normalize_selection(selected), prompt

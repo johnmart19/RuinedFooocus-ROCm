@@ -444,7 +444,7 @@ if generateconceptmixer:
     subjectsubtypesconcept.append("concept mixer")
 
 
-def ui_onebutton(prompt, run_event, checkpoint=None):
+def ui_onebutton(prompt, run_event, checkpoint=None, style_selection=None):
     # Auto resolves against the checkpoint actually used (presets may override the dropdown).
     checkpoint_input = [checkpoint] if checkpoint is not None else []
 
@@ -620,6 +620,10 @@ def ui_onebutton(prompt, run_event, checkpoint=None):
         return prompt
 
     with gr.Tab(label="Prompt tools"):
+        if style_selection is not None:
+            from ruinedfooocus.features.prompting.ui_styles import add_processor_controls
+
+            add_processor_controls(style_selection)
         gr.Markdown(
             "Build a prompt with One Button, then review it in the main prompt box. "
             "Instant OBP also starts generation."

@@ -526,6 +526,16 @@ textarea {
   white-space: pre-line;
 }
 
+.rf-style-choices .wrap {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr));
+}
+.rf-style-choices label {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 #details-links {
   list-style: none;
   margin: 0;

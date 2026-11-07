@@ -5,7 +5,6 @@ import random
 from ruinedfooocus.features.prompting.sdxl_styles import (
     apply_style,
     load_styles,
-    STYLE_ALIASES,
 )
 from ruinedfooocus.features.prompting.prompt_scheduling import prompt_switch_per_step
 from ruinedfooocus.features.prompting.one_button.build_dynamic_prompt import (
@@ -289,6 +288,8 @@ def process_prompt(style, prompt, negative, gen_data=None):
         gen_data = {}
     if gen_data.get("_metadata_prompt"):
         return prompt, negative
+    gen_data["raw_prompt"] = prompt
+    gen_data["raw_negative"] = negative
     enhanced = False
 
     def enhance_once(text, model_type="", preset_focus=""):
@@ -343,31 +344,23 @@ def process_prompt(style, prompt, negative, gen_data=None):
 
     # styles
     available_styles = load_styles()
-    pattern = re.compile(r"<style:([^>]+)>")
-    # Dropdown selections are staged for "Send Style to prompt". Generation
-    # must not invisibly apply them again, including saved/default selections.
-    styles = (
-        (style or []).copy()
-        if "task_type" in gen_data and gen_data["task_type"] == "tool_call"
-        else []
-    )
+    from ruinedfooocus.features.prompting.style_catalog import resolve_inline_styles
 
-    def inline_style(match):
-        name = STYLE_ALIASES.get(match.group(1), match.group(1))
-        key = f"Style: {name}"
-        if key not in available_styles:
-            key = name
-        if key in available_styles:
-            styles.append(key)
-            return ""
-        return match.group(0)
-
-    prompt = pattern.sub(inline_style, prompt)
+    styles, prompt = resolve_inline_styles(prompt, style, available_styles)
     if "lora_keywords" in gen_data:
         keywords = gen_data["lora_keywords"]
     else:
         keywords = ""
-    p_txt, n_txt = apply_style(styles, prompt, negative, keywords, enhancer=enhance_once)
+    provenance = {}
+    p_txt, n_txt = apply_style(
+        styles,
+        prompt,
+        negative,
+        keywords,
+        enhancer=enhance_once,
+        provenance=provenance,
+    )
+    gen_data["style_provenance"] = provenance
 
     # wildcards
     if "__" in p_txt:

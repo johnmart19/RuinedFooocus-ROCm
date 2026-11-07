@@ -1,5 +1,7 @@
 ### Unreleased (development)
 
+- Group styles under non-selectable categories; keep filtered selections, apply styles on Generate, separate prompt processors, and add preview/bake/undo with original prompt and style provenance in PNG metadata
+
 - Move Models beside Generation inside Create; use cached publisher names and versions while keeping file identities, and reject stale gallery selections
 
 - Keep category headings out of style selections, preserve prompts with empty templates, and load custom style overrides without rewriting user files

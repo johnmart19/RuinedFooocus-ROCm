@@ -92,18 +92,25 @@ and is remembered by your browser; browser zoom and keyboard navigation remain a
 
 ### Prompts and styles
 
-- Styles from `settings/styles.csv`: combine several, send a style to the prompt, or add `<style:name>`.
+- **Create > Generation > Styles** groups visual styles by category. Select several to apply them in
+  order when generating, or add `<style:name>` directly. Search keeps selections in other groups.
+  Preview shows style text without running enhancement; Bake into prompt applies it once and clears
+  those selections, with Undo that protects later edits. Optional prompt processors are in **Prompt tools**.
+  Styles come from `settings/styles.csv` and the bundled catalog.
   Category headings are never styles. Custom rows override bundled styles by name; loading styles
   does not rewrite your file, and empty templates keep your prompt intact.
 - Wildcards: type `__name__` to insert a random line from `wildcards/name.txt` (see `wildcards/colors.txt`).
 - LoRAs from **Create > Models > LoRAs** or with `<lora:name:0.9>` in the prompt. Trigger words are read from a `.txt`
-  file next to the LoRA or downloaded from Civitai; the `LoRA keywords` style adds them for you.
+  file next to the LoRA or downloaded from Civitai; enable **Append LoRA trigger words** to include them.
 - Put `---` on its own line to queue several prompts. Automatic negative prompt is available.
 - **Prompt tools** has [One Button Prompt](https://github.com/AIrjen/OneButtonPrompt) for random prompts. Its
   Prompt format follows the checkpoint: tags for SD/SDXL, anime tags for Illustrious/NoobAI/Pony, tags with a
   description for Anima, and natural language for Flux, Qwen and similar models.
   The bundled **Weird Hats** preset keeps existing saved selections and custom edits under its old spelling.
   If both spellings already contain custom presets, each saved selection keeps its own values.
+- Old saved style selections stay inactive until explicitly selected or saved with **Save current defaults**.
+  PNG metadata records the original prompt and applied styles alongside the final rendered prompt, so
+  replay does not apply styles twice.
 - **Rewrite prompt** and prompt enhancement use the selected local chat model. Rewrite instructions are bundled
   under `ruinedfooocus/resources/prompt_presets`; add your own in `prompt_presets`. Legacy `llamas` entries still work.
 - Evolve creates variations of the current prompt (in **Image tools**).

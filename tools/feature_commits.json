@@ -2,6 +2,20 @@
   "base": "cd7abb27064155f62dea002f745a8ce1b040c990",
   "features": [
     {
+      "id": "grouped-style-controls",
+      "subject": "Group visual styles and apply them once during generation",
+      "requires": ["create-model-workspace"],
+      "tests": [
+        "test_style_workflow.py",
+        "test_style_catalog.py",
+        "test_style_prompt_payloads.py",
+        "test_prompt_wildcards.py",
+        "test_local_prompt_enhancement.py",
+        "test_generation_defaults.py",
+        "test_ui_workflows.py"
+      ]
+    },
+    {
       "id": "create-model-workspace",
       "subject": "Browse named image models beside Generation",
       "requires": ["style-catalog-safety"],

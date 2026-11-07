@@ -60,12 +60,12 @@ import transformers
 transformers.utils.logging.set_verbosity_error()
 
 from comfy.samplers import KSampler
-from ruinedfooocus.features.prompting.sdxl_styles import load_styles, apply_style
+from ruinedfooocus.features.prompting.sdxl_styles import load_styles
+from ruinedfooocus.features.prompting import ui_styles
 from ruinedfooocus.features.prompting.prompt_processing import get_promptlist, use_random_prompt
 from ruinedfooocus.core.util import (
     get_wildcard_files,
     load_keywords,
-    get_checkpoint_thumbnail,
     get_lora_thumbnail,
 )
 from ruinedfooocus.features.gallery.imagebrowser import ImageBrowser
@@ -917,17 +917,9 @@ with shared.gradio_root as block:
                             value=resolution_settings.selection_for_model(family, None),
                         )
 
-                with gr.Accordion("Style", open=False, elem_id="generation-style"):
-                    style_button = gr.Button(value="⬅️ " + t("Send Style to prompt"), size="sm")
-                    style_selection = gr.Dropdown(
-                        elem_id="style-selection",
-                        label=t("Style Selection"),
-                        multiselect=True,
-                        container=True,
-                        choices=list(load_styles().keys()),
-                        buttons=[style_button],
-                        value=[],
-                    )
+                with gr.Accordion("Styles", open=False, elem_id="generation-style"):
+                    style_controls = ui_styles.create_ui(settings)
+                    style_selection = style_controls.selection
                     add_ctrl("style_selection", style_selection)
                 image_number = gr.Slider(
                     label=t("Image Number"),
@@ -982,17 +974,6 @@ with shared.gradio_root as block:
                 save_defaults_btn = gr.Button(
                     "Save current defaults", size="sm", elem_id="save-generation-defaults"
                 )
-
-                @style_button.click(
-                    api_visibility="undocumented",
-                    inputs=[prompt, negative_prompt, style_selection],
-                    outputs=[prompt, negative_prompt, style_selection],
-                )
-                def send_to_prompt(prompt_text, negative_text, style_inputs):
-                    prompt_style, negative_style = apply_style(
-                        style_inputs, prompt_text, negative_text, ""
-                    )
-                    return prompt_style, negative_style, []
 
                 @seed_random.change(
                     api_visibility="undocumented", inputs=[seed_random], outputs=[image_seed]
@@ -1165,6 +1146,7 @@ with shared.gradio_root as block:
 
                         lora_keywords = gr.Textbox(label=t("LoRA Trigger Words"), interactive=False)
                         add_ctrl("lora_keywords", lora_keywords)
+                        ui_styles.add_lora_keywords_control(style_selection)
 
                 def gallery_toggle():
                     result = [
@@ -1445,7 +1427,10 @@ with shared.gradio_root as block:
                 queue=False,
             )
 
-            ui_onebutton.ui_onebutton(prompt, run_event, effective_image_checkpoint)
+            ui_styles.bind_actions(style_controls, prompt, negative_prompt, lora_keywords)
+            ui_onebutton.ui_onebutton(
+                prompt, run_event, effective_image_checkpoint, style_selection
+            )
 
             # Image tools follow a preset's effective checkpoint without changing
             # the user's Main model selection or API-default identity.

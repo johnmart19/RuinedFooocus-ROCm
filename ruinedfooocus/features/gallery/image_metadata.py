@@ -6,6 +6,9 @@ RENDER_FIELDS = frozenset(
     {
         "prompt",
         "negative",
+        "raw_prompt",
+        "raw_negative",
+        "style_provenance",
         "steps",
         "custom_steps",
         "cfg",
