@@ -27,7 +27,9 @@ def llama_names():
 
 def clean_rewrite(text):
     """Remove an echoed example label or wrapping quotes around a rewritten prompt."""
-    text = re.sub(r"^\s*(?:output|prompt|rewritten prompt)\s*:\s*", "", text or "", flags=re.I).strip()
+    # Typographic hyphens/spaces (common in gpt-oss output) tokenize poorly in image models.
+    text = re.sub(r"[‐‑‒–−]", "-", text or "").replace(" ", " ").replace(" ", " ")
+    text = re.sub(r"^\s*(?:output|prompt|rewritten prompt)\s*:\s*", "", text, flags=re.I).strip()
     if len(text) > 1 and text[0] == text[-1] and text[0] in "\"'":
         text = text[1:-1].strip()
     return text
@@ -37,6 +39,17 @@ def restore_tags(original, rewritten):
     missing = [tag for tag in dict.fromkeys(re.findall(r"<(?:lora|style):[^<>]+>", original, flags=re.I))
                if tag not in rewritten]
     return " ".join([rewritten.rstrip(" ,"), *missing]) if missing else rewritten
+
+def rewrite_template_kwargs():
+    """Hidden reasoning shares the rewrite token limit; Settings chooses the effort.
+
+    gpt-oss reads reasoning_effort and Qwen3-style templates read enable_thinking
+    (off at Low). Other chat templates ignore both.
+    """
+    from modules.settings_validation import REWRITE_REASONING
+    effort = settings.default_settings.get("llm_rewrite_reasoning", "Low")
+    effort = effort if effort in REWRITE_REASONING else "Low"
+    return {"reasoning_effort": effort.lower(), "enable_thinking": effort != "Low"}
 
 def run_llama(system_file, prompt, *, instruction=None):
         name = None
@@ -72,9 +85,7 @@ def run_llama(system_file, prompt, *, instruction=None):
                         "max_tokens": settings.default_settings.get("llm_hp_max_tokens", 256),
                         "messages": [{"role": "system", "content": system_prompt},
                                      {"role": "user", "content": prompt}],
-                        # Hidden reasoning shares max_tokens: keep gpt-oss at low effort and
-                        # Qwen3-style templates out of thinking mode. Other templates ignore these.
-                        "chat_template_kwargs": {"reasoning_effort": "low", "enable_thinking": False},
+                        "chat_template_kwargs": rewrite_template_kwargs(),
                     }
                 )
                 if instruction is not None:

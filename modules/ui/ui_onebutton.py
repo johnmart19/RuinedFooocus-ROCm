@@ -724,7 +724,8 @@ def ui_onebutton(prompt, run_event):
                 info="Controls prompt wording, not the selected checkpoint.",
             )
             add_ctrl("OBP_modeltype", modeltype)
-        gr.Markdown("Local chat model uses the GGUF selected in Chatbot settings.")
+        gr.Markdown("Local prompt enhancement and rewrite use the model loaded in Chat bots (otherwise "
+                    "the startup default). Token limit and reasoning are in Settings > Chatbot settings.")
         with gr.Row():
             gr.Markdown(
                 """

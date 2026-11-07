@@ -382,8 +382,18 @@ def create_settings():
                     add_setting("llm_chat_history", llm_chat_history)
                     enable_llm_tools = gr.Checkbox(label=t("Enable image generation"), value=settings.default_settings.get("enable_llm_tools", False))
                     add_setting("enable_llm_tools", enable_llm_tools)
-                    llm_hp_max_tokens = gr.Number(label="Prompt enhancer token limit", interactive=True, value=settings.default_settings.get("llm_hp_max_tokens", 256), minimum=1, step=1)
+                    llm_hp_max_tokens = gr.Number(label="Prompt rewrite and enhancer token limit", interactive=True,
+                        value=settings.default_settings.get("llm_hp_max_tokens", 256), minimum=1, step=1,
+                        info="Maximum reply for Local prompt rewrite and prompt enhancement. A reasoning model's "
+                             "hidden thinking counts toward it; raise it with higher reasoning.")
                     add_setting("llm_hp_max_tokens", llm_hp_max_tokens)
+                    from modules.settings_validation import REWRITE_REASONING
+                    llm_rewrite_reasoning = gr.Dropdown(label="Prompt rewrite reasoning", choices=list(REWRITE_REASONING),
+                        value=settings.default_settings.get("llm_rewrite_reasoning", "Low"), interactive=True,
+                        info="Reasoning effort for models that think, such as gpt-oss. Low is fastest and fits the "
+                             "default limit; Medium or High may rewrite better but need about 1024+ tokens. "
+                             "Low also turns off Qwen3-style thinking.")
+                    add_setting("llm_rewrite_reasoning", llm_rewrite_reasoning)
 
                 with gr.Accordion(t("Other"), open=False):
                     video_fps = gr.Number(label="Fallback video frame rate", info="Used when the model recipe or Main video controls do not specify a frame rate.", interactive=True, value=settings.default_settings.get("video_fps", 30.0), minimum=0.01, step=0.01)

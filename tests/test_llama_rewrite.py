@@ -22,6 +22,7 @@ class RewriteOutputTests(unittest.TestCase):
         self.assertEqual(clean("  'a fox'  "), "a fox")
         self.assertEqual(clean("a \"quoted\" word stays"), 'a "quoted" word stays')
         self.assertEqual(clean(None), "")
+        self.assertEqual(clean("close‑up, low–angle"), "close-up, low-angle")
 
     def test_dropped_lora_and_style_tags_are_restored_once(self):
         _, restore = helpers()
@@ -30,6 +31,27 @@ class RewriteOutputTests(unittest.TestCase):
         kept = "a red fox, dusk <lora:detail:0.5> <style:Cinematic>"
         self.assertEqual(restore(original, kept), kept)
         self.assertEqual(restore("no tags here", "rewritten,"), "rewritten,")
+
+
+class RewriteReasoningTests(unittest.TestCase):
+    def test_setting_maps_to_template_kwargs_and_rejects_unknown_values(self):
+        from types import SimpleNamespace
+        from modules.settings_validation import validate_settings
+        tree = ast.parse((ROOT / "modules/llama_pipeline.py").read_text(encoding="utf-8"))
+        node = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "rewrite_template_kwargs")
+        settings = SimpleNamespace(default_settings={})
+        scope = {"settings": settings}
+        exec(compile(ast.Module(body=[node], type_ignores=[]), "llama_pipeline", "exec"), scope)
+        cases = {None: ("low", False), "Low": ("low", False), "Medium": ("medium", True),
+                 "High": ("high", True), "bogus": ("low", False)}
+        for value, (effort, thinking) in cases.items():
+            with self.subTest(value=value):
+                settings.default_settings = {} if value is None else {"llm_rewrite_reasoning": value}
+                self.assertEqual(scope["rewrite_template_kwargs"](),
+                                 {"reasoning_effort": effort, "enable_thinking": thinking})
+        self.assertEqual(validate_settings({"llm_rewrite_reasoning": "High"})["llm_rewrite_reasoning"], "High")
+        with self.assertRaises(ValueError):
+            validate_settings({"llm_rewrite_reasoning": "Extreme"})
 
 
 class PresetFileTests(unittest.TestCase):

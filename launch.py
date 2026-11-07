@@ -14,6 +14,12 @@ from modules.gpu_installer import (
 )
 from modules.comfy_compat import configure_device_environment, configure_torch_allocator
 
+# Redirected output uses the console codepage (e.g. cp1251); model text or file
+# names it cannot encode must not crash the operation that logs them.
+for stream in (sys.stdout, sys.stderr):
+    if hasattr(stream, "reconfigure"):
+        stream.reconfigure(errors="backslashreplace")
+
 os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
 os.environ["DO_NOT_TRACK"] = "1"
 os.environ["GRADIO_ANALYTICS_ENABLED"] = "False"

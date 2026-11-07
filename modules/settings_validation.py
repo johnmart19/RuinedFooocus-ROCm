@@ -15,6 +15,8 @@ INTEGER_RANGES = {
 FLOAT_RANGES = {"video_fps": (0.01, None), "update_interval": (0.01, None),
                 "moss_image_edit_strength": (0, 100)}
 LIST_FIELDS = {"archive_folders", "path_checkpoints", "path_loras", "path_wildcards"}
+# Reasoning effort for local prompt rewrites (gpt-oss reasoning_effort; Low also disables Qwen3 thinking).
+REWRITE_REASONING = ("Low", "Medium", "High")
 
 
 def validate_settings(values):
@@ -26,6 +28,8 @@ def validate_settings(values):
     result.update(validate_guidance(result))
     if result.get("moss_image_edit_format", "Disabled") not in MOSS_EDIT_FORMATS:
         raise ValueError("Choose a supported MOSS Image edit format.")
+    if result.get("llm_rewrite_reasoning", "Low") not in REWRITE_REASONING:
+        raise ValueError("Choose Low, Medium or High prompt rewrite reasoning.")
     for key, value in result.items():
         bounds = INTEGER_RANGES.get(key) or FLOAT_RANGES.get(key)
         if key.endswith("_shift"):

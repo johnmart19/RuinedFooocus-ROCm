@@ -234,6 +234,15 @@ def create_chat(image_controls=None):
                         buttons=[llama_reload],
                     )
                 llama_active_model = gr.State(selected_file)
+
+                def share_chat_model(model):
+                    # Prompt rewrite and enhancement use the model loaded here for this session;
+                    # Settings > Custom GGUF path stays the saved startup default.
+                    if model:
+                        settings.default_settings["llama_localfile"] = model
+
+                llama_active_model.change(share_chat_model, inputs=llama_active_model, queue=False,
+                                          api_visibility='undocumented')
                 llama_source = gr.Radio([("Installed", "Local models"), ("Download", "Downloadable")],
                     value=default_source, label="Model library", show_label=True, elem_id="chat-model-source")
                 llama_model = gr.Dropdown(
