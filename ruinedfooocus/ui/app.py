@@ -438,45 +438,6 @@ with shared.gradio_root as block:
 
     with gr.Row(elem_id="generation-layout"):
         with gr.Column(scale=5, min_width=0, elem_id="generation-workspace"):
-            base_model = gr.Dropdown(
-                label="Image model",
-                choices=checkpoint_choices(
-                    shared.models.get_names("checkpoints"), settings["base_model"]
-                ),
-                value=settings["base_model"],
-                interactive=True,
-                elem_id="create-model",
-            )
-            preset_notice = gr.Markdown("", visible=False)
-            clear_preset_btn = gr.Button("Clear generation preset", visible=False, size="sm")
-            with gr.Row(elem_id="prompt-row"):
-                with gr.Column(scale=5, min_width=0):
-                    with gr.Group():
-                        with gr.Group(), gr.Row():
-                            prompt = gr.Textbox(
-                                label=t("Prompt"),
-                                show_label=False,
-                                placeholder=t("Type prompt here."),
-                                container=False,
-                                autofocus=True,
-                                lines=3,
-                                value=settings["prompt"],
-                                scale=5,
-                            )
-                            add_ctrl("prompt", prompt)
-                            add_ctrl("_imported_prompt", gr.State(None))
-
-                with gr.Column(scale=1, min_width=0, elem_id="prompt-actions"):
-                    run_button = gr.Button(value=t("Generate"), elem_id="generate")
-                    stop_button = gr.Button(value=t("Stop"), interactive=False, visible="hidden")
-                    spellcheck = gr.Dropdown(
-                        label="Wildcards",
-                        visible="hidden",
-                        choices=[],
-                        value="",
-                        scale=1,
-                    )
-
             main_view = gr.Image(
                 elem_id="main_view",
                 value=str(asset_path("init_image.png")),
@@ -534,6 +495,34 @@ with shared.gradio_root as block:
                 value=[str(asset_path("init_image.png"))],
             )
 
+            with gr.Row(elem_id="prompt-row"):
+                with gr.Column(scale=5, min_width=0):
+                    with gr.Group():
+                        with gr.Group(), gr.Row():
+                            prompt = gr.Textbox(
+                                label=t("Prompt"),
+                                show_label=False,
+                                placeholder=t("Type prompt here."),
+                                container=False,
+                                autofocus=True,
+                                lines=3,
+                                value=settings["prompt"],
+                                scale=5,
+                            )
+                            add_ctrl("prompt", prompt)
+                            add_ctrl("_imported_prompt", gr.State(None))
+
+                with gr.Column(scale=1, min_width=0, elem_id="prompt-actions"):
+                    run_button = gr.Button(value=t("Generate"), elem_id="generate")
+                    stop_button = gr.Button(value=t("Stop"), interactive=False, visible="hidden")
+                    spellcheck = gr.Dropdown(
+                        label="Wildcards",
+                        visible="hidden",
+                        choices=[],
+                        value="",
+                        scale=1,
+                    )
+
             @gallery.select(
                 api_visibility="undocumented",
                 inputs=[gallery],
@@ -586,6 +575,17 @@ with shared.gradio_root as block:
                 return params, [file]
 
         with gr.Column(scale=2, min_width=0, elem_id="generation-controls") as right_col:
+            base_model = gr.Dropdown(
+                label="Image model",
+                choices=checkpoint_choices(
+                    shared.models.get_names("checkpoints"), settings["base_model"]
+                ),
+                value=settings["base_model"],
+                interactive=True,
+                elem_id="create-model",
+            )
+            preset_notice = gr.Markdown("", visible=False)
+            clear_preset_btn = gr.Button("Clear generation preset", visible=False, size="sm")
             with gr.Tab(label=t("Generation")):
                 preset_accordion = gr.Accordion(
                     label="Preset:",

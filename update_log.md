@@ -1,5 +1,7 @@
 ### Unreleased (development)
 
+- Image-first Create layout: preview above the prompt/Generate controls, image model selection at the top of the right sidebar, and stacked controls on narrow screens
+
 - Source ZIP builder records exact source/backend revisions and excludes user data and weights; archive launches skip Git updates, source updates preserve local work, and runtime caches/reinstall requests follow the writable data directory
 - Fresh installs show missing checkpoints clearly and provide an explicit default-model download; refreshing files updates the Create model selector without losing its current selection
 - Include the moved One Button presets/style dataset and preserve bundled PNG preset discovery with separate user data, without overwriting custom files

@@ -2,6 +2,12 @@
   "base": "cd7abb27064155f62dea002f745a8ce1b040c990",
   "features": [
     {
+      "id": "image-first-layout",
+      "subject": "Put the image above its prompt and model selection in the sidebar",
+      "requires": ["llama-server-data-logs"],
+      "tests": ["test_ui_workflows.py"]
+    },
+    {
       "id": "llama-server-data-logs",
       "subject": "Keep native chat server logs in writable user data",
       "requires": ["generation-hint-binding"],

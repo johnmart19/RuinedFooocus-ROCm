@@ -61,7 +61,8 @@ If you see **"MetadataIncompleteBuffer"**, a model file is incomplete or damaged
 ## Ruined Edition Features
 
 The main destinations are **Create**, **Chat**, **Library**, **Models** and **Settings**. Create puts the image
-model and prompt first, with Generation, Prompt tools, Image tools and Details beside the preview.
+preview above the prompt and Generate button, with the image model selector and tool tabs in the right sidebar.
+On narrow screens the sidebar follows the image and prompt.
 Settings groups Appearance, Storage, Runtime, Defaults and Integrations. Text size applies immediately
 and is remembered by your browser; browser zoom and keyboard navigation remain available.
 
