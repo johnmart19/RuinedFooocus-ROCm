@@ -2,6 +2,12 @@
   "base": "cd7abb27064155f62dea002f745a8ce1b040c990",
   "features": [
     {
+      "id": "modern-html",
+      "subject": "Bring app-owned HTML up to the current HTML standard",
+      "requires": ["stale-test-updates", "one-button-enhancer-join"],
+      "tests": ["test_html_templates.py", "test_ui_workflows.py"]
+    },
+    {
       "id": "stale-test-updates",
       "subject": "Bring the prompt-range and evolve tests up to date",
       "requires": ["explicit-image-source-compat"],
