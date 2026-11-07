@@ -103,6 +103,8 @@ def finalize(prompt, fmt):
         return prompt
     protected = re.findall(r"<[^<>]+>", prompt)
     text = re.sub(r"<[^<>]+>", " ", prompt)
+    # The local enhancer appends its addition on a new line; join it as another phrase.
+    text = re.sub(r"\s*\n+\s*", ", ", text.strip())
     text = re.sub(r"\bawardwinning\b", "award-winning", text, flags=re.I)
     if fmt in (ANIMA, NATURAL):
         text = _without_weights(text)

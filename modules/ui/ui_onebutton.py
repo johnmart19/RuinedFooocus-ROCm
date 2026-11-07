@@ -728,7 +728,7 @@ def ui_onebutton(prompt, run_event, checkpoint=None):
             
             modeltype = gr.Dropdown(
                 choices=FORMAT_CHOICES, label="Prompt format", value=AUTO,
-                info="Auto follows the image checkpoint. Natural-language models read best with Prompt enhancement on.",
+                info="Auto follows the image checkpoint. For full sentences, run Rewrite prompt on the result.",
             )
             add_ctrl("OBP_modeltype", modeltype)
         gr.Markdown("Local prompt enhancement and rewrite use the model loaded in Chat bots (otherwise "

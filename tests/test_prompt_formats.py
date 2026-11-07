@@ -65,6 +65,12 @@ class FinalizeTests(unittest.TestCase):
         out = pf.finalize("gorgeous 1girl, solo, (smiling:1.2), masterpiece, 8k, trending on artstation", pf.NATURAL)
         self.assertEqual(out, "Gorgeous girl, smiling")
 
+    def test_enhancer_additions_on_new_lines_join_as_phrases(self):
+        self.assertEqual(pf.finalize("gorgeous 1girl, smiling\nsoft rim light", pf.NATURAL),
+                         "Gorgeous girl, smiling, soft rim light")
+        self.assertEqual(pf.finalize("1girl\n(soft light:1.2)", pf.ANIMA),
+                         "masterpiece, best quality, 1girl, soft light")
+
     def test_empty_prompt_is_unchanged(self):
         self.assertEqual(pf.finalize("", pf.ANIMA), "")
 

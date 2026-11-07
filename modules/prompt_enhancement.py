@@ -7,7 +7,8 @@ import threading
 def image_prompt_instruction(model_type, preset_focus=""):
     format_hint = (
         "Use concise comma-separated visual tags."
-        if model_type == "Anime Model" else
+        # One Button tag formats (SDXL, anime) get tags; natural-language models get prose.
+        if model_type in ("Anime Model", "SDXL", "SD1.5") else
         "Use one short sentence."
     )
     instruction = (
