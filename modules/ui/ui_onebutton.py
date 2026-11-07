@@ -19,9 +19,9 @@ subjects = ["all"]
 subjectsubtypesobject = ["all"]
 subjectsubtypeshumanoid = ["all"]
 subjectsubtypesconcept = ["all"]
-modeltypelist = [("SDXL", "SDXL"),
-                 ("Illustrious / NoobAI / Pony", "Anime Model"),
-                 ("FLUX / SD3.5", "Stable Cascade")]
+modeltypelist = [("General", "SDXL"),
+                 ("Anime / illustration tags", "Anime Model"),
+                 ("Natural language", "Stable Cascade")]
 artists = [
     "all",
     "all (wild)",
@@ -720,7 +720,8 @@ def ui_onebutton(prompt, run_event):
             add_ctrl("OBP_promptenhance", promptenhance)
             
             modeltype = gr.Dropdown(
-                choices=modeltypelist, label="Model type", value="SDXL"
+                choices=modeltypelist, label="Prompt format", value="SDXL",
+                info="Controls prompt wording, not the selected checkpoint.",
             )
             add_ctrl("OBP_modeltype", modeltype)
         gr.Markdown("Local chat model uses the GGUF selected in Chatbot settings.")

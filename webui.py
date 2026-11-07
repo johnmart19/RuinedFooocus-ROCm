@@ -824,7 +824,7 @@ with shared.gradio_root as block:
                             container=False,
                         )
                         model_gallery = gr.Gallery(
-                            label=f"SDXL model: {settings['base_model']}",
+                            label=f"Checkpoint: {settings['base_model']}",
                             show_label=False,
                             height="auto",
                             allow_preview=False,
