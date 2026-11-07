@@ -9,6 +9,7 @@
 * Preserve distinct custom presets when both old and new names exist, and tolerate missing bundled anime defaults
 * Native image edit in Image tools, chat and the API on edit-capable checkpoints, with image-to-image as the fallback
 * Checkpoint tools: inspect, check weights and create FP16 copies; clear messages when a model cannot load
+* Keep checkpoint conversion destinations protected from overwrite on no-link filesystems and remove partial copies after write failures
 * Removed unused merge-recipe handling, legacy YAML checkpoint configs, style-model/merge-cache placeholders and merge artwork; native ComfyUI loading and checkpoint tools remain
 * OpenAI-compatible API (`--api`) and a restricted guest page (`--guest`)
 * Responsive UI for phones, laptops and 4K screens, and modernised HTML pages

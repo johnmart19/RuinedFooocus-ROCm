@@ -77,6 +77,7 @@ The main window has the prompt box and Generate button above the **Generation**,
   ComfyUI detects checkpoint configuration directly; legacy YAML configs and merge-recipe files are not used.
 * **Models > Model > Checkpoint tools** reports a checkpoint's size and tensor types, checks its weights for
   damage (NaN/Inf), and can create a smaller FP16 copy while keeping the original.
+  Existing destination files are never overwritten, including on drives without hard-link support.
 * If a checkpoint cannot load, the error names the cause: a missing file, a missing text encoder or VAE, a
   damaged or incomplete download, or a file that is not an image checkpoint.
 * Model gallery with animated thumbnails, Civitai metadata and trigger words, and subfolders. Files dropped into

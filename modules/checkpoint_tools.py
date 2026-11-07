@@ -106,7 +106,7 @@ def check_weights(path, progress=lambda fraction, description: None):
 
 
 def _publish(source, target):
-    """Move a finished file into place without ever replacing an existing one."""
+    """Publish a finished file without ever replacing an existing one."""
     try:
         # Atomic and no-overwrite on NTFS and Linux filesystems.
         os.link(source, target)
@@ -115,11 +115,22 @@ def _publish(source, target):
         raise
     except OSError:
         # exFAT/FAT drives and some network shares have no hard links.
-        if os.name != "nt" and target.exists():
-            raise FileExistsError(f"Already exists: {target.name}")
-    # Windows rename refuses to replace an existing file; on other systems the
-    # existence check above leaves only a negligible race on such drives.
-    os.rename(source, target)
+        if os.name == "nt":
+            # Unlike POSIX rename, Windows rename refuses to replace a target.
+            os.rename(source, target)
+            return
+    # Without hard links, POSIX rename could overwrite a concurrently created
+    # target. Exclusive creation keeps the no-overwrite guarantee on these drives.
+    destination = target.open('xb')
+    try:
+        with destination, source.open('rb') as incoming:
+            shutil.copyfileobj(incoming, destination, CHUNK_SIZE)
+            destination.flush()
+            os.fsync(destination.fileno())
+        source.unlink()
+    except BaseException:
+        target.unlink(missing_ok=True)
+        raise
 
 
 def create_fp16_copy(path, cache_dir, model_info=None, preview=None,

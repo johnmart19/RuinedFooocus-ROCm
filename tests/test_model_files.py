@@ -82,6 +82,59 @@ class ReportTests(unittest.TestCase):
 
 
 class PublishTests(unittest.TestCase):
+    def test_fp16_conversion_publishes_valid_copies_without_touching_original(self):
+        import numpy as np
+        from safetensors.numpy import load_file, save_file
+        with tempfile.TemporaryDirectory(dir=ROOT/'tmp') as directory:
+            source=Path(directory)/'tiny.safetensors'
+            values=np.linspace(-10,10,4096,dtype=np.float32)
+            save_file({'weight':values},source)
+            original=source.read_bytes()
+            with mock.patch.object(checkpoint_tools,'os',self.no_link_posix()):
+                result=checkpoint_tools.create_fp16_copy(source,Path(directory)/'cache')
+            target=Path(result['path'])
+            np.testing.assert_array_equal(load_file(target)['weight'],values.astype(np.float16))
+            self.assertEqual(source.read_bytes(),original)
+            self.assertTrue((Path(directory)/'cache'/target.with_suffix('.json').name).is_file())
+            with self.assertRaises(FileExistsError):
+                checkpoint_tools.create_fp16_copy(source,Path(directory)/'cache')
+            self.assertEqual(source.read_bytes(),original)
+
+    def no_link_posix(self):
+        platform = mock.Mock(wraps=os)
+        platform.name = 'posix'
+        platform.link.side_effect = OSError('no hard links')
+        platform.rename = os.replace  # POSIX rename semantics, even on a Windows test host.
+        return platform
+
+    def test_no_link_fallback_cannot_overwrite_a_target_after_a_stale_existence_check(self):
+        with tempfile.TemporaryDirectory(dir=ROOT/'tmp') as directory:
+            source, target = Path(directory)/'source', Path(directory)/'target'
+            source.write_bytes(b'converted');target.write_bytes(b'other writer')
+            exists = Path.exists
+            with mock.patch.object(checkpoint_tools,'os',self.no_link_posix()), \
+                 mock.patch.object(Path,'exists',autospec=True,
+                    side_effect=lambda path:False if path==target else exists(path)):
+                with self.assertRaises(FileExistsError):
+                    checkpoint_tools._publish(source,target)
+            self.assertEqual(target.read_bytes(),b'other writer')
+            self.assertEqual(source.read_bytes(),b'converted')
+
+    def test_no_link_copy_failure_removes_only_its_partial_target(self):
+        with tempfile.TemporaryDirectory(dir=ROOT/'tmp') as directory:
+            source, target = Path(directory)/'source', Path(directory)/'target'
+            source.write_bytes(b'converted')
+            with mock.patch.object(checkpoint_tools,'os',self.no_link_posix()), \
+                 mock.patch.object(checkpoint_tools.shutil,'copyfileobj',side_effect=OSError('disk full')):
+                with self.assertRaisesRegex(OSError,'disk full'):
+                    checkpoint_tools._publish(source,target)
+            self.assertFalse(target.exists())
+            self.assertEqual(source.read_bytes(),b'converted')
+            with mock.patch.object(checkpoint_tools,'os',self.no_link_posix()):
+                checkpoint_tools._publish(source,target)
+            self.assertEqual(target.read_bytes(),b'converted')
+            self.assertFalse(source.exists())
+
     def test_drives_without_hard_links_still_publish_without_overwriting(self):
         with tempfile.TemporaryDirectory(dir=ROOT / "tmp") as directory:
             source, target = Path(directory) / "source", Path(directory) / "target"

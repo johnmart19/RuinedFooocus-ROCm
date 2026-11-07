@@ -2,6 +2,17 @@
   "base": "cd7abb27064155f62dea002f745a8ce1b040c990",
   "features": [
     {
+      "id": "checkpoint-exclusive-publication",
+      "subject": "Prevent checkpoint copy overwrites on no-link filesystems",
+      "requires": [
+        "preset-selection-integrity"
+      ],
+      "tests": [
+        "test_model_files.py",
+        "test_model_cache.py"
+      ]
+    },
+    {
       "id": "preset-selection-integrity",
       "subject": "Preserve custom preset selection across legacy names",
       "requires": [
