@@ -1,5 +1,7 @@
 ### Unreleased (development)
 
+- Prompt expansion downloads only when selected, reusing existing weights and custom tokenizer files; optional SuperPrompt runs on the shared worker, honors CPU/DirectML mode and releases device memory without deleting weights
+
 - Pinned developer formatting for owned Python, Markdown, JSON, CSS, HTML and JavaScript; executable Python and JSON values checked for preservation, with model/tokenizer/data/vendor files excluded
 
 - Task-based Create, Chat, Library, Models and Settings navigation; model/prompt controls first, grouped preferences, browser-specific text sizing, explicit generation-default saving and opt-in startup weight loading

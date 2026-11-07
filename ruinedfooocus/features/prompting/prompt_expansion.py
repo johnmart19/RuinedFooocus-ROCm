@@ -8,9 +8,12 @@ import random
 import torch
 
 
-from ruinedfooocus.core.paths import data_path
+from ruinedfooocus.features.prompting.expansion_resources import (
+    expansion_model_path,
+    ensure_expansion_resources,
+)
 
-fooocus_expansion_path = str(data_path("prompt_expansion"))
+fooocus_expansion_path = str(expansion_model_path())
 
 SEED_LIMIT_NUMPY = 2**32
 neg_inf = -8192.0
@@ -39,6 +42,7 @@ class FooocusExpansion:
     @classmethod
     def load_model_and_tokenizer(cls, model_path):
         if cls.tokenizer is None or cls.model is None:
+            model_path = ensure_expansion_resources(model_path)
             cls.tokenizer = AutoTokenizer.from_pretrained(model_path)
             cls.model = AutoModelForCausalLM.from_pretrained(model_path)
             cls.model.to("cpu")

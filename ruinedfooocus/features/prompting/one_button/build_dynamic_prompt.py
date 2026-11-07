@@ -21,7 +21,7 @@ from ruinedfooocus.features.prompting.one_button.random_functions import (
     chance_roll,
 )
 
-from ruinedfooocus.features.prompting.superprompter.superprompter import *
+from ruinedfooocus.features.prompting.superprompter.runtime import answer
 
 from ruinedfooocus.features.prompting.one_button.one_button_presets import OneButtonPresets
 
@@ -7238,7 +7238,6 @@ def one_button_superprompt(
         seed = random.randint(1, 1000000)
 
     done = False
-    load_models()
 
     superprompterstyleslist = csv_to_list("superprompter_styles")
     descriptorlist = csv_to_list("descriptors")

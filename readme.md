@@ -7,10 +7,11 @@ where the selected model and runtime are compatible.
 ## Install
 
 RuinedFooocus needs Python 3.11–3.14 (3.10 still works but is deprecated) and Git. The launchers create a
-`venv` folder, install the right PyTorch build for your GPU and start the web UI. The first start downloads
-several GB of packages and the default model
+`venv` folder, install the right PyTorch build for your GPU and start the web UI. Package installation can
+download several GB. The optional default image model is
 [sd_xl_base_1.0_0.9vae.safetensors](https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/sd_xl_base_1.0_0.9vae.safetensors)
-into `models/checkpoints`. If you already have it, copy it there first.
+and belongs in `models/checkpoints`. If you already have it, keep your existing copy. Optional prompt
+expansion and SuperPrompt components download only when their feature is used; local weights are preserved.
 
 ### Windows
 

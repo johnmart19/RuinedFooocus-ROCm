@@ -354,26 +354,6 @@ def clone_git_repos(offline=False):
             sys.path.append(add_path)
 
 
-def download_models():
-    from ruinedfooocus.core.util import load_file_from_url
-    from ruinedfooocus.app.state import path_manager
-
-    model_filenames = [
-        (
-            "prompt_expansion",
-            "pytorch_model.bin",
-            "https://huggingface.co/lllyasviel/misc/resolve/main/fooocus_expansion.bin",
-        ),
-    ]
-
-    for model_dir, file_name, url in model_filenames:
-        load_file_from_url(
-            url=url,
-            model_dir=model_dir,
-            file_name=file_name,
-        )
-
-
 from ruinedfooocus.app.arguments import args
 from ruinedfooocus.app.startup_port import configure_port
 from ruinedfooocus.integrations.web_access import validate_web_access
@@ -459,14 +439,10 @@ try:
 except:
     print(f"WARNING: Failed checking git-repos. Trying to start without update.")
 
-# Online auxiliary downloads import shared state, which starts metadata scanning.
-# Initialize native memory services before that scan imports backend modules.
+# Initialize native memory services before UI model discovery imports backend modules.
 from ruinedfooocus.backends.comfy.comfy_compat import initialize_backend
 
 initialize_backend(args)
-
-if not offline:
-    download_models()
 
 from ruinedfooocus.core.paths import data_path
 

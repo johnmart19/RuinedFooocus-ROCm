@@ -782,6 +782,7 @@ def ui_onebutton(prompt, run_event, checkpoint=None):
                 choices=promptenhancelist,
                 label="Prompt enhancement",
                 value="none",
+                info="SuperPrompt downloads its optional model on first use. Local chat model reuses Chat.",
             )
             add_ctrl("OBP_promptenhance", promptenhance)
 
