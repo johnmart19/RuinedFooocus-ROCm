@@ -2,6 +2,12 @@
   "base": "cd7abb27064155f62dea002f745a8ce1b040c990",
   "features": [
     {
+      "id": "stale-test-updates",
+      "subject": "Bring the prompt-range and evolve tests up to date",
+      "requires": ["explicit-image-source-compat"],
+      "tests": ["test_image_cleanup.py", "test_image_ui_audit.py", "test_prompt_schedule_sigmas.py"]
+    },
+    {
       "id": "explicit-image-source-compat",
       "subject": "Keep tool choices and the LoRA cache test working with explicit image edit",
       "requires": ["explicit-image-sources"],
