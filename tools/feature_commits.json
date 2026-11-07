@@ -2,6 +2,12 @@
   "base": "cd7abb27064155f62dea002f745a8ce1b040c990",
   "features": [
     {
+      "id": "model-load-feedback",
+      "subject": "Explain model load failures and speed up checkpoint inspection",
+      "requires": ["modern-html", "offline-chatbots"],
+      "tests": ["test_model_files.py", "test_model_headers.py", "test_model_cache.py", "test_chatbots.py"]
+    },
+    {
       "id": "modern-html",
       "subject": "Bring app-owned HTML up to the current HTML standard",
       "requires": ["stale-test-updates", "one-button-enhancer-join"],
