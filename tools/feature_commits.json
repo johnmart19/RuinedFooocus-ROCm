@@ -2,6 +2,12 @@
   "base": "cd7abb27064155f62dea002f745a8ce1b040c990",
   "features": [
     {
+      "id": "explicit-image-source-compat",
+      "subject": "Keep tool choices and the LoRA cache test working with explicit image edit",
+      "requires": ["explicit-image-sources"],
+      "tests": ["test_image_tool_registry.py", "test_model_cache.py", "test_image_request_isolation.py"]
+    },
+    {
       "id": "one-button-enhancer-join",
       "subject": "Fit local enhancer additions into One Button prompt formats",
       "requires": ["one-button-prompt-formats"],
