@@ -43,12 +43,13 @@ class OneButtonPresets:
                 settings['subject'] = 'all'
             # Upgrade unchanged bundled anime text, preserving custom preset edits.
             if name in ("Waifu's", "Husbando's"):
+                bundled = default_data.get(name, {})
                 for key, old in {
                     "prefixprompt": "(((masterpiece))), (((best quality))), anime style, 2d,",
                     "suffixprompt": "key visual",
                 }.items():
-                    if settings.get(key) == old:
-                        settings[key] = default_data[name][key]
+                    if settings.get(key) == old and key in bundled:
+                        settings[key] = bundled[key]
 
         try:
             self._save_data(self.OBP_FILE, data)
@@ -69,8 +70,12 @@ class OneButtonPresets:
         self._save_data(self.OBP_FILE, perf_options)
         self.opb_presets = self.load_obp_presets()
 
+    def resolve_name(self, name):
+        # If both names were customized, a saved selection must keep its own values.
+        return name if name in self.opb_presets else self.RENAMED.get(name, name)
+
     def get_obp_preset(self, name):
-        name = self.RENAMED.get(name, name)
+        name = self.resolve_name(name)
         # Saved settings or API calls may name a deleted/renamed preset; fall back to Standard.
         if name in self.opb_presets:
             return self.opb_presets[name]

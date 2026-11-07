@@ -76,6 +76,40 @@ class FinalizeTests(unittest.TestCase):
 
 
 class PresetFallbackTests(unittest.TestCase):
+    def test_existing_legacy_and_modern_custom_presets_remain_distinct(self):
+        from random_prompt.one_button_presets import OneButtonPresets
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)/'presets.json'
+            data = {'Standard': {'subject':'all'}, 'WIERD HATS': {'subject':'old custom'},
+                    'Weird Hats': {'subject':'new custom'}}
+            path.write_text(json.dumps(data), encoding='utf-8')
+            with mock.patch.object(OneButtonPresets, 'OBP_FILE', path), \
+                 mock.patch.object(OneButtonPresets, 'DEFAULT_OBP_FILE', path):
+                presets = OneButtonPresets()
+                self.assertEqual(presets.get_obp_preset('WIERD HATS')['subject'], 'old custom')
+                self.assertEqual(presets.get_obp_preset('Weird Hats')['subject'], 'new custom')
+                import ast
+                tree = ast.parse((ROOT/'modules/ui/ui_onebutton.py').read_text(encoding='utf-8'))
+                call = next(n.value for n in ast.walk(tree) if isinstance(n, ast.Assign)
+                            and any(isinstance(t, ast.Name) and t.id=='OBP_preset' for t in n.targets))
+                value = next(k.value for k in call.keywords if k.arg=='value')
+                self.assertEqual(eval(compile(ast.Expression(value),'preset_choice','eval'),
+                    {'OBPresets':presets,'settings':{'OBP_preset':'WIERD HATS'}}), 'WIERD HATS')
+                self.assertEqual(json.loads(path.read_text(encoding='utf-8')), data)
+
+    def test_legacy_anime_customization_survives_missing_bundled_preset(self):
+        from random_prompt.one_button_presets import OneButtonPresets
+        with tempfile.TemporaryDirectory() as tmp:
+            default, user = Path(tmp)/'default.json', Path(tmp)/'user.json'
+            default.write_text(json.dumps({'Standard':{'subject':'all'}}),encoding='utf-8')
+            custom = {'subject':'all','prefixprompt':'(((masterpiece))), (((best quality))), anime style, 2d,',
+                      'suffixprompt':'key visual'}
+            user.write_text(json.dumps({"Waifu's":custom}),encoding='utf-8')
+            with mock.patch.object(OneButtonPresets,'OBP_FILE',user), \
+                 mock.patch.object(OneButtonPresets,'DEFAULT_OBP_FILE',default):
+                presets = OneButtonPresets()
+                self.assertEqual(presets.get_obp_preset("Waifu's"),custom)
+
     def test_unknown_preset_uses_standard(self):
         from random_prompt.one_button_presets import OneButtonPresets
         with tempfile.TemporaryDirectory() as tmp:

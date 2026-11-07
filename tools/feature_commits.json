@@ -2,6 +2,19 @@
   "base": "cd7abb27064155f62dea002f745a8ce1b040c990",
   "features": [
     {
+      "id": "preset-selection-integrity",
+      "subject": "Preserve custom preset selection across legacy names",
+      "requires": [
+        "weird-hats-preset"
+      ],
+      "tests": [
+        "test_prompt_formats.py",
+        "test_local_prompt_enhancement.py",
+        "test_prompt_wildcards.py",
+        "test_ui_workflows.py"
+      ]
+    },
+    {
       "id": "weird-hats-preset",
       "subject": "Rename the Weird Hats preset without losing saved choices",
       "requires": [

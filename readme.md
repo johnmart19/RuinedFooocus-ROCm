@@ -97,6 +97,7 @@ The main window has the prompt box and Generate button above the **Generation**,
   Prompt format follows the checkpoint: tags for SD/SDXL, anime tags for Illustrious/NoobAI/Pony, tags with a
   description for Anima, and natural language for Flux, Qwen and similar models.
   The bundled **Weird Hats** preset keeps existing saved selections and custom edits under its old spelling.
+  If both spellings already contain custom presets, each saved selection keeps its own values.
 * **Rewrite prompt** and prompt enhancement use the local chat model; rewrite presets are text files in `llamas`.
 * Evolve creates variations of the current prompt (in **Image tools**).
 

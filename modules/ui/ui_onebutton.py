@@ -590,7 +590,7 @@ def ui_onebutton(prompt, run_event, checkpoint=None):
                     label="One Button Preset",
                     choices=[OBPresets.RANDOM_PRESET_OBP] + list(OBPresets.opb_presets.keys())
                     + [OBPresets.CUSTOM_OBP],
-                    value=OBPresets.RENAMED.get(settings["OBP_preset"], settings["OBP_preset"]),
+                    value=OBPresets.resolve_name(settings["OBP_preset"]),
                 )
                 add_ctrl("OBP_preset", OBP_preset)
         

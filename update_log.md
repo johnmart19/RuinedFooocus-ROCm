@@ -6,6 +6,7 @@
 * Prompt enhancement uses the Chat bots model and keeps your prompt; Erniehancer is replaced by the "Local chat model" style
 * One Button Prompt formats follow the checkpoint: SD/SDXL tags, Illustrious/NoobAI/Pony tags, Anima and natural language
 * Renamed the bundled Weird Hats preset, migrating its old saved name without replacing custom preset edits
+* Preserve distinct custom presets when both old and new names exist, and tolerate missing bundled anime defaults
 * Native image edit in Image tools, chat and the API on edit-capable checkpoints, with image-to-image as the fallback
 * Checkpoint tools: inspect, check weights and create FP16 copies; clear messages when a model cannot load
 * Removed unused merge-recipe handling, legacy YAML checkpoint configs, style-model/merge-cache placeholders and merge artwork; native ComfyUI loading and checkpoint tools remain
