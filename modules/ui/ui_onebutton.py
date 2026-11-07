@@ -4,6 +4,7 @@ import shared
 from shared import add_ctrl
 
 from random_prompt.build_dynamic_prompt import build_dynamic_prompt
+from random_prompt.prompt_formats import AUTO, FORMAT_CHOICES, engine_mode, finalize, format_for
 
 from random_prompt.csv_reader import load_config_csv
 
@@ -19,9 +20,6 @@ subjects = ["all"]
 subjectsubtypesobject = ["all"]
 subjectsubtypeshumanoid = ["all"]
 subjectsubtypesconcept = ["all"]
-modeltypelist = [("General", "SDXL"),
-                 ("Anime / illustration tags", "Anime Model"),
-                 ("Natural language", "Stable Cascade")]
 artists = [
     "all",
     "all (wild)",
@@ -398,7 +396,10 @@ if generateconceptmixer:
     subjectsubtypesconcept.append("concept mixer")
 
 
-def ui_onebutton(prompt, run_event):
+def ui_onebutton(prompt, run_event, checkpoint=None):
+    # Auto resolves against the checkpoint actually used (presets may override the dropdown).
+    checkpoint_input = [checkpoint] if checkpoint is not None else []
+
     def gen_prompt(
         insanitylevel,
         subject,
@@ -419,7 +420,9 @@ def ui_onebutton(prompt, run_event):
         OBP_preset,
         promptenhance,
         modeltype,
+        checkpoint=None,
     ):
+        fmt = format_for(modeltype, checkpoint)
         prompt = build_dynamic_prompt(
             insanitylevel,
             subject,
@@ -444,12 +447,12 @@ def ui_onebutton(prompt, run_event):
             0,
             givenoutfit,
             False,
-            modeltype,
+            engine_mode(fmt),
             OBP_preset,
             promptenhance,
         )
 
-        return prompt 
+        return finalize(prompt, fmt)
 
     def instant_gen_prompt(
         insanitylevel,
@@ -472,7 +475,9 @@ def ui_onebutton(prompt, run_event):
         promptenhance,
         modeltype,
         run_event,
+        checkpoint=None,
     ):
+        fmt = format_for(modeltype, checkpoint)
         prompt = build_dynamic_prompt(
             insanitylevel,
             subject,
@@ -497,12 +502,12 @@ def ui_onebutton(prompt, run_event):
             0,
             givenoutfit,
             False,
-            modeltype,
+            engine_mode(fmt),
             OBP_preset,
-            promptenhance, 
+            promptenhance,
         )
 
-        return prompt, run_event+1
+        return finalize(prompt, fmt), run_event+1
 
     def add_prompt(
         prompt,
@@ -525,11 +530,13 @@ def ui_onebutton(prompt, run_event):
         OBP_preset,
         promptenhance,
         modeltype,
+        checkpoint=None,
     ):
+        fmt = format_for(modeltype, checkpoint)
         prompt = (
             prompt
             + "---"
-            + build_dynamic_prompt(
+            + finalize(build_dynamic_prompt(
                 insanitylevel,
                 subject,
                 artist,
@@ -553,10 +560,10 @@ def ui_onebutton(prompt, run_event):
                 0,
                 givenoutfit,
                 False,
-                modeltype,
+                engine_mode(fmt),
                 OBP_preset,
                 promptenhance,
-            )
+            ), fmt)
         )
 
         return prompt
@@ -720,8 +727,8 @@ def ui_onebutton(prompt, run_event):
             add_ctrl("OBP_promptenhance", promptenhance)
             
             modeltype = gr.Dropdown(
-                choices=modeltypelist, label="Prompt format", value="SDXL",
-                info="Controls prompt wording, not the selected checkpoint.",
+                choices=FORMAT_CHOICES, label="Prompt format", value=AUTO,
+                info="Auto follows the image checkpoint. Natural-language models read best with Prompt enhancement on.",
             )
             add_ctrl("OBP_modeltype", modeltype)
         gr.Markdown("Local prompt enhancement and rewrite use the model loaded in Chat bots (otherwise "
@@ -980,7 +987,7 @@ def ui_onebutton(prompt, run_event):
                 promptenhance,
                 modeltype,
                 run_event,
-            ],
+            ] + checkpoint_input,
             outputs=[prompt, run_event],
         )
         random_button.click(
@@ -1006,7 +1013,7 @@ def ui_onebutton(prompt, run_event):
                 OBP_preset,
                 promptenhance,
                 modeltype,
-            ],
+            ] + checkpoint_input,
             outputs=[prompt],
         )
         add_random_button.click(
@@ -1033,7 +1040,7 @@ def ui_onebutton(prompt, run_event):
                 OBP_preset,
                 promptenhance,
                 modeltype,
-            ],
+            ] + checkpoint_input,
             outputs=[prompt],
         )
 

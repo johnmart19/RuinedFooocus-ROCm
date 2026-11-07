@@ -1263,7 +1263,7 @@ with shared.gradio_root as block:
                 queue=False,
             )
 
-            ui_onebutton.ui_onebutton(prompt, run_event)
+            ui_onebutton.ui_onebutton(prompt, run_event, effective_image_checkpoint)
 
             # Image tools follow a preset's effective checkpoint without changing
             # the user's Main model selection or API-default identity.

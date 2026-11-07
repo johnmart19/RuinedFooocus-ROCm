@@ -284,6 +284,8 @@ def process_prompt(style, prompt, negative, gen_data=None):
         enhanced = True
         return result
     if use_random_prompt(gen_data, prompt):
+        from random_prompt.prompt_formats import format_for, engine_mode, finalize
+        prompt_format = format_for(gen_data.get("OBP_modeltype", "Auto"), gen_data.get("base_model_name"))
         prompt = build_dynamic_prompt(
             insanitylevel=gen_data["obp_insanitylevel"],
             forcesubject=gen_data["obp_subject"],
@@ -303,10 +305,11 @@ def process_prompt(style, prompt, negative, gen_data=None):
             antivalues=gen_data["obp_antistring"],
             OBP_preset=gen_data["OBP_preset"],
             advancedprompting=False,
-            base_model=gen_data["OBP_modeltype"],
+            base_model=engine_mode(prompt_format),
             prompt_enhancer=gen_data["OBP_promptenhance"],
             enhancer=enhance_once,
         )
+        prompt = finalize(prompt, prompt_format)
 
     # styles
     pattern = re.compile(r"<style:([^>]+)>")

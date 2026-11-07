@@ -2115,10 +2115,8 @@ def build_dynamic_prompt(insanitylevel = 5, forcesubject = "all", artists = "all
             if(overrideoutfit!=""):
                 outfitmode = 2
             if(animalashuman or subjectchooser in ["human","fictional", "non fictional", "humanoid", "manwomanrelation","manwomanmultiple", "firstname"]  and chance_roll(insanitylevel, outfitchance) and generateoutfit == True and humanspecial != 1):
-                if(random.randint(0,10)==0):
-                    outfitmode = 1
-                else:
-                    outfitmode = 2
+                # Outfit-in-front produced "a dressed in ... dress, 1girl"; keep it after the subject.
+                outfitmode = 2
 
             if(outfitmode == 1):
                 completeprompt += "OR(wearing;dressed in;in;normal) OR(;OR(;a very;rare) -outfitdescriptor-;normal) OR(;-color-;uncommon) OR(;-culture-;uncommon) OR(;-material-;rare) -outfit-, "

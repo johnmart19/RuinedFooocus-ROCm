@@ -64,4 +64,9 @@ class OneButtonPresets:
         self.opb_presets = self.load_obp_presets()
 
     def get_obp_preset(self, name):
-        return self.opb_presets[name]
+        # Saved settings or API calls may name a deleted/renamed preset; fall back to Standard.
+        if name in self.opb_presets:
+            return self.opb_presets[name]
+        if name not in ("", self.CUSTOM_OBP, self.RANDOM_PRESET_OBP):
+            print(f"One Button preset {name!r} not found, using Standard.")
+        return self.opb_presets.get("Standard") or next(iter(self.opb_presets.values()), {})
