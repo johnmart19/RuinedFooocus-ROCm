@@ -2,6 +2,21 @@
   "base": "cd7abb27064155f62dea002f745a8ce1b040c990",
   "features": [
     {
+      "id": "prompt-text-integrity",
+      "subject": "Preserve native prompt text and bound schedule processing",
+      "requires": [
+        "image-native-cleanup",
+        "validation"
+      ],
+      "tests": [
+        "test_prompt_scheduling.py",
+        "test_prompt_schedule_sigmas.py",
+        "test_prompt_lengths.py",
+        "test_sequence_prefill.py",
+        "test_image_hidream_references.py"
+      ]
+    },
+    {
       "id": "launchers",
       "subject": "Add portable Windows and Linux launchers",
       "requires": [],

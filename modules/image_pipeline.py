@@ -3,7 +3,6 @@ import numpy as np
 import os
 import torch
 import traceback
-import re
 
 import modules.controlnet
 import modules.async_worker as worker
@@ -469,10 +468,6 @@ class pipeline:
 
     def textencode(self, id, text, clip_skip):
         update = False
-        # Don't encode <lora> and things like that
-        for pat in [r"<lora:[^>]*>", r"<facerestore>"]:
-            text = re.sub(pat, "", text)
-        text = text.strip(", ")
         hash = f"{text} {clip_skip}"
         if hash != self.conditions[id]["text"]:
             # Keep the model's native CLIP layer intact when switching presets.
@@ -529,8 +524,8 @@ class pipeline:
         seed = gen_data["seed"] if isinstance(gen_data["seed"], int) else random.randint(1, 2**32)
         if "<facerestore>" in gen_data.get("positive_prompt", ""):
             gen_data["facerestore"] = True
-        positive_prompt = gen_data["positive_prompt"]
-        negative_prompt = gen_data["negative_prompt"]
+        positive_prompt = gen_data["positive_prompt"].replace("<facerestore>", "")
+        negative_prompt = gen_data["negative_prompt"].replace("<facerestore>", "")
         image_edit = (self.model_info.get('options', {}).get('has_image_edit', False) or
                       (architecture == "MOSSImage" and guidance['moss_image_edit_format'] != "Disabled"))
         hidream_edit = architecture == 'HiDreamO1'
@@ -668,18 +663,19 @@ class pipeline:
             self.textencode("+", positive_prompt, clip_skip)
             self.textencode("-", negative_prompt, clip_skip)
 
-            if "[" in positive_prompt and "]" in positive_prompt and not positive_prompt.strip().startswith("{"):
-                prompt_per_step = pp.prompt_switch_per_step(positive_prompt, gen_data["steps"])
-                perc_per_step = round(100 / gen_data["steps"], 2)
+            prompt_per_step = pp.prompt_switch_per_step(positive_prompt, gen_data["steps"])
+            if prompt_per_step:
+                encoded_switches = {}
                 for i in range(len(prompt_per_step)):
-                    self.textencode("switch", prompt_per_step[i], clip_skip)
-                    positive_switch = self.conditions["switch"]["cache"]
-                    start_perc = round((perc_per_step * i) / 100, 2)
-                    end_perc = round((perc_per_step * (i + 1)) / 100, 2)
-                    if end_perc >= 0.99:
-                        end_perc = 1
+                    text = prompt_per_step[i]
+                    if text not in encoded_switches:
+                        self.textencode("switch", text, clip_skip)
+                        encoded_switches[text] = self.conditions["switch"]["cache"]
+                    positive_switch = encoded_switches[text]
+                    start_perc = i / len(prompt_per_step)
+                    end_perc = (i + 1) / len(prompt_per_step)
                     positive_switch = conditioning_set_values(positive_switch,
-                        {"start_percent": start_perc, "end_percent": end_perc})
+                        {"start_percent": start_perc, "end_percent": end_perc, "_rf_prompt_step": i})
                     switched_prompt += positive_switch
 
 
@@ -834,6 +830,9 @@ class pipeline:
 
         # Flux embeds guidance in the conditioning instead of sampler CFG.
         positive_cond = switched_prompt if switched_prompt else positive_conditioning
+        from modules.prompt_scheduling import bind_prompt_steps
+        positive_cond = bind_prompt_steps(positive_cond, sampling_model, gen_data['steps'],
+                                          sampler_name, scheduler, denoise)
         if isinstance(self.xl_base.unet.model, Flux):
             if controlnet.get("type", "") == "kontext":
                 positive_cond = ReferenceLatent().execute(positive_cond, latent=latent)[0]
