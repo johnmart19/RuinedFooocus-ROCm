@@ -176,10 +176,6 @@ class pipeline:
             print(f"ERROR: Could not load checkpoint {name}")
             return
 
-        if Path(filename).suffix == '.merge':
-            print(f"Error: Model type not supported.")
-            return
-
         if input_unet is None: # Be quiet if we already loaded a unet
             print(f"Loading base {'unet' if unet_only else 'model'}: {name}")
 

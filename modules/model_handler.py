@@ -341,8 +341,6 @@ class Models:
             path = self.get_file(model_type, path)
         if path is None:
             return {}
-        if path.suffix == ".merge":
-            return {"baseModel": "Merge"}
 
         json_path = (self.cache_paths[model_type] / path.name).with_suffix(".json")
         try:
@@ -579,8 +577,6 @@ class Models:
         from shared import settings
         from modules.model_previews import write_preview
 
-        if model.get("baseModel") == "Merge":
-            return False
         caption = Path(path).stem if "caption" in settings.default_settings.get("model_preview", "").split(",") else ""
         previews = model.get("images") or []
         if not isinstance(previews, list):

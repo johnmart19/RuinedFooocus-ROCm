@@ -272,11 +272,6 @@ class pipeline:
                                "choose another checkpoint in the Models tab.")
             return
 
-        if Path(filename).suffix == '.merge':
-            print(f"Error: Model type not supported.")
-            self.load_error = f"{name} is a merge file, which cannot be loaded as an image model here."
-            return
-
         if input_unet is None: # Be quiet if we already loaded a unet
             print(f"Loading base {'unet' if unet_only else 'model'}: {name}")
 

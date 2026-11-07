@@ -2,6 +2,23 @@
   "base": "cd7abb27064155f62dea002f745a8ce1b040c990",
   "features": [
     {
+      "id": "retired-merge-assets",
+      "subject": "Remove unused merge recipes and legacy model assets",
+      "requires": [
+        "docs-refresh",
+        "launchers",
+        "video",
+        "retired-setup-tools"
+      ],
+      "tests": [
+        "test_model_files.py",
+        "test_model_cache.py",
+        "test_model_headers.py",
+        "test_image_settings.py",
+        "test_image_native_helpers.py"
+      ]
+    },
+    {
       "id": "retired-setup-tools",
       "subject": "Retire obsolete portable setup tooling",
       "requires": [

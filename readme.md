@@ -74,13 +74,14 @@ The main window has the prompt box and Generate button above the **Generation**,
   PixArt, PixelDiT, AuraFlow, Cosmos Predict 2, Boogu and Ideogram 4 (limited). See the [update log](update_log.md).
 * Safetensors and GGUF checkpoints, including UNet-only files. **Models > Model > Image model components** lists
   and downloads the text encoders and VAE a checkpoint needs.
+  ComfyUI detects checkpoint configuration directly; legacy YAML configs and merge-recipe files are not used.
 * **Models > Model > Checkpoint tools** reports a checkpoint's size and tensor types, checks its weights for
   damage (NaN/Inf), and can create a smaller FP16 copy while keeping the original.
 * If a checkpoint cannot load, the error names the cause: a missing file, a missing text encoder or VAE, a
   damaged or incomplete download, or a file that is not an image checkpoint.
 * Model gallery with animated thumbnails, Civitai metadata and trigger words, and subfolders. Files dropped into
   `models/inbox` are identified on Civitai and moved to the right folder.
-* Custom model and output folders in `settings/paths.json` (on Windows use `/` or `\` instead of `\`).
+* Custom model and output folders in `settings/paths.json` (on Windows use `/` or `\\` instead of `\`).
 
 ### Video models
 * Wan 2.1/2.2, Hunyuan Video, LTX Video (including LTX 2.3 and 2.5) and MiniMax H3. Image to video is in

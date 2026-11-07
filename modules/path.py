@@ -38,7 +38,7 @@ class PathManager:
         "path_presets": "presets",
     }
 
-    EXTENSIONS = [".pth", ".ckpt", ".bin", ".safetensors", ".gguf", ".merge"]
+    EXTENSIONS = [".pth", ".ckpt", ".bin", ".safetensors", ".gguf"]
 
     # Add a dictionary to store file download information
     DOWNLOADABLE_FILES = {}

@@ -7,6 +7,7 @@
 * One Button Prompt formats follow the checkpoint: SD/SDXL tags, Illustrious/NoobAI/Pony tags, Anima and natural language
 * Native image edit in Image tools, chat and the API on edit-capable checkpoints, with image-to-image as the fallback
 * Checkpoint tools: inspect, check weights and create FP16 copies; clear messages when a model cannot load
+* Removed unused merge-recipe handling, legacy YAML checkpoint configs, style-model/merge-cache placeholders and merge artwork; native ComfyUI loading and checkpoint tools remain
 * OpenAI-compatible API (`--api`) and a restricted guest page (`--guest`)
 * Responsive UI for phones, laptops and 4K screens, and modernised HTML pages
 * Many fixes for ComfyUI integration, image, video and prompt handling

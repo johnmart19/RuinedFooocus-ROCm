@@ -116,7 +116,7 @@ class LoadErrorTests(unittest.TestCase):
         # Every load failure path records a reason for the user.
         load = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == "load_base_model")
         text = ast.get_source_segment(source, load)
-        for reason in ("Checkpoint not found", "merge file", "text encoder file(s) that are not installed",
+        for reason in ("Checkpoint not found", "text encoder file(s) that are not installed",
                        "needs the VAE file", "not recognized", "not supported as an image model"):
             self.assertIn(reason, text)
 
