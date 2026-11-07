@@ -98,7 +98,7 @@ class StyleEncodingTests(unittest.TestCase):
             custom.write_text('name,prompt,negative_prompt\nCustom,світло café,текст\n', encoding='utf-8-sig')
             execute = function('modules/sdxl_styles.py', 'load_styles', {
                 'DEFAULT_STYLES_FILE': default, 'STYLES_FILE': custom, 'exists': os.path.exists,
-                'csv': csv, 'DictReader': csv.DictReader, 'locale': __import__('locale')})
+                'csv': csv, 'DictReader': csv.DictReader, 'locale': __import__('locale'), 'STYLE_ALIASES': {}})
             styles = execute()
             self.assertEqual(styles['Київ'], ('猫 біля чашки','без шуму'))
             self.assertEqual(styles['Custom'], ('світло café','текст'))
@@ -116,7 +116,7 @@ class StyleEncodingTests(unittest.TestCase):
             execute = function('modules/sdxl_styles.py', 'load_styles', {
                 'DEFAULT_STYLES_FILE': default, 'STYLES_FILE': custom, 'exists': os.path.exists,
                 'csv': csv, 'DictReader': csv.DictReader,
-                'locale': SimpleNamespace(getpreferredencoding=lambda flag: 'cp1251')})
+                'locale': SimpleNamespace(getpreferredencoding=lambda flag: 'cp1251'), 'STYLE_ALIASES': {}})
             self.assertEqual(execute()['Custom'], ('світло', 'текст'))
             self.assertEqual(custom.read_bytes(), original)
 

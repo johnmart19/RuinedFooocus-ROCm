@@ -1,19 +1,11 @@
-from modules.resource_defaults import resource_name
 from .util import remove_empty_str
 from comfy.model_patcher import ModelPatcher
 from transformers import AutoTokenizer, AutoModelForCausalLM, set_seed
 import comfy.model_management as model_management
 from transformers.generation.logits_process import LogitsProcessorList
-from molbal_comfyui_gguf.nodes import DualCLIPLoaderGGUF
-from comfy.sd import CLIPType, load_clip
-from comfy_extras.nodes_textgen import TextGenerate
-from modules.model_identity import file_signature, read_safetensors_header
-from shared import path_manager, settings
 import os
-import json
 import random
 import torch
-from math import prod
 
 
 fooocus_expansion_path = "prompt_expansion"
@@ -117,84 +109,3 @@ class PromptExpansion:
         final_prompt = expansion_text
 
         return final_prompt
-
-
-class Erniehancer:
-    _cache = None
-
-    @staticmethod
-    def _load_clip(paths, clip_type, options):
-        device = options['load_device']
-        low_precision = any(getattr(model_management.args, key, False) for key in
-                            ('fp16_text_enc', 'bf16_text_enc', 'fp8_e4m3fn_text_enc', 'fp8_e5m2_text_enc'))
-        if device.type == 'cpu' and len(paths) == 1 and not low_precision:
-            header = read_safetensors_header(paths[0])
-            tensors = {key: value for key, value in header.items() if key != '__metadata__'}
-            unquantized = bool(tensors) and not header.get('__metadata__') and all(
-                value['dtype'] in ('F16', 'BF16', 'F32') or (key == 'tekken_model' and value['dtype'] == 'U8')
-                for key, value in tensors.items())
-            fp32_bytes = sum(prod(value['shape']) * 4 for value in tensors.values()
-                             if value['dtype'] in ('F16', 'BF16', 'F32'))
-            if unquantized and fp32_bytes * 2.5 < model_management.get_free_memory(device):
-                from comfy.utils import load_torch_file
-                from comfy.sd import load_text_encoder_state_dicts
-                state = load_torch_file(paths[0], safe_load=True)
-                # BF16/FP16 values promote exactly; disk weights remain unchanged.
-                state = {key: value.float() if value.dtype in (torch.float16, torch.bfloat16) else value
-                         for key, value in state.items()}
-                return load_text_encoder_state_dicts([state], clip_type=clip_type,
-                    model_options=options, disable_dynamic=True)
-        return load_clip(ckpt_paths=paths, clip_type=clip_type, model_options=options)
-
-    def __init__(self):
-        self.clip = None
-        self.clip_names = []
-        self.clip_paths = []
-        self.clip_type = CLIPType.FLUX2
-
-        clip_name = resource_name("clip_ernie_enhancer", settings.default_settings)
-        self.clip_names.append(str(clip_name))
-        clip_path = path_manager.get_folder_file_path(
-            "clip",
-            clip_name,
-            default = os.path.join(path_manager.model_paths["clip_path"], clip_name)
-        )
-        self.clip_paths.append(str(clip_path))
-
-        device = model_management.text_encoder_device()
-        offload = model_management.text_encoder_offload_device()
-        key = (tuple(tuple(file_signature(path)) for path in self.clip_paths), self.clip_type,
-               str(device), str(offload), str(model_management.text_encoder_dtype(device)),
-               tuple(getattr(model_management.args, name, False) for name in
-                     ('fp16_text_enc', 'bf16_text_enc', 'fp8_e4m3fn_text_enc', 'fp8_e5m2_text_enc')))
-        cached = type(self)._cache
-        if cached is not None and cached[0] == key:
-            self.clip = cached[1]
-            return
-
-        print(f"Loading Erniehancer: {self.clip_names}")
-        if all(name.endswith(".safetensors") for name in self.clip_paths):
-            self.clip = self._load_clip(self.clip_paths, self.clip_type,
-                {'load_device': device, 'offload_device': offload})
-        else:
-            clip_loader = DualCLIPLoaderGGUF()
-            self.clip = clip_loader.load_patcher(
-                self.clip_paths,
-                self.clip_type,
-                clip_loader.load_data(self.clip_paths)
-            )
-        type(self)._cache = (key, self.clip)
-
-    def execute(self, prompt, image=None, thinking=False):
-        # Ernie's tokenizer is raw: the instruction delimiters are supplied by the caller.
-        instruction = ('You are an image prompt enhancer. Expand the supplied prompt into one concise visual '
-                       'description in the same language. Preserve every requested subject, exact count, color, '
-                       'spatial relationship, exclusion and quoted text. Add only compatible lighting, texture '
-                       'and composition details. Output only the enhanced description, with no explanation.')
-        request = '[SYSTEM_PROMPT]' + instruction + '[/SYSTEM_PROMPT][INST]' + json.dumps(
-            {'prompt': prompt}, ensure_ascii=False) + '[/INST]'
-        text = TextGenerate.execute(clip=self.clip, prompt=request, image=image, thinking=thinking,
-            max_length=512, sampling_mode=dict(sampling_mode='on', temperature=.6, top_k=64,
-                top_p=.8, min_p=.05, repetition_penalty=1.05, presence_penalty=0.,
-                seed=random.randint(1, 2**32)))[0]
-        return text or prompt

@@ -39,6 +39,36 @@
       ]
     },
     {
+      "id": "local-chat-prompt-enhancement",
+      "subject": "Replace Erniehancer with prompt-preserving local chat expansion",
+      "requires": [
+        "ernie-prompt-enhancement",
+        "style-payload-integrity",
+        "chat-rewrite-controls"
+      ],
+      "tests": [
+        "test_local_prompt_enhancement.py",
+        "test_prompt_expansion_cpu.py",
+        "test_prompt_wildcards.py",
+        "test_style_prompt_payloads.py",
+        "test_prompt_lengths.py",
+        "test_chat_boundaries.py",
+        "test_llama_rewrite.py"
+      ]
+    },
+    {
+      "id": "chat-rewrite-presets",
+      "subject": "Rewrite the prompt-rewrite presets for local chat models",
+      "requires": ["chat"],
+      "tests": []
+    },
+    {
+      "id": "chat-rewrite-controls",
+      "subject": "Use the Chat bots model for prompt rewrites and expose rewrite controls",
+      "requires": ["chat-rewrite-presets", "ernie-prompt-enhancement", "ui", "startup"],
+      "tests": ["test_llama_rewrite.py"]
+    },
+    {
       "id": "prompt-text-integrity",
       "subject": "Preserve native prompt text and bound schedule processing",
       "requires": [

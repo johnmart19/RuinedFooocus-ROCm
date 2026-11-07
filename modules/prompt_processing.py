@@ -2,7 +2,7 @@ import os
 import re
 import random
 
-from modules.sdxl_styles import apply_style, styles as available_styles
+from modules.sdxl_styles import apply_style, styles as available_styles, STYLE_ALIASES
 from modules.prompt_scheduling import prompt_switch_per_step
 from random_prompt.build_dynamic_prompt import (
     build_dynamic_prompt,
@@ -271,6 +271,18 @@ def process_prompt(style, prompt, negative, gen_data=None):
         gen_data = {}
     if gen_data.get('_metadata_prompt'):
         return prompt, negative
+    enhanced = False
+    def enhance_once(text, model_type="", preset_focus=""):
+        nonlocal enhanced
+        if enhanced:
+            return text
+        from modules.prompt_enhancement import enhance_prompt
+        def check_cancelled():
+            from modules.async_worker import check_interrupt
+            check_interrupt(gen_data)
+        result = enhance_prompt(text, model_type, preset_focus, check_cancelled=check_cancelled)
+        enhanced = True
+        return result
     if use_random_prompt(gen_data, prompt):
         prompt = build_dynamic_prompt(
             insanitylevel=gen_data["obp_insanitylevel"],
@@ -293,6 +305,7 @@ def process_prompt(style, prompt, negative, gen_data=None):
             advancedprompting=False,
             base_model=gen_data["OBP_modeltype"],
             prompt_enhancer=gen_data["OBP_promptenhance"],
+            enhancer=enhance_once,
         )
 
     # styles
@@ -301,9 +314,10 @@ def process_prompt(style, prompt, negative, gen_data=None):
     # must not invisibly apply them again, including saved/default selections.
     styles = (style or []).copy() if "task_type" in gen_data and gen_data["task_type"] == "tool_call" else []
     def inline_style(match):
-        key = f"Style: {match.group(1)}"
+        name = STYLE_ALIASES.get(match.group(1), match.group(1))
+        key = f"Style: {name}"
         if key not in available_styles:
-            key = match.group(1)
+            key = name
         if key in available_styles:
             styles.append(key)
             return ""
@@ -313,7 +327,7 @@ def process_prompt(style, prompt, negative, gen_data=None):
         keywords = gen_data["lora_keywords"]
     else:
         keywords = ""
-    p_txt, n_txt = apply_style(styles, prompt, negative, keywords)
+    p_txt, n_txt = apply_style(styles, prompt, negative, keywords, enhancer=enhance_once)
 
     # wildcards
     if "__" in p_txt:

@@ -57,7 +57,7 @@ class PromptLengthTests(unittest.TestCase):
         expand = Mock(side_effect=AssertionError('Unexpected prompt expansion'))
         process = function_from('modules/prompt_processing.py', 'process_prompt', {
             're': re, 'build_dynamic_prompt': expand, 'build_dynamic_negative': expand,
-            'apply_style': lambda styles, prompt, negative, keywords: (prompt, negative)})
+            'apply_style': lambda styles, prompt, negative, keywords, **kwargs: (prompt, negative)})
         for prompt in ('f', 'fox', '\u732b', LONG):
             with self.subTest(characters=len(prompt)):
                 self.assertEqual(process([], prompt, LONG, {'obp_assume_direct_control': False}),
@@ -68,7 +68,7 @@ class PromptLengthTests(unittest.TestCase):
         expand = Mock(return_value='random replacement')
         process = function_from('modules/prompt_processing.py', 'process_prompt', {
             're': re, 'build_dynamic_prompt': expand, 'build_dynamic_negative': expand,
-            'apply_style': lambda styles, prompt, negative, keywords: (prompt, negative)})
+            'apply_style': lambda styles, prompt, negative, keywords, **kwargs: (prompt, negative)})
         tree = ast.parse((ROOT / 'modules/prompt_processing.py').read_text(encoding='utf-8'))
         fields = {node.slice.value for node in ast.walk(tree) if isinstance(node, ast.Subscript)
                   and isinstance(node.value, ast.Name) and node.value.id == 'gen_data'

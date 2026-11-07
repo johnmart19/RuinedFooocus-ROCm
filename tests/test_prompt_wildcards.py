@@ -21,7 +21,7 @@ class WildcardTests(unittest.TestCase):
         self.folder = Path(self.temp.name)
         self.expand = Mock(return_value=r'blue (cup)\1\g<name>')
         self.scope = dict(os=os, re=re, random=random, build_dynamic_prompt=self.expand,
-                          available_styles={},
+                          available_styles={}, STYLE_ALIASES={},
                           path_manager=SimpleNamespace(paths={'path_wildcards': [str(self.folder)]}))
         tree = ast.parse((ROOT / 'modules/prompt_processing.py').read_text(encoding='utf-8'))
         nodes = [node for node in tree.body if isinstance(node, ast.FunctionDef)
@@ -74,14 +74,14 @@ class WildcardTests(unittest.TestCase):
         self.assertEqual(self.process('A __blank__ cup'), 'A  cup')
 
     def test_positive_preprocessing_preserves_negative_and_does_not_rescan_missing_text(self):
-        self.scope['apply_style'] = lambda styles, prompt, negative, keywords: (prompt, negative)
+        self.scope['apply_style'] = lambda styles, prompt, negative, keywords, **kwargs: (prompt, negative)
         self.choice('subject', r'red \1 cup')
         with redirect_stdout(StringIO()):
             result = self.scope['process_prompt']([], '__subject__ __missing__', ' , __negative__', {})
         self.assertEqual(result, (r'red \1 cup __missing__', ' , __negative__'))
 
     def test_inline_styles_consume_only_known_names_and_leave_literal_unknowns(self):
-        apply = Mock(side_effect=lambda styles, prompt, negative, keywords: (prompt, negative))
+        apply = Mock(side_effect=lambda styles, prompt, negative, keywords, **kwargs: (prompt, negative))
         self.scope.update(apply_style=apply, available_styles={'Style: Known': object(), 'Custom': object()})
         result = self.scope['process_prompt']([], 'A <style:Known> cup <style:Missing> <style:Custom>', '', {})
         self.assertEqual(result, ('A  cup <style:Missing> ', ''))

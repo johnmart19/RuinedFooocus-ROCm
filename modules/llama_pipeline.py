@@ -13,6 +13,7 @@ from modules.util import url_to_filename, load_file_from_url
 from shared import settings
 import json
 import modules.async_worker as worker
+import comfy.model_management as model_management
 
 def llama_names():
         names = []
@@ -51,7 +52,7 @@ def rewrite_template_kwargs():
     effort = effort if effort in REWRITE_REASONING else "Low"
     return {"reasoning_effort": effort.lower(), "enable_thinking": effort != "Low"}
 
-def run_llama(system_file, prompt, *, instruction=None):
+def run_llama(system_file, prompt, *, instruction=None, check_cancelled=None):
         name = None
         sys_pat = r"system:.*\n\n"
         system = re.match(sys_pat, prompt, flags=re.M|re.I)
@@ -72,36 +73,49 @@ def run_llama(system_file, prompt, *, instruction=None):
                 return prompt
 
         llama = pipeline()
-        llama.load_base_model()
-
-        with TimeIt(""):
-            print(f"# System:\n{system_prompt.strip()}\n")
-            print(f"# User:\n{prompt.strip()}\n")
-            print(f"# {name}: (Thinking...)")
-            try:
-
-                ret = llama.llm.handle_chat_completions(
-                    {
-                        "max_tokens": settings.default_settings.get("llm_hp_max_tokens", 256),
-                        "messages": [{"role": "system", "content": system_prompt},
-                                     {"role": "user", "content": prompt}],
-                        "chat_template_kwargs": rewrite_template_kwargs(),
-                    }
-                )
-                if instruction is not None:
-                    from modules.prompt_enhancement import image_prompt_result
-                    res = image_prompt_result(ret['choices'][0], prompt)
-                else:
-                    res = restore_tags(prompt, clean_rewrite(ret['choices'][0]['message']['content']) or prompt)
-            except Exception as e:
-                print(f"LLAMA ERROR: {e}")
-                res = prompt
-
-            print(f"{res.strip()}\n")
-
-        llama.unload()
-
-        return res
+        try:
+            if check_cancelled:
+                check_cancelled()
+            # External llama.cpp allocations are outside Comfy's model residency.
+            model_management.unload_all_models()
+            llama.load_base_model(vision=instruction is None)
+            if check_cancelled:
+                check_cancelled()
+            parts = []
+            choice = {"finish_reason": None}
+            def collect(chunk):
+                if check_cancelled:
+                    check_cancelled()
+                for item in chunk.get("choices", []):
+                    text = item.get("delta", {}).get("content")
+                    if text:
+                        parts.append(text)
+                    if item.get("finish_reason"):
+                        choice["finish_reason"] = item["finish_reason"]
+            parameters = {
+                "stream": True,
+                "chat_template_kwargs": rewrite_template_kwargs(),
+                "max_tokens": settings.default_settings.get("llm_hp_max_tokens", 256),
+                "messages": [{"role": "system", "content": system_prompt},
+                             {"role": "user", "content": prompt}],
+            }
+            if instruction is not None:
+                parameters['temperature'] = 0.2
+            llama.llm.handle_chat_completions(parameters, collect)
+            if check_cancelled:
+                check_cancelled()
+            choice["message"] = {"content": "".join(parts)}
+            if instruction is not None:
+                from modules.prompt_enhancement import image_prompt_result
+                return image_prompt_result(choice, prompt)
+            return restore_tags(prompt, clean_rewrite(choice["message"]["content"]) or prompt)
+        except model_management.InterruptProcessingException:
+            raise
+        except Exception as error:
+            print(f"LLAMA ERROR: {error}")
+            return prompt
+        finally:
+            llama.unload()
 
 class pipeline:
     pipeline_type = ["llama"]
@@ -134,13 +148,13 @@ class pipeline:
         self.embeddings_hash = ""
         gc.collect()
 
-    def load_base_model(self, model=None, progress=None):
+    def load_base_model(self, model=None, progress=None, *, vision=True):
         from modules.auxiliary_resources import release_except
         release_except()
         self.unload()
         localfile = model or settings.default_settings.get("llama_localfile") or DEFAULT_MODEL
         llm_path = resolve_model(localfile, progress=progress)
-        projector = projector_path(settings.default_settings, llm_path, progress=progress)
+        projector = projector_path(settings.default_settings, llm_path, progress=progress) if vision else None
         self.vision_projector = projector
         if progress:
             progress(None, None, None)

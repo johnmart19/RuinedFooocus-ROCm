@@ -26,14 +26,13 @@ from superprompter.superprompter import *
 from random_prompt.one_button_presets import OneButtonPresets
 OBPresets = OneButtonPresets()
 
-from modules.llama_pipeline import run_llama
-from modules.prompt_enhancement import image_prompt_instruction
+from modules.prompt_enhancement import enhance_prompt
 
 #builds a prompt dynamically
 # insanity level controls randomness of propmt 0-10
 # forcesubject van be used to force a certain type of subject
 # Set artistmode to none, to exclude artists 
-def build_dynamic_prompt(insanitylevel = 5, forcesubject = "all", artists = "all", imagetype = "all", onlyartists = False, antivalues = "", prefixprompt = "", suffixprompt ="",promptcompounderlevel ="1", seperator = "comma", givensubject="",smartsubject = True,giventypeofimage="", imagemodechance = 20, gender = "all", subtypeobject="all", subtypehumanoid="all", subtypeconcept="all", advancedprompting=True, hardturnoffemojis=False, seed=-1, overrideoutfit="", prompt_g_and_l = False, base_model = "SD1.5", OBP_preset = "", prompt_enhancer = "none", subtypeanimal="all", subtypelocation="all", preset_prefix = "", preset_suffix = ""):
+def build_dynamic_prompt(insanitylevel = 5, forcesubject = "all", artists = "all", imagetype = "all", onlyartists = False, antivalues = "", prefixprompt = "", suffixprompt ="",promptcompounderlevel ="1", seperator = "comma", givensubject="",smartsubject = True,giventypeofimage="", imagemodechance = 20, gender = "all", subtypeobject="all", subtypehumanoid="all", subtypeconcept="all", advancedprompting=True, hardturnoffemojis=False, seed=-1, overrideoutfit="", prompt_g_and_l = False, base_model = "SD1.5", OBP_preset = "", prompt_enhancer = "none", subtypeanimal="all", subtypelocation="all", preset_prefix = "", preset_suffix = "", enhancer=None):
 
     prompt_model = ("Anime Model" if OBP_preset in ("Waifu's", "Husbando's")
                     and base_model != "Stable Cascade" else base_model)
@@ -3687,8 +3686,7 @@ def build_dynamic_prompt(insanitylevel = 5, forcesubject = "all", artists = "all
         startprompt = cleanup(promptlist[0], advancedprompting, insanitylevel)
         endprompt = cleanup(promptlist[2], advancedprompting, insanitylevel)
         scene = ", ".join(part for part in (startprompt, subjectprompt, endprompt) if part.strip())
-        llamapromptresult = run_llama(None, scene,
-                                     instruction=image_prompt_instruction(prompt_model, enhancement_focus))
+        llamapromptresult = (enhancer or enhance_prompt)(scene, prompt_model, enhancement_focus)
         completeprompt = llamapromptresult
         prompt_g = llamapromptresult
         prompt_l = completeprompt

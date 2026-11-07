@@ -12,7 +12,7 @@ class StylePayloadTests(unittest.TestCase):
     def apply(self, selected, prompt, keywords='metadata {prompt}'):
         tree = ast.parse((ROOT / 'modules/sdxl_styles.py').read_text(encoding='utf-8'))
         node = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'apply_style')
-        scope = dict(random=random, re=re, styles={
+        scope = dict(random=random, re=re, STYLE_ALIASES={}, styles={
             'Frame': ('Frame {prompt}, , done', ''), 'Outer': ('Outer {prompt}', ''),
             'Keywords': ('{prompt} {lora_keywords}', ''), 'Negative only': (None,'noise')},
             default_style=('{prompt}',''), allstyles=[])
@@ -39,6 +39,10 @@ class StylePayloadTests(unittest.TestCase):
             self.assertEqual(positive,prompt)
         positive, _ = self.apply(['Frame','Negative only'],prompt)
         self.assertEqual(positive,'Frame '+prompt+',  done, ')
+
+    def test_styles_without_negative_text_leave_negative_prompt_exact(self):
+        _, negative = self.apply(['Frame'],'Two cups.')
+        self.assertEqual(negative,'literal __negative__')
 
 
 if __name__ == '__main__':

@@ -239,19 +239,18 @@ def _process(gen_data):
     if modules.controlnet.get_settings(gen_data).get("preserve_details"):
         prompt_styles = []
     for i in range(max(image_number, 1)):
-        p_txt, n_txt = process_prompt(
-            prompt_styles, gen_data["prompt"], gen_data["negative"], gen_data
-        )
-
-        distance = float(i) / max(image_number - 1.0, 1.0) # Use max() to avoid div. by 0
-        p_txt = shift_attention(p_txt, distance)
-        n_txt = shift_attention(n_txt, distance)
-
         gen_data["seed"] = abs(seed) # Update seed
         start_step = 0
         denoise = None
         with TimeIt("Pipeline process"):
             try:
+                check_interrupt(gen_data)
+                p_txt, n_txt = process_prompt(
+                    prompt_styles, gen_data["prompt"], gen_data["negative"], gen_data
+                )
+                distance = float(i) / max(image_number - 1.0, 1.0)
+                p_txt = shift_attention(p_txt, distance)
+                n_txt = shift_attention(n_txt, distance)
                 check_interrupt(gen_data)
                 # Load LoRAs
                 parsed_loras, p_txt, n_txt = parse_loras(p_txt, n_txt)

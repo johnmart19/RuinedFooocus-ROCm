@@ -3,7 +3,6 @@
 RESOURCE_DEFAULTS = {
     'clip_qwen35_9b': 'qwen3.5_9b_int8_convrot.safetensors',
     'clip_aura': 'clip_aura.safetensors',
-    'clip_ernie_enhancer': 'ernie-image-prompt-enhancer.safetensors',
     'clip_g': 'clip_g.safetensors',
     'clip_gemma': 'gemma_2_2b_fp16.safetensors',
     'clip_gemma2_it': 'gemma_2_2b_it_bf16.safetensors',
@@ -68,7 +67,7 @@ RESOURCE_LABELS = {
     "clip_t5": "T5 (Flux / HiDream / SD3 / PixArt / LTX)",
     "clip_gemma": "Lumina 2 Gemma", "clip_gemma2_it_elm": "PixelDiT Gemma 2",
     "clip_gemma3": "NewBieImage Gemma 3", "clip_jina": "NewBieImage Jina",
-    "clip_ernie_enhancer": "Ernie prompt enhancer", "clip_ministral3": "ErnieImage Ministral",
+    "clip_ministral3": "ErnieImage Ministral",
     "clip_mistral3": "Flux 2 Mistral", "clip_llama": "HiDream Llama",
     "clip_llava": "Hunyuan Video LLaVA", "clip_oldt5": "Cosmos Predict 2 T5",
     "clip_qwen25": "Qwen Image Qwen 2.5 VL", "clip_qwen3_06b": "Anima Qwen 3 0.6B",

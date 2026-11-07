@@ -5,11 +5,14 @@ import locale
 from os.path import exists
 from csv import DictReader
 from pathlib import Path
-from modules.prompt_expansion import PromptExpansion, Erniehancer
+from modules.prompt_expansion import PromptExpansion
+from modules.prompt_enhancement import enhance_prompt
 from random_prompt import build_dynamic_prompt
 
 DEFAULT_STYLES_FILE = Path("settings/styles.default")
 STYLES_FILE = Path("settings/styles.csv")
+
+STYLE_ALIASES = {"Erniehancer": "Local chat model", "Style: Erniehancer": "Local chat model"}
 
 prompt_expansion = PromptExpansion()
 
@@ -74,13 +77,14 @@ def load_styles():
         "prompt": "{prompt}",
         "negative_prompt": "",
     }
-    erniehancer_style = {
-        "name": "Erniehancer",
+    local_chat_style = {
+        "name": "Local chat model",
         "prompt": "{prompt}",
         "negative_prompt": "",
     }
 
-    styles.insert(0, erniehancer_style)
+    styles = [s for s in styles if s["name"] not in STYLE_ALIASES]
+    styles.insert(0, local_chat_style)
     styles.insert(0, hyperprompt_style)
     styles.insert(0, flufferizer_style)
     styles.insert(0, lora_keywords_style)
@@ -90,13 +94,13 @@ def load_styles():
     return {s["name"]: (s["prompt"], s["negative_prompt"]) for s in styles}
 
 
-def apply_style(style, prompt, negative_prompt, lora_keywords):
+def apply_style(style, prompt, negative_prompt, lora_keywords, *, enhancer=None):
     output_prompt = ""
-    output_negative_prompt = ""
+    negative_parts = []
     temp_style_prompt = prompt
     bFlufferizer = False
     bHyperprompt = False
-    bErniehancer = False
+    bLocalChat = False
     artifylist = []
     artifystylelist = []
     index = 0
@@ -117,8 +121,8 @@ def apply_style(style, prompt, negative_prompt, lora_keywords):
             bHyperprompt = True
             del style[style.index(s)]
 
-        if _s in map(str.upper, ["Erniehancer", "Style: Erniehancer"]):
-            bErniehancer = True
+        if _s in map(str.upper, ["Local chat model", "Style: Local chat model", *STYLE_ALIASES]):
+            bLocalChat = True
             del style[style.index(s)]
 
         if _s in map(str.upper, ["LoRA keywords", "Style: LoRA keywords"]):
@@ -153,8 +157,8 @@ def apply_style(style, prompt, negative_prompt, lora_keywords):
                 return "{lora_keywords}" if lora_keywords is None else lora_keywords
             temp_style_prompt = re.sub(r"\{prompt\}|\{lora_keywords\}", substitute, template)
             output_prompt = temp_style_prompt
-        if n is not None:
-            output_negative_prompt += n + ", "
+        if n:
+            negative_parts.append(n)
 
     # prep outputprompt for use in Flufferize and Artify
     if output_prompt == "":
@@ -166,12 +170,10 @@ def apply_style(style, prompt, negative_prompt, lora_keywords):
     if bFlufferizer:
         output_prompt = prompt_expansion.expand_prompt(output_prompt)
 
-    if bErniehancer:
-        output_prompt = Erniehancer().execute(output_prompt)
+    if bLocalChat:
+        output_prompt = (enhancer or enhance_prompt)(output_prompt)
 
-    output_negative_prompt += ", " + negative_prompt
-
-    return output_prompt, output_negative_prompt
+    return output_prompt, ", ".join(negative_parts + ([negative_prompt] if negative_prompt else []))
 
 
 styles = load_styles()
