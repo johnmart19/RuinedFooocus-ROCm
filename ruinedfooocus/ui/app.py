@@ -48,7 +48,7 @@ finally:
     logging.getLogger().setLevel(_startup_log_level)
 worker.start_worker()
 import ruinedfooocus.ui.html as html
-import ruinedfooocus.ui.hints as hints
+import ruinedfooocus.ui.hints as ui_hints
 import ruinedfooocus.features.prompting.ui_random as ui_onebutton
 import ruinedfooocus.features.image_editing.ui as ui_controlnet
 from ruinedfooocus.app.api import add_api, add_fastapi
@@ -261,7 +261,7 @@ def update_clicked():
             visible="hidden",
             interactive=True,
         ),
-        hint_text: gr.update(visible=True, value=hints.get_hint()),
+        hint_text: gr.update(visible=True, value=ui_hints.get_hint()),
     }
 
 
@@ -1617,12 +1617,12 @@ with shared.gradio_root as block:
 
             try:
                 with open("update_log.md", "r", encoding="utf-8") as update_log:
-                    hints = update_log.read()
+                    changelog_text = update_log.read()
             except:
-                hints = ""
+                changelog_text = ""
             with gr.Accordion(t("Changelog"), open=False, elem_id="changelog-panel"):
                 hint_text = gr.Markdown(
-                    value=hints,
+                    value=changelog_text,
                     elem_id="hint-container",
                     elem_classes="hint-container",
                 )

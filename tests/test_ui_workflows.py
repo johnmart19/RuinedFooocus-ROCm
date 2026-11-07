@@ -6,7 +6,7 @@ from functools import lru_cache
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, mock_open, patch
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -22,6 +22,53 @@ def function_from(path, name, namespace):
 
 
 class WorkflowControlsTests(unittest.TestCase):
+    def test_generation_initial_update_works_after_changelog_setup(self):
+        from ruinedfooocus.ui import hints
+
+        namespace = dict(
+            gr=SimpleNamespace(update=lambda **values: values),
+            html=SimpleNamespace(make_progress_html=lambda *_: "Waiting"),
+            asset_path=asset_path,
+            hints=hints,
+            ui_hints=hints,
+        )
+        for name in (
+            "run_button",
+            "stop_button",
+            "progress_html",
+            "gallery",
+            "main_view",
+            "inpaint_view",
+            "hint_text",
+        ):
+            namespace[name] = name
+        source = ROOT / "ruinedfooocus/ui/app.py"
+        tree = ast.parse(source.read_text(encoding="utf-8"))
+        changelog = next(
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Try)
+            and any(
+                isinstance(child, ast.Call)
+                and isinstance(child.func, ast.Name)
+                and child.func.id == "open"
+                and child.args
+                and isinstance(child.args[0], ast.Constant)
+                and child.args[0].value == "update_log.md"
+                for statement in node.body
+                for child in ast.walk(statement)
+            )
+        )
+        with patch("builtins.open", mock_open(read_data="Recent changes")):
+            exec(
+                compile(ast.Module(body=[changelog], type_ignores=[]), str(source), "exec"),
+                namespace,
+            )
+        update = function_from("ruinedfooocus/ui/app.py", "update_clicked", namespace)()
+        self.assertTrue(update["hint_text"]["value"].startswith("**LPT:**"))
+        self.assertFalse(update["run_button"]["interactive"])
+        self.assertTrue(update["stop_button"]["interactive"])
+
     def test_rewrite_preview_requires_apply_and_does_not_overwrite_new_edits(self):
         gr = SimpleNamespace(Error=ValueError, update=lambda **values: values)
         model = Mock(return_value="A rewritten prompt")
