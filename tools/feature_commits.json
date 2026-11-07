@@ -2,6 +2,12 @@
   "base": "cd7abb27064155f62dea002f745a8ce1b040c990",
   "features": [
     {
+      "id": "ui-native-edits",
+      "subject": "Offer native image edit in the UI with an image-to-image fallback",
+      "requires": ["api-native-edits"],
+      "tests": ["test_powerup_family_controls.py", "test_image_request_isolation.py", "test_api_image_edits.py", "test_chat_boundaries.py", "test_chatbots.py"]
+    },
+    {
       "id": "api-native-edits",
       "subject": "Edit API uploads natively on edit models and show icons on light theme",
       "requires": ["model-load-feedback"],
