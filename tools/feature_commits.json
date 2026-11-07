@@ -2,6 +2,12 @@
   "base": "cd7abb27064155f62dea002f745a8ce1b040c990",
   "features": [
     {
+      "id": "api-native-edits",
+      "subject": "Edit API uploads natively on edit models and show icons on light theme",
+      "requires": ["model-load-feedback"],
+      "tests": ["test_api_image_edits.py", "test_image_guidance.py", "test_powerup_family_controls.py", "test_image_tool_registry.py", "test_html_templates.py"]
+    },
+    {
       "id": "model-load-feedback",
       "subject": "Explain model load failures and speed up checkpoint inspection",
       "requires": ["modern-html", "offline-chatbots"],
