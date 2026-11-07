@@ -26,13 +26,9 @@ class pipeline:
         gen_data=None,
         callback=None,
     ):
-        worker.add_result(
-            gen_data["task_id"],
-            "preview",
-            (-1, f"Generating ...", None)
-        )
+        worker.add_result(gen_data["task_id"], "preview", (-1, f"Generating ...", None))
 
-        image = Image.open(str(asset_path('logo.png')))
+        image = Image.open(str(asset_path("logo.png")))
 
         # Return finished image to preview
         if callback is not None:

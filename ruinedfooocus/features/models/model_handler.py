@@ -14,6 +14,7 @@ from ruinedfooocus.app.state import translate as t
 from ruinedfooocus.core.config_io import save_json
 from ruinedfooocus.features.models.model_identity import file_signature
 
+
 class Models:
     def civit_update_worker(self, model_type, folder_paths):
         if model_type in self.civit_workers:
@@ -26,6 +27,7 @@ class Models:
             print(f"Model update failed for {model_type}: {error}")
         finally:
             from ruinedfooocus.app.state import shared_cache
+
             for key in list(shared_cache):
                 if isinstance(key, Path) and key.parent == self.cache_paths[model_type]:
                     shared_cache.pop(key, None)
@@ -52,9 +54,7 @@ class Models:
         self.names[model_type] = sorted(
             self.names[model_type],
             key=lambda x: (
-                f"0{x.casefold()}"
-                if not str(Path(x).parent) == "."
-                else f"1{x.casefold()}"
+                f"0{x.casefold()}" if not str(Path(x).parent) == "." else f"1{x.casefold()}"
             ),
         )
         self.ready[model_type] = True
@@ -79,12 +79,22 @@ class Models:
                     cache_file = Path(self.cache_paths[model_type] / path.name)
                     model_data = self.get_models_by_path(model_type, path, fetch=True)
 
-                    from ruinedfooocus.features.models.model_previews import SUFFIXES, VERSION, is_warning, valid_preview
+                    from ruinedfooocus.features.models.model_previews import (
+                        SUFFIXES,
+                        VERSION,
+                        is_warning,
+                        valid_preview,
+                    )
+
                     suffixes = list(SUFFIXES)
                     has_preview = False
                     for suffix in suffixes:
                         thumbcheck = cache_file.with_suffix(suffix)
-                        if thumbcheck.is_file() and valid_preview(thumbcheck) and not is_warning(thumbcheck):
+                        if (
+                            thumbcheck.is_file()
+                            and valid_preview(thumbcheck)
+                            and not is_warning(thumbcheck)
+                        ):
                             # Retain valid artwork if its online refresh fails.
                             has_preview = True
                             break
@@ -97,21 +107,41 @@ class Models:
                         preview_state = preview_state if isinstance(preview_state, dict) else {}
                     except (OSError, ValueError):
                         preview_state = {}
-                    real_artwork = any(isinstance(item, dict) and item.get("url") and
-                                       "cdn-thumbnails.huggingface.co/social-thumbnails/" not in item["url"]
-                                       for item in (model_data.get("images") or []))
+                    real_artwork = any(
+                        isinstance(item, dict)
+                        and item.get("url")
+                        and "cdn-thumbnails.huggingface.co/social-thumbnails/" not in item["url"]
+                        for item in (model_data.get("images") or [])
+                    )
                     replace_generated = preview_state.get("generated") and real_artwork
-                    if has_preview and not self.offline and (preview_state.get("version") != VERSION or replace_generated) and model_data.get("images"):
+                    if (
+                        has_preview
+                        and not self.offline
+                        and (preview_state.get("version") != VERSION or replace_generated)
+                        and model_data.get("images")
+                    ):
                         from PIL import Image
+
                         with Image.open(thumbcheck) as image:
-                            legacy = replace_generated or max(image.size) <= 166 or getattr(image, "n_frames", 1) > 1
-                        local_artwork = any(path.with_suffix(suffix).is_file() or path.with_suffix(".preview" + suffix).is_file() for suffix in suffixes)
+                            legacy = (
+                                replace_generated
+                                or max(image.size) <= 166
+                                or getattr(image, "n_frames", 1) > 1
+                            )
+                        local_artwork = any(
+                            path.with_suffix(suffix).is_file()
+                            or path.with_suffix(".preview" + suffix).is_file()
+                            for suffix in suffixes
+                        )
                         if legacy and not local_artwork:
                             self.get_image(model_data, cache_file)
 
                     if not has_preview:
                         for suffix in suffixes:
-                            for local in (path.with_suffix(suffix), path.with_suffix(".preview" + suffix)):
+                            for local in (
+                                path.with_suffix(suffix),
+                                path.with_suffix(".preview" + suffix),
+                            ):
                                 if local.is_file():
                                     shutil.copyfile(local, cache_file.with_suffix(suffix))
                                     has_preview = True
@@ -124,33 +154,53 @@ class Models:
 
                     if not has_preview and not self.offline:
                         self.get_image(model_data, thumbcheck)
-                        if not any(valid_preview(cache_file.with_suffix(suffix)) and not is_warning(cache_file.with_suffix(suffix)) for suffix in suffixes):
-                            from ruinedfooocus.features.models.model_sources import huggingface_preview
-                            from ruinedfooocus.features.models.model_identity import checkpoint_hashes
-                            hash = checkpoint_hashes(model_data).get("SHA256") or self.model_sha256(path)
+                        if not any(
+                            valid_preview(cache_file.with_suffix(suffix))
+                            and not is_warning(cache_file.with_suffix(suffix))
+                            for suffix in suffixes
+                        ):
+                            from ruinedfooocus.features.models.model_sources import (
+                                huggingface_preview,
+                            )
+                            from ruinedfooocus.features.models.model_identity import (
+                                checkpoint_hashes,
+                            )
+
+                            hash = checkpoint_hashes(model_data).get("SHA256") or self.model_sha256(
+                                path
+                            )
                             metadata = self.read_safetensors_header(path).get("__metadata__", {})
-                            source = (f"https://huggingface.co/{model_data['hf_repo_id']}"
-                                      if model_data.get("hf_repo_id") else metadata.get("modelspec.source", ""))
+                            source = (
+                                f"https://huggingface.co/{model_data['hf_repo_id']}"
+                                if model_data.get("hf_repo_id")
+                                else metadata.get("modelspec.source", "")
+                            )
                             fallback = huggingface_preview(path, hash, source)
                             if fallback:
                                 model_data = model_data | fallback
                                 save_json(cache_file.with_suffix(".json"), model_data)
                                 self.get_image(model_data, thumbcheck)
                             else:
-                                print(f"No published artwork found for {path.name}; add a local .preview image to supply artwork.")
+                                print(
+                                    f"No published artwork found for {path.name}; add a local .preview image to supply artwork."
+                                )
                         updated += 1
                         time.sleep(1)
 
                     txtcheck = cache_file.with_suffix(".txt")
-                    if model_type == "loras" and model_data.get("trainedWords") and not txtcheck.exists():
+                    if (
+                        model_type == "loras"
+                        and model_data.get("trainedWords")
+                        and not txtcheck.exists()
+                    ):
                         print(
                             t(
                                 "Get LoRA keywords for {name} ({base} - {type})",
-                                mapping= {
-                                    'name': Path(path).name,
-                                    'base': self.get_model_base(model_data),
-                                    'type': self.get_model_type(model_data)
-                                }
+                                mapping={
+                                    "name": Path(path).name,
+                                    "base": self.get_model_base(model_data),
+                                    "type": self.get_model_type(model_data),
+                                },
                             )
                         )
                         keywords = self.get_keywords(model_data)
@@ -162,9 +212,19 @@ class Models:
                         name = str(path.relative_to(folder))
                         filename = path
                         baseModel = self.get_model_base(model_data)
-                        destination, cache = folders.get(self.get_model_type(model_data), [None, None])
+                        destination, cache = folders.get(
+                            self.get_model_type(model_data), [None, None]
+                        )
                         if destination is None or baseModel is None:
-                            print(t('Skipping {name} not sure what {type} is.', mapping={'name': str(name), 'type': self.get_model_type(model_data)}))
+                            print(
+                                t(
+                                    "Skipping {name} not sure what {type} is.",
+                                    mapping={
+                                        "name": str(name),
+                                        "type": self.get_model_type(model_data),
+                                    },
+                                )
+                            )
                             updated += 1
                             continue
                         # Never overwrite an existing model or its cached metadata.
@@ -174,11 +234,17 @@ class Models:
                             continue
                         cache_file = self.cache_paths[model_type] / path.name
                         suffixes = [".json", ".txt", ".jpeg", ".jpg", ".png", ".gif"]
-                        cached = [(cache_file.with_suffix(suffix),
-                                   (Path(cache) / path.name).with_suffix(suffix))
-                                  for suffix in suffixes]
+                        cached = [
+                            (
+                                cache_file.with_suffix(suffix),
+                                (Path(cache) / path.name).with_suffix(suffix),
+                            )
+                            for suffix in suffixes
+                        ]
                         if dest.exists() or any(target.exists() for _, target in cached):
-                            print(f"WARNING: {name} already exists at the destination. Leaving it in Inbox.")
+                            print(
+                                f"WARNING: {name} already exists at the destination. Leaving it in Inbox."
+                            )
                             continue
                         dest.parent.mkdir(parents=True, exist_ok=True)
                         Path(cache).mkdir(parents=True, exist_ok=True)
@@ -186,20 +252,25 @@ class Models:
                         for source, target in cached:
                             if source.is_file():
                                 shutil.move(source, target)
-                        print(t("Moved {name} to {dest}", mapping={'name': name, 'dest': dest}))
+                        print(t("Moved {name} to {dest}", mapping={"name": name, "dest": dest}))
                         updated += 1
 
                     else:
                         # If this isn't the inbox, store some info about the "live" model
                         try:
-                            from ruinedfooocus.features.models.model_identity import checkpoint_hashes
-                            self.model_hash[model_type][checkpoint_hashes(model_data)["SHA256"]] = str(path)
+                            from ruinedfooocus.features.models.model_identity import (
+                                checkpoint_hashes,
+                            )
+
+                            self.model_hash[model_type][checkpoint_hashes(model_data)["SHA256"]] = (
+                                str(path)
+                            )
                         except:
                             # Some models seem to not have sha256 hashes, just ignore those.
                             pass
 
         if updated > 0:
-            print(t("CivitAI update for {type} done.", mapping={'type': model_type}))
+            print(t("CivitAI update for {type} done.", mapping={"type": model_type}))
 
     def get_names(self, model_type):
         while not self.ready[model_type]:
@@ -228,8 +299,6 @@ class Models:
                 ),
                 daemon=True,
             ).start()
-
-
 
     def __init__(self, offline=False):
         from ruinedfooocus.app.state import path_manager, settings
@@ -298,25 +367,28 @@ class Models:
         cache = self.cache_paths["checkpoints"].parent / "hashes" / (key + ".json")
         try:
             cached = json.loads(cache.read_text(encoding="utf-8"))
-            if (isinstance(cached, dict) and cached.get("signature") == signature
-                    and isinstance(cached.get("sha256"), str)
-                    and len(cached["sha256"]) == 64
-                    and all(char in "0123456789ABCDEF" for char in cached["sha256"])):
+            if (
+                isinstance(cached, dict)
+                and cached.get("signature") == signature
+                and isinstance(cached.get("sha256"), str)
+                and len(cached["sha256"]) == 64
+                and all(char in "0123456789ABCDEF" for char in cached["sha256"])
+            ):
                 return cached["sha256"]
         except (OSError, ValueError):
             pass
-        print(t("Hashing {filename}", mapping={'filename': filename}))
+        print(t("Hashing {filename}", mapping={"filename": filename}))
         blksize = 1024 * 1024
         hash_sha256 = hashlib.sha256()
         try:
-            with open(filename, 'rb') as f:
+            with open(filename, "rb") as f:
                 for chunk in iter(lambda: f.read(blksize), b""):
                     hash_sha256.update(chunk)
             ret = hash_sha256.hexdigest().upper()
             # Cache locally, never beside the potentially read-only model. Only
             # publish a hash if the file remained unchanged while being read.
             if signature != file_signature(filename):
-                raise OSError('Model changed while hashing; retry when the file is stable.')
+                raise OSError("Model changed while hashing; retry when the file is stable.")
             try:
                 save_json(cache, {"signature": signature, "sha256": ret})
             except OSError as error:
@@ -331,6 +403,7 @@ class Models:
         if self.offline:
             return None
         from ruinedfooocus.features.models.model_sources import civitai_metadata
+
         return civitai_metadata(f"model-versions/by-hash/{hash}") or {
             "files": [{"hashes": {"SHA256": hash}}]
         }
@@ -380,18 +453,24 @@ class Models:
         needs_metadata = not (data.get("id") or data.get("hf_repo_id")) or not data.get("images")
         if fetch and not self.offline and needs_metadata and (not local_metadata or data.get("id")):
             from ruinedfooocus.features.models.model_identity import checkpoint_hashes
+
             hash = checkpoint_hashes(data).get("SHA256")
             if not hash and not data.get("id"):
                 hash = self.model_sha256(path)
             if hash or data.get("id"):
                 from ruinedfooocus.features.models.model_sources import civitai_metadata
-                remote = (civitai_metadata(f"model-versions/{data['id']}") if data.get("id")
-                          else self.search_civitai_with_hash(hash))
+
+                remote = (
+                    civitai_metadata(f"model-versions/{data['id']}")
+                    if data.get("id")
+                    else self.search_civitai_with_hash(hash)
+                )
                 if remote:
                     data = data | remote
                 if hash and not data.get("id") and not data.get("hf_repo_id"):
                     # Identity discovery must not depend on needing new artwork.
                     from ruinedfooocus.features.models.model_sources import huggingface_preview
+
                     header = self.read_safetensors_header(path).get("__metadata__", {})
                     source = header.get("modelspec.source", "") if isinstance(header, dict) else ""
                     fallback = huggingface_preview(path, hash, source)
@@ -411,15 +490,20 @@ class Models:
             save_json(json_path, data)
 
         from ruinedfooocus.features.video.video_settings import VIDEO_FPS
+
         base = self.detect_checkpoint_base(path)
-        if base and (base in VIDEO_FPS or base in ("Flux2Klein4B", "Flux2Klein9B")
-                     or data.get("baseModel") in (None, "", "Unknown", "Other", "Lumina2")):
+        if base and (
+            base in VIDEO_FPS
+            or base in ("Flux2Klein4B", "Flux2Klein9B")
+            or data.get("baseModel") in (None, "", "Unknown", "Other", "Lumina2")
+        ):
             data = data | {"baseModel": base}
         return data
 
     @staticmethod
     def read_safetensors_header(path):
         from ruinedfooocus.features.models.model_identity import cached_safetensors_header
+
         try:
             return cached_safetensors_header(path)
         except (OSError, ValueError):
@@ -447,12 +531,16 @@ class Models:
     @staticmethod
     def _detect_checkpoint_base(path):
         from ruinedfooocus.features.video.video_settings import detect_video_model
+
         if path.suffix.lower() == ".gguf":
             import gguf
+
             try:
                 reader = gguf.GGUFReader(str(path))
                 try:
-                    tensors = {t.name: {"shape": list(reversed(t.shape.tolist()))} for t in reader.tensors}
+                    tensors = {
+                        t.name: {"shape": list(reversed(t.shape.tolist()))} for t in reader.tensors
+                    }
                     video = detect_video_model(tensors)
                     if video:
                         return video
@@ -460,16 +548,32 @@ class Models:
                     architecture = field.contents() if field else None
                     if architecture == "ltxv":
                         for tensor in reader.tensors:
-                            if tensor.name.endswith("keyframes_abs_pos_embedding") and 4096 in tensor.shape:
+                            if (
+                                tensor.name.endswith("keyframes_abs_pos_embedding")
+                                and 4096 in tensor.shape
+                            ):
                                 return "LTXV 2.5"
-                        if any(t.name.endswith("transformer_blocks.0.attn1.to_gate_logits.weight") for t in reader.tensors):
+                        if any(
+                            t.name.endswith("transformer_blocks.0.attn1.to_gate_logits.weight")
+                            for t in reader.tensors
+                        ):
                             return "LTXV 2.3"
-                        return "LTXV2" if any(t.name.startswith("audio_") for t in reader.tensors) else "LTXV"
-                    family = {"wan": "Wan Video", "hyvid": "Hunyuan Video",
-                              "minimax_h3": "MiniMaxH3"}.get(architecture)
+                        return (
+                            "LTXV2"
+                            if any(t.name.startswith("audio_") for t in reader.tensors)
+                            else "LTXV"
+                        )
+                    family = {
+                        "wan": "Wan Video",
+                        "hyvid": "Hunyuan Video",
+                        "minimax_h3": "MiniMaxH3",
+                    }.get(architecture)
                     if family:
                         return family
-                    from ruinedfooocus.features.models.model_architecture import detect_tensor_architecture
+                    from ruinedfooocus.features.models.model_architecture import (
+                        detect_tensor_architecture,
+                    )
+
                     return detect_tensor_architecture(tensors)
                 finally:
                     reader.data._mmap.close()
@@ -480,20 +584,27 @@ class Models:
         video = detect_video_model(tensors)
         if video:
             return video
-        if ("conditioner.embedders.1.model.text_projection" in tensors
-                and "model.diffusion_model.input_blocks.0.0.weight" in tensors):
+        if (
+            "conditioner.embedders.1.model.text_projection" in tensors
+            and "model.diffusion_model.input_blocks.0.0.weight" in tensors
+        ):
             return "SDXL 1.0"
         prefix = "model.diffusion_model."
         for anima_prefix in (prefix, "net.", ""):
-            if (anima_prefix + "blocks.0.mlp.layer1.weight" in tensors
-                    and anima_prefix + "llm_adapter.blocks.0.cross_attn.q_proj.weight" in tensors):
+            if (
+                anima_prefix + "blocks.0.mlp.layer1.weight" in tensors
+                and anima_prefix + "llm_adapter.blocks.0.cross_attn.q_proj.weight" in tensors
+            ):
                 return "Anima"
-        if (prefix + "double_blocks.0.img_attn.qkv.weight" in tensors
-                and prefix + "single_blocks.0.linear1.weight" in tensors
-                and tensors.get(prefix + "img_in.weight", {}).get("shape") == [3072, 64]):
+        if (
+            prefix + "double_blocks.0.img_attn.qkv.weight" in tensors
+            and prefix + "single_blocks.0.linear1.weight" in tensors
+            and tensors.get(prefix + "img_in.weight", {}).get("shape") == [3072, 64]
+        ):
             return "Flux.1 D" if prefix + "guidance_in.in_layer.weight" in tensors else "Flux.1 S"
         try:
             from ruinedfooocus.features.models.model_architecture import detect_tensor_architecture
+
             return detect_tensor_architecture(tensors)
         except ImportError:
             return None  # Backend is not installed during first-run setup.
@@ -513,7 +624,6 @@ class Models:
             pass
         return False
 
-
     def get_model_path(self, model_type, name, hash=None, default=None):
         from ruinedfooocus.app.state import path_manager, settings
 
@@ -530,11 +640,15 @@ class Models:
         # Do not replace a missing custom model with an unrelated default.
         if filename is None and model_type in ("checkpoints", "loras"):
             from ruinedfooocus.app.arguments import args
+
             if not args.offline and os.environ.get("RF_OFFLINE") != "1":
                 filename = path_manager.get_folder_file_path(model_type, name)
                 if filename is not None:
-                    threading.Thread(target=self.civit_update_worker,
-                        args=(model_type, self.model_dirs[model_type]), daemon=True).start()
+                    threading.Thread(
+                        target=self.civit_update_worker,
+                        args=(model_type, self.model_dirs[model_type]),
+                        daemon=True,
+                    ).start()
 
         # If we don't have a filename, get the default.
         if filename is None and default is not None:
@@ -551,12 +665,11 @@ class Models:
             if hash is not None and hash != "None":
                 print(f"    SHA256: {hash}")
                 data = self.search_civitai_with_hash(hash)
-                if data is not None and data.get('modelId', None) is not None:
+                if data is not None and data.get("modelId", None) is not None:
                     print(f"    Download link: https://civitai.com/models/{data.get('modelId')}")
                 print(f"    Search here: https://civitaiarchive.com/sha256/{hash}")
 
         return filename
-
 
     def get_keywords(self, model):
         keywords = model.get("trainedWords", [""])
@@ -577,12 +690,20 @@ class Models:
         from ruinedfooocus.app.state import settings
         from ruinedfooocus.features.models.model_previews import write_preview
 
-        caption = Path(path).stem if "caption" in settings.default_settings.get("model_preview", "").split(",") else ""
+        caption = (
+            Path(path).stem
+            if "caption" in settings.default_settings.get("model_preview", "").split(",")
+            else ""
+        )
         previews = model.get("images") or []
         if not isinstance(previews, list):
             return False
         for preview in previews[:5]:
-            if not isinstance(preview, dict) or not preview.get("url") or "cdn-thumbnails.huggingface.co/social-thumbnails/" in preview["url"]:
+            if (
+                not isinstance(preview, dict)
+                or not preview.get("url")
+                or "cdn-thumbnails.huggingface.co/social-thumbnails/" in preview["url"]
+            ):
                 continue
             try:
                 with self.session.get(preview["url"], timeout=(5, 20), stream=True) as response:
@@ -590,7 +711,10 @@ class Models:
                     data = bytearray()
                     started = time.monotonic()
                     for chunk in response.iter_content(65536):
-                        if len(data) + len(chunk) > 64 * 1024 * 1024 or time.monotonic() - started > 60:
+                        if (
+                            len(data) + len(chunk) > 64 * 1024 * 1024
+                            or time.monotonic() - started > 60
+                        ):
                             raise ValueError("Preview exceeds the download size or time limit")
                         data.extend(chunk)
                 write_preview(bytes(data), path, caption, video=preview.get("type") == "video")

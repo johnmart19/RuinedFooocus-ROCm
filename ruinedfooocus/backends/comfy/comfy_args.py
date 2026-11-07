@@ -132,12 +132,8 @@ def add_comfy_arguments(parser):
     fpvae_group.add_argument(
         "--fp32-vae", action="store_true", help="Run the VAE in full precision fp32."
     )
-    fpvae_group.add_argument(
-        "--bf16-vae", action="store_true", help="Run the VAE in bf16."
-    )
-    parser.add_argument(
-        "--cpu-vae", action="store_true", help="Run the VAE on the CPU."
-    )
+    fpvae_group.add_argument("--bf16-vae", action="store_true", help="Run the VAE in bf16.")
+    parser.add_argument("--cpu-vae", action="store_true", help="Run the VAE on the CPU.")
     fpte_group.add_argument(
         "--fp8_e4m3fn-text-enc",
         action="store_true",
@@ -211,18 +207,14 @@ def add_comfy_arguments(parser):
         action="store_true",
         help="Use the new pytorch 2.0 cross attention function.",
     )
-    attn_group.add_argument(
-        "--use-sage-attention", action="store_true", help="Use sage attention."
-    )
+    attn_group.add_argument("--use-sage-attention", action="store_true", help="Use sage attention.")
     attn_group.add_argument(
         "--use-flash-attention", action="store_true", help="Use FlashAttention."
     )
     attn_group.add_argument(
         "--use-ck-attention", action="store_true", help="Use Comfy Kitchen attention."
     )
-    parser.add_argument(
-        "--disable-xformers", action="store_true", help="Disable xformers."
-    )
+    parser.add_argument("--disable-xformers", action="store_true", help="Disable xformers.")
     # Upstream groups this with execution-cache modes, which the embedded
     # pipeline does not expose.
     parser.add_mutually_exclusive_group().add_argument(
@@ -255,9 +247,7 @@ def add_comfy_arguments(parser):
         action="store_true",
         help="Doesn't do anything if dynamic vram is enabled. If dynamic vram isn't being used this option makes the text encoders run on the CPU.",
     )
-    vram_group.add_argument(
-        "--novram", action="store_true", help="When lowvram isn't enough."
-    )
+    vram_group.add_argument("--novram", action="store_true", help="When lowvram isn't enough.")
     vram_group.add_argument(
         "--cpu", action="store_true", help="To use the CPU for everything (slow)."
     )
@@ -312,9 +302,7 @@ def add_comfy_arguments(parser):
         action="store_true",
         help="Disable disk-backed dynamic loading and offload over unpinned RAM. Overrides --fast-disk.",
     )
-    parser.add_argument(
-        "--disable-cuda-graphs", action="store_true", help="Disable CUDA graphs."
-    )
+    parser.add_argument("--disable-cuda-graphs", action="store_true", help="Disable CUDA graphs.")
     parser.add_argument(
         "--disable-comfy-compiler",
         action="store_true",

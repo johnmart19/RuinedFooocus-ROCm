@@ -13,20 +13,37 @@ class WindowsJob:
         from ctypes import wintypes as w
 
         class BasicLimits(ctypes.Structure):
-            _fields_ = [("process_time", ctypes.c_int64), ("job_time", ctypes.c_int64),
-                        ("flags", w.DWORD), ("min_working_set", ctypes.c_size_t),
-                        ("max_working_set", ctypes.c_size_t), ("active_processes", w.DWORD),
-                        ("affinity", ctypes.c_size_t), ("priority", w.DWORD), ("scheduling", w.DWORD)]
+            _fields_ = [
+                ("process_time", ctypes.c_int64),
+                ("job_time", ctypes.c_int64),
+                ("flags", w.DWORD),
+                ("min_working_set", ctypes.c_size_t),
+                ("max_working_set", ctypes.c_size_t),
+                ("active_processes", w.DWORD),
+                ("affinity", ctypes.c_size_t),
+                ("priority", w.DWORD),
+                ("scheduling", w.DWORD),
+            ]
 
         class ExtendedLimits(ctypes.Structure):
-            _fields_ = [("basic", BasicLimits), ("io_counters", ctypes.c_uint64 * 6),
-                        ("process_memory", ctypes.c_size_t), ("job_memory", ctypes.c_size_t),
-                        ("peak_process_memory", ctypes.c_size_t), ("peak_job_memory", ctypes.c_size_t)]
+            _fields_ = [
+                ("basic", BasicLimits),
+                ("io_counters", ctypes.c_uint64 * 6),
+                ("process_memory", ctypes.c_size_t),
+                ("job_memory", ctypes.c_size_t),
+                ("peak_process_memory", ctypes.c_size_t),
+                ("peak_job_memory", ctypes.c_size_t),
+            ]
 
         self.api = ctypes.WinDLL("kernel32", use_last_error=True)
         self.api.CreateJobObjectW.argtypes = [ctypes.c_void_p, w.LPCWSTR]
         self.api.CreateJobObjectW.restype = w.HANDLE
-        self.api.SetInformationJobObject.argtypes = [w.HANDLE, ctypes.c_int, ctypes.c_void_p, w.DWORD]
+        self.api.SetInformationJobObject.argtypes = [
+            w.HANDLE,
+            ctypes.c_int,
+            ctypes.c_void_p,
+            w.DWORD,
+        ]
         self.api.SetInformationJobObject.restype = w.BOOL
         self.api.AssignProcessToJobObject.argtypes = [w.HANDLE, w.HANDLE]
         self.api.AssignProcessToJobObject.restype = w.BOOL
@@ -37,7 +54,9 @@ class WindowsJob:
             raise ctypes.WinError(ctypes.get_last_error())
         limits = ExtendedLimits()
         limits.basic.flags = 0x2000  # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
-        if not self.api.SetInformationJobObject(self.handle, 9, ctypes.byref(limits), ctypes.sizeof(limits)):
+        if not self.api.SetInformationJobObject(
+            self.handle, 9, ctypes.byref(limits), ctypes.sizeof(limits)
+        ):
             error = ctypes.WinError(ctypes.get_last_error())
             self.close()
             raise error

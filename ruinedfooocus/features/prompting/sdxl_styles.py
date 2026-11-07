@@ -47,11 +47,10 @@ def load_styles():
 
     if changed:
         styles_encoding = "utf-8-sig"
-        with open(STYLES_FILE, "w", encoding="utf-8", newline='') as f:
+        with open(STYLES_FILE, "w", encoding="utf-8", newline="") as f:
             csv_writer = csv.writer(f)
             for row in styles:
                 csv_writer.writerow(row)
-
 
     with STYLES_FILE.open("r", encoding=styles_encoding, newline="") as f:
         reader = DictReader(f)
@@ -127,7 +126,7 @@ def apply_style(style, prompt, negative_prompt, lora_keywords, *, enhancer=None)
             del style[style.index(s)]
 
         if _s in map(str.upper, ["LoRA keywords", "Style: LoRA keywords"]):
-            style[style.index(s)] = "LoRA keywords" # Make sure it has the correct name
+            style[style.index(s)] = "LoRA keywords"  # Make sure it has the correct name
 
     if bHyperprompt:
         prompt = build_dynamic_prompt.one_button_superprompt(prompt=prompt)
@@ -144,18 +143,28 @@ def apply_style(style, prompt, negative_prompt, lora_keywords, *, enhancer=None)
 
     for s in style:
         p, n = styles.get(s, default_style)
-        if (s == "Style: sai-cinematic" and p and p.startswith("cinematic film still {prompt}")
-                and re.search(r"\banime\b", prompt, re.IGNORECASE)):
+        if (
+            s == "Style: sai-cinematic"
+            and p
+            and p.startswith("cinematic film still {prompt}")
+            and re.search(r"\banime\b", prompt, re.IGNORECASE)
+        ):
             p = p.replace("cinematic film still", "cinematic anime illustration", 1)
             # Do not make the style reject the medium explicitly requested in the prompt.
-            n = ", ".join(tag.strip() for tag in (n or "").split(",")
-                          if tag.strip().lower() not in {"", "anime", "cartoon", "graphic", "painting", "crayon"})
+            n = ", ".join(
+                tag.strip()
+                for tag in (n or "").split(",")
+                if tag.strip().lower()
+                not in {"", "anime", "cartoon", "graphic", "painting", "crayon"}
+            )
         if p is not None:
             template = (p + ", ").replace(", ,", ", ")
+
             def substitute(match):
                 if match.group(0) == "{prompt}":
                     return temp_style_prompt
                 return "{lora_keywords}" if lora_keywords is None else lora_keywords
+
             temp_style_prompt = re.sub(r"\{prompt\}|\{lora_keywords\}", substitute, template)
             output_prompt = temp_style_prompt
         if n:

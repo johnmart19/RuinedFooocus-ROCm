@@ -2,7 +2,11 @@ import os
 import re
 import random
 
-from ruinedfooocus.features.prompting.sdxl_styles import apply_style, styles as available_styles, STYLE_ALIASES
+from ruinedfooocus.features.prompting.sdxl_styles import (
+    apply_style,
+    styles as available_styles,
+    STYLE_ALIASES,
+)
 from ruinedfooocus.features.prompting.prompt_scheduling import prompt_switch_per_step
 from ruinedfooocus.features.prompting.one_button.build_dynamic_prompt import (
     build_dynamic_prompt,
@@ -13,31 +17,37 @@ from ruinedfooocus.app.state import path_manager
 
 def process_metadata(gen_data):
     from ruinedfooocus.features.gallery.image_metadata import read_metadata, render_values
-    meta = read_metadata(gen_data['prompt'])
+
+    meta = read_metadata(gen_data["prompt"])
     if meta is not None:
-        if not isinstance(meta['prompt'], str):
-            raise ValueError('Image metadata needs a text prompt.')
+        if not isinstance(meta["prompt"], str):
+            raise ValueError("Image metadata needs a text prompt.")
         from ruinedfooocus.features.image_editing.image_guidance import restore_guidance_metadata
         from ruinedfooocus.app.state import models
-        checkpoint = meta.get('base_model_name', gen_data.get('base_model_name'))
-        family = 'Unknown'
+
+        checkpoint = meta.get("base_model_name", gen_data.get("base_model_name"))
+        family = "Unknown"
         if checkpoint:
-            info = models.get_models_by_path('checkpoints', checkpoint, fetch=False)
+            info = models.get_models_by_path("checkpoints", checkpoint, fetch=False)
             family = models.get_model_base(info)
-            path = models.get_file('checkpoints', checkpoint)
+            path = models.get_file("checkpoints", checkpoint)
             if path:
                 family = models.detect_checkpoint_base(path) or family
         restored = restore_guidance_metadata(meta, family=family)
         gen_data.update(render_values(meta))
-        gen_data['_metadata_prompt'] = True
+        gen_data["_metadata_prompt"] = True
         # Canonical validated flat/grouped guidance takes precedence. This also
         # restores the recorded effective Auto shift instead of a later default.
         gen_data.update(restored)
         gen_data["style_selection"] = []
         gen_data["performance_selection"] = "Own settings"
         if meta.get("width") and meta.get("height"):
-            gen_data["width"] = gen_data["custom_width"] = meta.get("generation_width", meta["width"])
-            gen_data["height"] = gen_data["custom_height"] = meta.get("generation_height", meta["height"])
+            gen_data["width"] = gen_data["custom_width"] = meta.get(
+                "generation_width", meta["width"]
+            )
+            gen_data["height"] = gen_data["custom_height"] = meta.get(
+                "generation_height", meta["height"]
+            )
             gen_data["aspect_ratios_selection"] = "Custom..."
         gen_data["automatic_upscale"] = meta.get("automatic_upscale", "Off")
         gen_data["automatic_upscale_target"] = "Generated image"
@@ -49,8 +59,9 @@ def process_metadata(gen_data):
 
 def get_promptlist(gen_data):
     from ruinedfooocus.features.gallery.image_metadata import read_metadata
-    if gen_data.get('_metadata_prompt') or read_metadata(gen_data['prompt']) is not None:
-        return [gen_data['prompt']]
+
+    if gen_data.get("_metadata_prompt") or read_metadata(gen_data["prompt"]) is not None:
+        return [gen_data["prompt"]]
     return gen_data["prompt"].split("---")
 
 
@@ -245,7 +256,9 @@ def process_wildcards(wildcard_text, directory=None, *, _stack=()):
             random_choice = random.choice(placeholder_choices[placeholder])
 
         if "__" in random_choice:
-            random_choice = process_wildcards(random_choice, directory, _stack=(*_stack, placeholder))
+            random_choice = process_wildcards(
+                random_choice, directory, _stack=(*_stack, placeholder)
+            )
         wildcard_text = wildcard_text.replace(f"__{placeholder}__", random_choice, 1)
 
     return wildcard_text
@@ -253,18 +266,19 @@ def process_wildcards(wildcard_text, directory=None, *, _stack=()):
 
 def use_random_prompt(gen_data, prompt):
     from ruinedfooocus.features.gallery.image_metadata import read_metadata
-    if gen_data.get('_metadata_prompt') or read_metadata(prompt) is not None:
+
+    if gen_data.get("_metadata_prompt") or read_metadata(prompt) is not None:
         return False
     if "obp_assume_direct_control" not in gen_data:
         return False
     # An empty image-conditioned prompt is intentional, not a request for OBP.
-    control = gen_data.get('controlnet')
-    tool = control.get('type') if control is not None else gen_data.get('cn_selection')
-    if control is None and tool == 'Custom...':
-        tool = gen_data.get('cn_type')
-    image_conditioned = (gen_data.get("input_image") is not None and tool not in (None, '', 'None')) or (
-        "inpaint_toggle" in gen_data and gen_data["inpaint_toggle"]
-    )
+    control = gen_data.get("controlnet")
+    tool = control.get("type") if control is not None else gen_data.get("cn_selection")
+    if control is None and tool == "Custom...":
+        tool = gen_data.get("cn_type")
+    image_conditioned = (
+        gen_data.get("input_image") is not None and tool not in (None, "", "None")
+    ) or ("inpaint_toggle" in gen_data and gen_data["inpaint_toggle"])
     if image_conditioned:
         return gen_data.get("obp_image_prompt", False)
     return gen_data["obp_assume_direct_control"] or not prompt.strip()
@@ -273,23 +287,35 @@ def use_random_prompt(gen_data, prompt):
 def process_prompt(style, prompt, negative, gen_data=None):
     if gen_data is None:
         gen_data = {}
-    if gen_data.get('_metadata_prompt'):
+    if gen_data.get("_metadata_prompt"):
         return prompt, negative
     enhanced = False
+
     def enhance_once(text, model_type="", preset_focus=""):
         nonlocal enhanced
         if enhanced:
             return text
         from ruinedfooocus.features.prompting.prompt_enhancement import enhance_prompt
+
         def check_cancelled():
             from ruinedfooocus.app.async_worker import check_interrupt
+
             check_interrupt(gen_data)
+
         result = enhance_prompt(text, model_type, preset_focus, check_cancelled=check_cancelled)
         enhanced = True
         return result
+
     if use_random_prompt(gen_data, prompt):
-        from ruinedfooocus.features.prompting.one_button.prompt_formats import format_for, engine_mode, finalize
-        prompt_format = format_for(gen_data.get("OBP_modeltype", "Auto"), gen_data.get("base_model_name"))
+        from ruinedfooocus.features.prompting.one_button.prompt_formats import (
+            format_for,
+            engine_mode,
+            finalize,
+        )
+
+        prompt_format = format_for(
+            gen_data.get("OBP_modeltype", "Auto"), gen_data.get("base_model_name")
+        )
         prompt = build_dynamic_prompt(
             insanitylevel=gen_data["obp_insanitylevel"],
             forcesubject=gen_data["obp_subject"],
@@ -319,7 +345,12 @@ def process_prompt(style, prompt, negative, gen_data=None):
     pattern = re.compile(r"<style:([^>]+)>")
     # Dropdown selections are staged for "Send Style to prompt". Generation
     # must not invisibly apply them again, including saved/default selections.
-    styles = (style or []).copy() if "task_type" in gen_data and gen_data["task_type"] == "tool_call" else []
+    styles = (
+        (style or []).copy()
+        if "task_type" in gen_data and gen_data["task_type"] == "tool_call"
+        else []
+    )
+
     def inline_style(match):
         name = STYLE_ALIASES.get(match.group(1), match.group(1))
         key = f"Style: {name}"
@@ -329,6 +360,7 @@ def process_prompt(style, prompt, negative, gen_data=None):
             styles.append(key)
             return ""
         return match.group(0)
+
     prompt = pattern.sub(inline_style, prompt)
     if "lora_keywords" in gen_data:
         keywords = gen_data["lora_keywords"]
@@ -352,7 +384,11 @@ def parse_loras(prompt, negative):
     pattern = re.compile(r"<lora:([^<>]+):([+-]?(?:\d+(?:\.\d*)?|\.\d+))>")
     loras = []
     for match in re.finditer(pattern, prompt):
-        loras.append({"name": f"{match.group(1)}.safetensors", "weight": float(match.group(2)), "hash": None})
+        loras.append(
+            {"name": f"{match.group(1)}.safetensors", "weight": float(match.group(2)), "hash": None}
+        )
     for match in re.finditer(pattern, negative):
-        loras.append({"name": f"{match.group(1)}.safetensors", "weight": float(match.group(2)), "hash": None})
+        loras.append(
+            {"name": f"{match.group(1)}.safetensors", "weight": float(match.group(2)), "hash": None}
+        )
     return loras, re.sub(pattern, "", prompt), re.sub(pattern, "", negative)

@@ -6,13 +6,30 @@ import warnings
 from pathlib import Path
 from tempfile import gettempdir
 from ruinedfooocus.packaging.rocm_installer import ROCM_PLATFORM, automatic_rocm_plan, install_rocm
-from ruinedfooocus.packaging.runtime_support import inspect_installed_rocm, inspect_installed_cuda, inspect_installed_cpu, installed_cuda_platform, select_torch_platform
-from ruinedfooocus.packaging.gpu_installer import (
-    preserve_installed_rocm, preserve_installed_cuda, installed_torch_constraints, torch_constraints, torch_install_commands,
-    xllamacpp_index, has_vulkan_xllamacpp, has_cuda_xllamacpp, has_xllamacpp_device,
-    xllamacpp_backend_matches, record_xllamacpp_backend,
+from ruinedfooocus.packaging.runtime_support import (
+    inspect_installed_rocm,
+    inspect_installed_cuda,
+    inspect_installed_cpu,
+    installed_cuda_platform,
+    select_torch_platform,
 )
-from ruinedfooocus.backends.comfy.comfy_compat import configure_device_environment, configure_torch_allocator
+from ruinedfooocus.packaging.gpu_installer import (
+    preserve_installed_rocm,
+    preserve_installed_cuda,
+    installed_torch_constraints,
+    torch_constraints,
+    torch_install_commands,
+    xllamacpp_index,
+    has_vulkan_xllamacpp,
+    has_cuda_xllamacpp,
+    has_xllamacpp_device,
+    xllamacpp_backend_matches,
+    record_xllamacpp_backend,
+)
+from ruinedfooocus.backends.comfy.comfy_compat import (
+    configure_device_environment,
+    configure_torch_allocator,
+)
 
 # Redirected output uses the console codepage (e.g. cp1251); model text or file
 # names it cannot encode must not crash the operation that logs them.
@@ -39,9 +56,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings(
     "ignore", category=UserWarning, module="torchvision.transforms.functional_tensor"
 )
-warnings.filterwarnings(
-    "ignore", category=UserWarning, message="TypedStorage is deprecated"
-)
+warnings.filterwarnings("ignore", category=UserWarning, message="TypedStorage is deprecated")
 
 from ruinedfooocus.packaging.launch_util import (
     is_installed,
@@ -86,6 +101,7 @@ def prepare_environment(offline=False):
         print("Skip pip check.")
     else:
         from ruinedfooocus.core.dependency_cache import needed, record
+
         maintenance_needed = needed(script_path, "maintenance", force=REINSTALL_ALL)
         if maintenance_needed:
             run(
@@ -94,7 +110,9 @@ def prepare_environment(offline=False):
                 "Couldn't check pip",
                 live=False,
             )
-        if not getattr(sys, "_rf_bootstrap_checked", False) and needed(script_path, "bootstrap", force=REINSTALL_ALL):
+        if not getattr(sys, "_rf_bootstrap_checked", False) and needed(
+            script_path, "bootstrap", force=REINSTALL_ALL
+        ):
             run(
                 f'"{python}" -m pip install --quiet {"--force-reinstall " if REINSTALL_ALL else ""}-r "{requirements_file}"',
                 "Check pre-requirements",
@@ -113,21 +131,34 @@ def prepare_environment(offline=False):
         if not getattr(sys, "_rf_bootstrap_checked", False):
             record(script_path, "bootstrap")
 
-
         import torchruntime
         import platform
+
         os_platform = platform.system()
         if args.cuda_nightly:
             from ruinedfooocus.packaging.cuda_selection import select_cuda_nightly
-            os.environ["TORCH_PLATFORM"] = select_cuda_nightly(os_platform, os.environ.get("TORCH_PLATFORM"))
-        installed_rocm = inspect_installed_rocm(os_platform, repair=REINSTALL_ALL or REINSTALL_TORCH or args.rocm10)
+
+            os.environ["TORCH_PLATFORM"] = select_cuda_nightly(
+                os_platform, os.environ.get("TORCH_PLATFORM")
+            )
+        installed_rocm = inspect_installed_rocm(
+            os_platform, repair=REINSTALL_ALL or REINSTALL_TORCH or args.rocm10
+        )
         installed_cuda = inspect_installed_cuda(os_platform)
         installed_cpu = inspect_installed_cpu() if args.cpu else None
         keep_cpu = bool(installed_cpu and not (REINSTALL_ALL or REINSTALL_TORCH))
-        torch_platform = select_torch_platform(torchruntime, os_platform, installed_rocm, installed_cuda)
-        keep_cuda = preserve_installed_cuda(installed_cuda, torch_platform, REINSTALL_ALL or REINSTALL_TORCH or args.rocm10 or args.cuda_nightly)
+        torch_platform = select_torch_platform(
+            torchruntime, os_platform, installed_rocm, installed_cuda
+        )
+        keep_cuda = preserve_installed_cuda(
+            installed_cuda,
+            torch_platform,
+            REINSTALL_ALL or REINSTALL_TORCH or args.rocm10 or args.cuda_nightly,
+        )
         keep_rocm = preserve_installed_rocm(
-            installed_rocm, torch_platform, REINSTALL_ALL or REINSTALL_TORCH or args.rocm10,
+            installed_rocm,
+            torch_platform,
+            REINSTALL_ALL or REINSTALL_TORCH or args.rocm10,
         )
 
         rocm_plan = None
@@ -161,9 +192,13 @@ def prepare_environment(offline=False):
         if keep_cpu:
             print(f"Using installed PyTorch {installed_cpu['versions']['torch']} on CPU")
         elif keep_rocm:
-            print(f"Using installed {os_platform} ROCm PyTorch {installed_rocm['versions']['torch']}")
+            print(
+                f"Using installed {os_platform} ROCm PyTorch {installed_rocm['versions']['torch']}"
+            )
         elif keep_cuda:
-            print(f"Using installed {os_platform} CUDA PyTorch {installed_cuda['versions']['torch']}")
+            print(
+                f"Using installed {os_platform} CUDA PyTorch {installed_cuda['versions']['torch']}"
+            )
         elif rocm_plan:
             install_rocm(rocm_plan.args, REINSTALL_ALL or REINSTALL_TORCH or args.rocm10)
             installed_rocm = inspect_installed_rocm(os_platform)
@@ -177,7 +212,9 @@ def prepare_environment(offline=False):
                     "Install a compatible Windows ROCm bundle from AMD for this explicit version. "
                     "Remove reinstall/reinstalltorch after repairing the bundle."
                 )
-            cmds = torch_install_commands(torchruntime, torch_platform, os_platform, nightly=args.cuda_nightly)
+            cmds = torch_install_commands(
+                torchruntime, torch_platform, os_platform, nightly=args.cuda_nightly
+            )
             if REINSTALL_ALL or REINSTALL_TORCH:
                 for idx in range(len(cmds)):
                     cmds[idx].insert(0, "--force-reinstall")
@@ -188,26 +225,39 @@ def prepare_environment(offline=False):
             for command in cmds:
                 subprocess.run(command, check=True)
             if torch_platform == "directml":
-                subprocess.run([python, "-c",
-                    "import torch, torch_directml as dml; "
-                    f"device=dml.device({args.directml}) if {args.directml} >= 0 else dml.device(); "
-                    "x=torch.ones((2,2)).to(device); assert (x@x).cpu()[0,0].item()==2; "
-                    "print('DirectML GPU verified')"], check=True)
+                subprocess.run(
+                    [
+                        python,
+                        "-c",
+                        "import torch, torch_directml as dml; "
+                        f"device=dml.device({args.directml}) if {args.directml} >= 0 else dml.device(); "
+                        "x=torch.ones((2,2)).to(device); assert (x@x).cpu()[0,0].item()==2; "
+                        "print('DirectML GPU verified')",
+                    ],
+                    check=True,
+                )
             if torch_platform.startswith("cu"):
                 installed_cuda = inspect_installed_cuda(os_platform)
                 if not installed_cuda or installed_cuda_platform(installed_cuda) != torch_platform:
-                    raise RuntimeError("CUDA installation did not validate the selected runtime. Check the NVIDIA driver and CUDA/Python versions; the reinstall request remains pending.")
+                    raise RuntimeError(
+                        "CUDA installation did not validate the selected runtime. Check the NVIDIA driver and CUDA/Python versions; the reinstall request remains pending."
+                    )
                 if args.cuda_nightly:
                     from packaging.version import Version
+
                     if not Version(installed_cuda["versions"]["torch"]).is_devrelease:
-                        raise RuntimeError("CUDA nightly was requested, but installed PyTorch is not a nightly build.")
+                        raise RuntimeError(
+                            "CUDA nightly was requested, but installed PyTorch is not a nightly build."
+                        )
             torchruntime.configure()
         else:
             print(f"Torch frozen...")
 
         installed_torch = installed_torch_constraints()
         compatible_transformers = (installed_torch or {}).get("versions", {}).get("transformers")
-        repair_transformers = compatible_transformers and not is_installed(f"transformers=={compatible_transformers}")
+        repair_transformers = compatible_transformers and not is_installed(
+            f"transformers=={compatible_transformers}"
+        )
         if REINSTALL_ALL or repair_transformers or not requirements_met(modules_file):
             print("This next step may take a while")
             with torch_constraints(installed_torch) as constraints:
@@ -221,27 +271,40 @@ def prepare_environment(offline=False):
             index = xllamacpp_index(torch_platform, os_platform, version=xlc_version.split("==")[1])
             needs_vulkan = index.endswith("/vulkan")
             needs_cuda = index.rsplit("/", 1)[-1] in ("cu128", "cu132")
-            wrong_backend = (not xllamacpp_backend_matches(index)
-                             or needs_vulkan and not has_vulkan_xllamacpp()
-                             or needs_cuda and not has_cuda_xllamacpp())
+            wrong_backend = (
+                not xllamacpp_backend_matches(index)
+                or needs_vulkan
+                and not has_vulkan_xllamacpp()
+                or needs_cuda
+                and not has_cuda_xllamacpp()
+            )
             installed_before = is_installed(xlc_version)
             if REINSTALL_ALL or not installed_before or wrong_backend:
                 with torch_constraints(installed_torch) as constraints:
                     run_pip(
-                        f'install {xlc_version} --index-url {index} --only-binary=xllamacpp{constraints}',
+                        f"install {xlc_version} --index-url {index} --only-binary=xllamacpp{constraints}",
                         "XLlamacpp",
                     )
                     # pip keeps an installed wheel of the same version from another backend index.
                     if REINSTALL_ALL or wrong_backend and installed_before:
-                        run_pip(f'install --force-reinstall --no-deps {xlc_version} --index-url {index} --only-binary=xllamacpp', "reinstall XLlamacpp backend")
+                        run_pip(
+                            f"install --force-reinstall --no-deps {xlc_version} --index-url {index} --only-binary=xllamacpp",
+                            "reinstall XLlamacpp backend",
+                        )
                 if needs_cuda and not has_cuda_xllamacpp():
-                    raise RuntimeError("xllamacpp CUDA installed but no CUDA device is available. Check the NVIDIA driver, or use native llama.cpp with Vulkan.")
+                    raise RuntimeError(
+                        "xllamacpp CUDA installed but no CUDA device is available. Check the NVIDIA driver, or use native llama.cpp with Vulkan."
+                    )
                 if needs_vulkan and not has_vulkan_xllamacpp():
-                    raise RuntimeError("xllamacpp Vulkan installed but its Vulkan libraries are missing.")
+                    raise RuntimeError(
+                        "xllamacpp Vulkan installed but its Vulkan libraries are missing."
+                    )
                 record_xllamacpp_backend(index)
                 if needs_vulkan and not has_xllamacpp_device("Vulkan"):
-                    print("NOTE: xllamacpp found no Vulkan GPU (common in WSL) and will run on CPU. "
-                          "The default native llama.cpp runtime selects its own GPU backend (ROCm/CUDA).")
+                    print(
+                        "NOTE: xllamacpp found no Vulkan GPU (common in WSL) and will run on CPU. "
+                        "The default native llama.cpp runtime selects its own GPU backend (ROCm/CUDA)."
+                    )
         except Exception as e:
             if REINSTALL_ALL:
                 raise  # Keep the request pending when a requested reinstall fails.
@@ -249,9 +312,15 @@ def prepare_environment(offline=False):
             print(e)
 
         if args.rocm10:
-            subprocess.run([python, "-c",
-                "from ruinedfooocus.backends.llama.llama_installer import server_path, runtime_environment; "
-                "server_path(True); runtime_environment(True, reinstall=True)"], check=True)
+            subprocess.run(
+                [
+                    python,
+                    "-c",
+                    "from ruinedfooocus.backends.llama.llama_installer import server_path, runtime_environment; "
+                    "server_path(True); runtime_environment(True, reinstall=True)",
+                ],
+                check=True,
+            )
 
     if args.api:
         print("Check API dependencies")
@@ -259,7 +328,9 @@ def prepare_environment(offline=False):
         if REINSTALL_ALL or not requirements_met(api_requirements):
             if offline:
                 if not requirements_met(api_requirements):
-                    raise RuntimeError("API dependencies are missing. Launch once without --offline to install them.")
+                    raise RuntimeError(
+                        "API dependencies are missing. Launch once without --offline to install them."
+                    )
             else:
                 with torch_constraints(installed_torch) as constraints:
                     run_pip(f'install -r "{api_requirements}"{constraints}', "API dependencies")
@@ -302,6 +373,7 @@ def download_models():
             file_name=file_name,
         )
 
+
 from ruinedfooocus.app.arguments import args
 from ruinedfooocus.app.startup_port import configure_port
 from ruinedfooocus.integrations.web_access import validate_web_access
@@ -312,6 +384,7 @@ configure_port(args)
 # Warn if using python 3.10
 import platform
 import time
+
 py_ver = platform.python_version().split(".")
 if int(py_ver[0]) == 3 and int(py_ver[1]) <= 10:
     print("")
@@ -320,7 +393,7 @@ if int(py_ver[0]) == 3 and int(py_ver[1]) <= 10:
     print("See the Install section of readme.md.")
     print("")
     time.sleep(3)
-    #input("Press enter to continue...")
+    # input("Press enter to continue...")
 
 REINSTALL_ALL = False
 if os.path.exists("reinstall"):
@@ -332,11 +405,17 @@ TORCH_FROZEN = os.path.exists("freezetorch") and not (REINSTALL_ALL or REINSTALL
 
 configure_device_environment(args)
 
-offline = os.environ.get("RF_OFFLINE") == "1" or "--offline" in sys.argv or "--iINSTallLEDmYOwNPaCKaGeS" in sys.argv
+offline = (
+    os.environ.get("RF_OFFLINE") == "1"
+    or "--offline" in sys.argv
+    or "--iINSTallLEDmYOwNPaCKaGeS" in sys.argv
+)
 if args.cpu and args.directml is not None:
     raise RuntimeError("Choose --cpu or --directml, not both.")
 if args.directml is not None and args.directml < -1:
-    raise RuntimeError("--directml expects a non-negative GPU index, or no value for the default GPU.")
+    raise RuntimeError(
+        "--directml expects a non-negative GPU index, or no value for the default GPU."
+    )
 if args.cpu or args.directml is not None:
     os.environ["TORCH_PLATFORM"] = "cpu" if args.cpu else "directml"
 if os.environ.get("TORCH_PLATFORM") == "cpu":
@@ -344,10 +423,18 @@ if os.environ.get("TORCH_PLATFORM") == "cpu":
 elif os.environ.get("TORCH_PLATFORM") == "directml" and args.directml is None:
     args.directml = -1
 
-if args.rocm10 and (offline or args.cpu or args.directml is not None or os.path.exists("freezetorch")):
-    raise RuntimeError("--rocm10 cannot be combined with offline, CPU, DirectML or freezetorch mode.")
-if args.cuda_nightly and (offline or args.rocm10 or args.cpu or args.directml is not None or TORCH_FROZEN):
-    raise RuntimeError("--cuda-nightly cannot be combined with offline, ROCm, CPU, DirectML or freezetorch mode.")
+if args.rocm10 and (
+    offline or args.cpu or args.directml is not None or os.path.exists("freezetorch")
+):
+    raise RuntimeError(
+        "--rocm10 cannot be combined with offline, CPU, DirectML or freezetorch mode."
+    )
+if args.cuda_nightly and (
+    offline or args.rocm10 or args.cpu or args.directml is not None or TORCH_FROZEN
+):
+    raise RuntimeError(
+        "--cuda-nightly cannot be combined with offline, ROCm, CPU, DirectML or freezetorch mode."
+    )
 
 if offline:
     print("Skip checking python modules.")
@@ -375,16 +462,19 @@ except:
 # Online auxiliary downloads import shared state, which starts metadata scanning.
 # Initialize native memory services before that scan imports backend modules.
 from ruinedfooocus.backends.comfy.comfy_compat import initialize_backend
+
 initialize_backend(args)
 
 if not offline:
     download_models()
 
 from ruinedfooocus.core.paths import data_path
-gradio_cache = str(data_path('cache', 'uploads'))
-os.environ['GRADIO_TEMP_DIR'] = gradio_cache
+
+gradio_cache = str(data_path("cache", "uploads"))
+os.environ["GRADIO_TEMP_DIR"] = gradio_cache
 # Delete old data
 import shutil
+
 try:
     if args.clean_cache and Path(gradio_cache).is_dir() and not Path(gradio_cache).is_symlink():
         shutil.rmtree(gradio_cache)
@@ -395,7 +485,10 @@ except PermissionError:
 except Exception as e:
     print(f"An error occurred: {str(e)}")
 
+
 def launch_ui():
     print("Starting webui")
     import ruinedfooocus.ui.app as webui
+
+
 launch_ui()

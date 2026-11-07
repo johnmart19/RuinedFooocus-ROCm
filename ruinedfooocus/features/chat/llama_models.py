@@ -20,7 +20,11 @@ def local_models():
             if path.is_file() and not path.name.lower().startswith("mmproj"):
                 files.setdefault(path.name, str(path.resolve()))
     hidden = set(settings.default_settings.get("llama_hidden_models", []))
-    return {name: filename for name, filename in files.items() if str(Path(filename).resolve()) not in hidden}
+    return {
+        name: filename
+        for name, filename in files.items()
+        if str(Path(filename).resolve()) not in hidden
+    }
 
 
 def import_model(filename):
@@ -38,7 +42,9 @@ def import_model(filename):
         if destination != path:
             destination.parent.mkdir(parents=True, exist_ok=True)
             if destination.exists():
-                raise ValueError("A model with this filename already exists. Rename one file before importing.")
+                raise ValueError(
+                    "A model with this filename already exists. Rename one file before importing."
+                )
             temporary = destination.with_suffix(".gguf.importing")
             target = temporary.open("xb")
             try:
@@ -50,7 +56,9 @@ def import_model(filename):
                 raise
             path = destination
         hidden = settings.default_settings.get("llama_hidden_models", [])
-        settings.default_settings["llama_hidden_models"] = [item for item in hidden if item != str(path)]
+        settings.default_settings["llama_hidden_models"] = [
+            item for item in hidden if item != str(path)
+        ]
         try:
             settings.save_settings()
         except OSError:
@@ -65,30 +73,39 @@ def import_model(filename):
 
 def remove_local_model(filename, delete_file=False):
     path = Path(filename).resolve()
-    if path.suffix.lower() != ".gguf" or str(path) not in {str(Path(item).resolve()) for item in local_models().values()}:
+    if path.suffix.lower() != ".gguf" or str(path) not in {
+        str(Path(item).resolve()) for item in local_models().values()
+    }:
         raise ValueError("This model is no longer in the local list. Refresh the list first.")
     if delete_file:
         try:
             path.unlink()
         except PermissionError as error:
-            raise ValueError("Cannot delete this file. Load another model or close apps using it, then try again.") from error
+            raise ValueError(
+                "Cannot delete this file. Load another model or close apps using it, then try again."
+            ) from error
     hidden = settings.default_settings.get("llama_hidden_models", [])
-    settings.default_settings["llama_hidden_models"] = list(dict.fromkeys([*hidden, str(path)])) if not delete_file else hidden
+    settings.default_settings["llama_hidden_models"] = (
+        list(dict.fromkeys([*hidden, str(path)])) if not delete_file else hidden
+    )
     try:
         settings.save_settings()
     except OSError as error:
         if delete_file:
-            raise ValueError("The file was deleted, but the updated model list could not be saved.") from error
+            raise ValueError(
+                "The file was deleted, but the updated model list could not be saved."
+            ) from error
         raise
 
 
 def model_catalogue(source=None):
     local = local_models()
     downloadable = path_manager.get_folder_list("llm")
-    names = list(dict.fromkeys([DEFAULT_MODEL, GPT_OSS_MODEL]
-        + downloadable + list(local)))
+    names = list(dict.fromkeys([DEFAULT_MODEL, GPT_OSS_MODEL] + downloadable + list(local)))
     catalogue = {}
-    hidden_names = {Path(item).name for item in settings.default_settings.get("llama_hidden_models", [])}
+    hidden_names = {
+        Path(item).name for item in settings.default_settings.get("llama_hidden_models", [])
+    }
     for name in names:
         if Path(name).name.lower().startswith("mmproj"):
             continue
@@ -98,8 +115,11 @@ def model_catalogue(source=None):
             continue
         if source == "Downloadable" and name in local:
             continue
-        match = re.fullmatch(r"(.+?)[.-]((?:I?Q\d|MXFP\d|BF16|F16|F32)[A-Za-z0-9_]*)",
-                             Path(name).stem, flags=re.IGNORECASE)
+        match = re.fullmatch(
+            r"(.+?)[.-]((?:I?Q\d|MXFP\d|BF16|F16|F32)[A-Za-z0-9_]*)",
+            Path(name).stem,
+            flags=re.IGNORECASE,
+        )
         model, quant = match.groups() if match else (Path(name).stem, "Original")
         value = name if name in downloadable else local.get(name, name)
         status = "Local" if name in local else "Download"
@@ -116,8 +136,7 @@ def model_label(name):
 
 
 def preferred_quant(choices):
-    return next((value for label, value in choices if label.startswith("Q4_K_M ")),
-                choices[0][1])
+    return next((value for label, value in choices if label.startswith("Q4_K_M ")), choices[0][1])
 
 
 def resolve_model(name, progress=None):
@@ -130,5 +149,6 @@ def resolve_model(name, progress=None):
         return path_manager.get_folder_file_path("vision", name, progress=progress)
     folders = path_manager.paths["path_llm"]
     folder = folders[0] if isinstance(folders, list) else folders
-    return path_manager.get_folder_file_path("llm", name,
-        default=path_manager.get_abspath(folder) / name, progress=progress)
+    return path_manager.get_folder_file_path(
+        "llm", name, default=path_manager.get_abspath(folder) / name, progress=progress
+    )

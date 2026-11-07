@@ -9,6 +9,7 @@ import torch
 
 
 from ruinedfooocus.core.paths import data_path
+
 fooocus_expansion_path = str(data_path("prompt_expansion"))
 
 SEED_LIMIT_NUMPY = 2**32
@@ -49,12 +50,14 @@ class FooocusExpansion:
         tokenized_kwargs.data["input_ids"] = tokenized_kwargs.data["input_ids"].to(
             self.patcher.load_device
         )
-        tokenized_kwargs.data["attention_mask"] = tokenized_kwargs.data[
-            "attention_mask"
-        ].to(self.patcher.load_device)
+        tokenized_kwargs.data["attention_mask"] = tokenized_kwargs.data["attention_mask"].to(
+            self.patcher.load_device
+        )
         current_token_length = int(tokenized_kwargs.data["input_ids"].shape[1])
-        max_new_tokens = min(75 - current_token_length % 75,
-                             self.model.config.max_position_embeddings - current_token_length)
+        max_new_tokens = min(
+            75 - current_token_length % 75,
+            self.model.config.max_position_embeddings - current_token_length,
+        )
         if max_new_tokens <= 0:
             return prompt
         set_seed(seed)
@@ -70,10 +73,12 @@ class FooocusExpansion:
                 top_k=100,
                 max_new_tokens=max_new_tokens,
                 do_sample=True,
-                logits_processor=LogitsProcessorList([self.logits_processor])
+                logits_processor=LogitsProcessorList([self.logits_processor]),
             )
 
-            response = self.tokenizer.batch_decode(features[:, current_token_length:], skip_special_tokens=True)
+            response = self.tokenizer.batch_decode(
+                features[:, current_token_length:], skip_special_tokens=True
+            )
             suffix = safe_str(response[0])
             result = prompt + (", " + suffix if suffix else "")
         except Exception as e:

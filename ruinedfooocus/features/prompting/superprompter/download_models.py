@@ -6,9 +6,7 @@ import os
 def download_models(modelDir):
     model_name = "roborovski/superprompt-v1"
     tokenizer = T5Tokenizer.from_pretrained(model_name)
-    model = T5ForConditionalGeneration.from_pretrained(
-        model_name, torch_dtype=torch.float16
-    )
+    model = T5ForConditionalGeneration.from_pretrained(model_name, torch_dtype=torch.float16)
 
     os.makedirs(modelDir, exist_ok=True)
     tokenizer.save_pretrained(modelDir)

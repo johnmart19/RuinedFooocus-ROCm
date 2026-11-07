@@ -8,7 +8,10 @@ import types
 import unittest
 from unittest.mock import Mock, patch
 
-from ruinedfooocus.backends.comfy.comfy_compat import configure_device_environment, initialize_comfy_memory
+from ruinedfooocus.backends.comfy.comfy_compat import (
+    configure_device_environment,
+    initialize_comfy_memory,
+)
 import ruinedfooocus.backends.comfy.comfy_compat as comfy_compat
 from ruinedfooocus.backends.comfy.comfy_args import add_comfy_arguments, COMFY_DESTINATIONS
 
@@ -40,16 +43,22 @@ class ComputeArgumentContractTests(unittest.TestCase):
                 other = expected[action.dest]
                 self.assertIn(action.dest, COMFY_DESTINATIONS)
                 for field in ("option_strings", "default", "const", "nargs", "required"):
-                    self.assertEqual(normalized(getattr(action, field)), normalized(getattr(other, field)))
+                    self.assertEqual(
+                        normalized(getattr(action, field)), normalized(getattr(other, field))
+                    )
                 if action.type is not None and issubclass(action.type, enum.Enum):
                     self.assertEqual([v.value for v in action.type], [v.value for v in other.type])
                 else:
                     self.assertEqual(action.type, other.type)
                 self.assertEqual(type(action), type(other))
         destinations = set(COMFY_DESTINATIONS)
+
         def groups(parser):
-            return {frozenset(a.dest for a in group._group_actions if a.dest in destinations)
-                    for group in parser._mutually_exclusive_groups} - {frozenset()}
+            return {
+                frozenset(a.dest for a in group._group_actions if a.dest in destinations)
+                for group in parser._mutually_exclusive_groups
+            } - {frozenset()}
+
         self.assertEqual(groups(local), groups(backend))
 
     def test_high_ram_and_compiler_implications_reach_backend(self):
@@ -60,6 +69,7 @@ class ComputeArgumentContractTests(unittest.TestCase):
         backend = types.SimpleNamespace()
         cli = types.ModuleType("comfy.cli_args")
         from ruinedfooocus.backends.comfy.comfy_args import PerformanceFeature
+
         cli.PerformanceFeature = PerformanceFeature
         cli.LatentPreviewMethod = types.SimpleNamespace(from_string=lambda value: value)
         with patch.dict(sys.modules, {"comfy.cli_args": cli}):
@@ -71,54 +81,93 @@ class ComputeArgumentContractTests(unittest.TestCase):
 
 
 def device_args(**overrides):
-    return types.SimpleNamespace(**(dict(cuda_device=None, default_device=0,
-        gpu_device_id=None, oneapi_device_selector=None, deterministic=False) | overrides))
+    return types.SimpleNamespace(
+        **(
+            dict(
+                cuda_device=None,
+                default_device=0,
+                gpu_device_id=None,
+                oneapi_device_selector=None,
+                deterministic=False,
+            )
+            | overrides
+        )
+    )
 
 
 class DeviceSelectionTests(unittest.TestCase):
     def test_invalid_memory_controls_fail_before_device_probe_or_environment_changes(self):
-        for name in ('reserve_vram', 'vram_headroom', 'async_offload'):
-            for value in (-1, float('nan'), float('inf')):
-                with self.subTest(name=name, value=value), patch.dict(os.environ, {}, clear=True), \
-                        patch.object(comfy_compat, '_physical_device_count') as probe:
-                    with self.assertRaisesRegex(ValueError, name.replace('_', '-')):
+        for name in ("reserve_vram", "vram_headroom", "async_offload"):
+            for value in (-1, float("nan"), float("inf")):
+                with (
+                    self.subTest(name=name, value=value),
+                    patch.dict(os.environ, {}, clear=True),
+                    patch.object(comfy_compat, "_physical_device_count") as probe,
+                ):
+                    with self.assertRaisesRegex(ValueError, name.replace("_", "-")):
                         configure_device_environment(device_args(**{name: value}))
                     probe.assert_not_called()
-                    self.assertNotIn('CUDA_VISIBLE_DEVICES', os.environ)
-                    self.assertNotIn('TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL', os.environ)
+                    self.assertNotIn("CUDA_VISIBLE_DEVICES", os.environ)
+                    self.assertNotIn("TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL", os.environ)
 
     def test_zero_and_positive_memory_controls_are_valid(self):
         with patch.dict(os.environ, {}, clear=True):
-            configure_device_environment(device_args(default_device=None, reserve_vram=0,
-                                                     vram_headroom=4.0, async_offload=0))
+            configure_device_environment(
+                device_args(default_device=None, reserve_vram=0, vram_headroom=4.0, async_offload=0)
+            )
 
     def test_backend_startup_defaults_and_user_overrides(self):
-        for existing in ({}, {"TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL": "0", "MIMALLOC_PURGE_DELAY": "10"}):
-            with patch.dict(os.environ, existing, clear=True), patch.object(
-                    comfy_compat.platform, 'system', return_value='Windows'):
+        for existing in (
+            {},
+            {"TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL": "0", "MIMALLOC_PURGE_DELAY": "10"},
+        ):
+            with (
+                patch.dict(os.environ, existing, clear=True),
+                patch.object(comfy_compat.platform, "system", return_value="Windows"),
+            ):
                 configure_device_environment(device_args(default_device=None))
-                self.assertEqual(os.environ['TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL'],
-                                 existing.get('TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL', '1'))
-                self.assertEqual(os.environ['MIMALLOC_PURGE_DELAY'], existing.get('MIMALLOC_PURGE_DELAY', '0'))
+                self.assertEqual(
+                    os.environ["TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL"],
+                    existing.get("TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL", "1"),
+                )
+                self.assertEqual(
+                    os.environ["MIMALLOC_PURGE_DELAY"], existing.get("MIMALLOC_PURGE_DELAY", "0")
+                )
 
     def test_single_nvidia_default_does_not_create_phantom_devices(self):
         from ruinedfooocus.packaging.cuda_selection import nvidia_devices
+
         responses = ["CUDA Version: 13.2", "GPU-test, 00000000:01:00.0, 8.6"] * 2
-        with patch.dict(os.environ, {}, clear=True), patch(
-                "ruinedfooocus.packaging.cuda_selection.subprocess.check_output", side_effect=responses):
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch(
+                "ruinedfooocus.packaging.cuda_selection.subprocess.check_output",
+                side_effect=responses,
+            ),
+        ):
             configure_device_environment(device_args())
             self.assertEqual(os.environ["CUDA_VISIBLE_DEVICES"], "0")
             self.assertEqual(nvidia_devices(), ((8.6,), (13, 2)))
 
     def test_multi_gpu_reorders_only_real_devices(self):
-        with patch.dict(os.environ, {"CUDA_DEVICE_ORDER": "PCI_BUS_ID"}, clear=True), patch(
-                "ruinedfooocus.packaging.cuda_selection.nvidia_devices", return_value=((8.6, 8.9, 8.6), (13, 2))):
+        with (
+            patch.dict(os.environ, {"CUDA_DEVICE_ORDER": "PCI_BUS_ID"}, clear=True),
+            patch(
+                "ruinedfooocus.packaging.cuda_selection.nvidia_devices",
+                return_value=((8.6, 8.9, 8.6), (13, 2)),
+            ),
+        ):
             configure_device_environment(device_args(default_device=1))
             self.assertEqual(os.environ["CUDA_VISIBLE_DEVICES"], "1,0,2")
 
     def test_ambiguous_nvidia_order_rejected_and_environment_restored(self):
-        with patch.dict(os.environ, {"CUDA_VISIBLE_DEVICES": "GPU-old"}, clear=True), patch(
-                "ruinedfooocus.packaging.cuda_selection.nvidia_devices", return_value=((8.6, 8.9), (13, 2))):
+        with (
+            patch.dict(os.environ, {"CUDA_VISIBLE_DEVICES": "GPU-old"}, clear=True),
+            patch(
+                "ruinedfooocus.packaging.cuda_selection.nvidia_devices",
+                return_value=((8.6, 8.9), (13, 2)),
+            ),
+        ):
             with self.assertRaisesRegex(ValueError, "PCI_BUS_ID"):
                 configure_device_environment(device_args())
             self.assertEqual(os.environ["CUDA_VISIBLE_DEVICES"], "GPU-old")
@@ -127,22 +176,34 @@ class DeviceSelectionTests(unittest.TestCase):
         def probe(*args, **kwargs):
             self.assertNotIn("HIP_VISIBLE_DEVICES", os.environ)
             return "2\n"
-        with patch.dict(os.environ, {"HIP_VISIBLE_DEVICES": "1"}, clear=True), patch(
-                "ruinedfooocus.packaging.cuda_selection.nvidia_devices", return_value=((), None)), patch(
-                "ruinedfooocus.backends.comfy.comfy_compat.subprocess.check_output", side_effect=probe):
+
+        with (
+            patch.dict(os.environ, {"HIP_VISIBLE_DEVICES": "1"}, clear=True),
+            patch("ruinedfooocus.packaging.cuda_selection.nvidia_devices", return_value=((), None)),
+            patch(
+                "ruinedfooocus.backends.comfy.comfy_compat.subprocess.check_output",
+                side_effect=probe,
+            ),
+        ):
             configure_device_environment(device_args(default_device=1))
             self.assertEqual(os.environ["HIP_VISIBLE_DEVICES"], "1,0")
 
     def test_unavailable_index_does_not_change_visibility(self):
-        with patch.dict(os.environ, {"CUDA_VISIBLE_DEVICES": "0"}, clear=True), patch(
-                "ruinedfooocus.backends.comfy.comfy_compat._physical_device_count", return_value=1):
+        with (
+            patch.dict(os.environ, {"CUDA_VISIBLE_DEVICES": "0"}, clear=True),
+            patch(
+                "ruinedfooocus.backends.comfy.comfy_compat._physical_device_count", return_value=1
+            ),
+        ):
             with self.assertRaisesRegex(ValueError, "unavailable"):
                 configure_device_environment(device_args(default_device=1))
             self.assertEqual(os.environ["CUDA_VISIBLE_DEVICES"], "0")
 
     def test_explicit_selection_skips_default_probe(self):
-        with patch.dict(os.environ, {}, clear=True), patch(
-                "ruinedfooocus.backends.comfy.comfy_compat._physical_device_count") as probe:
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch("ruinedfooocus.backends.comfy.comfy_compat._physical_device_count") as probe,
+        ):
             configure_device_environment(device_args(cuda_device="2,0"))
             self.assertEqual(os.environ["CUDA_VISIBLE_DEVICES"], "2,0")
             configure_device_environment(device_args(gpu_device_id=1))
@@ -152,20 +213,41 @@ class DeviceSelectionTests(unittest.TestCase):
 
 class DynamicMemoryTests(unittest.TestCase):
     def setUp(self):
-        names = ("comfy", "comfy.cli_args", "comfy.model_management",
-                 "comfy.memory_management", "comfy.model_patcher", "comfy_aimdo", "comfy_aimdo.control")
+        names = (
+            "comfy",
+            "comfy.cli_args",
+            "comfy.model_management",
+            "comfy.memory_management",
+            "comfy.model_patcher",
+            "comfy_aimdo",
+            "comfy_aimdo.control",
+        )
         self.modules = {name: types.ModuleType(name) for name in names}
         for name, module in self.modules.items():
             if "." in name:
                 parent, child = name.rsplit(".", 1)
                 setattr(self.modules[parent], child, module)
-        self.args = types.SimpleNamespace(reserve_vram=1.5, disable_nvml_pressure=False,
-            vram_headroom=0.5, directml=None, cpu=False, enable_dynamic_vram=False,
-            disable_dynamic_vram=False, highvram=False, gpu_only=False, novram=False)
+        self.args = types.SimpleNamespace(
+            reserve_vram=1.5,
+            disable_nvml_pressure=False,
+            vram_headroom=0.5,
+            directml=None,
+            cpu=False,
+            enable_dynamic_vram=False,
+            disable_dynamic_vram=False,
+            highvram=False,
+            gpu_only=False,
+            novram=False,
+        )
         cli = self.modules["comfy.cli_args"]
         cli.args = self.args
-        cli.enables_dynamic_vram = lambda: self.args.enable_dynamic_vram or not any(
-            getattr(self.args, key) for key in ("disable_dynamic_vram", "highvram", "gpu_only", "novram", "cpu"))
+        cli.enables_dynamic_vram = lambda: (
+            self.args.enable_dynamic_vram
+            or not any(
+                getattr(self.args, key)
+                for key in ("disable_dynamic_vram", "highvram", "gpu_only", "novram", "cpu")
+            )
+        )
         self.control = self.modules["comfy_aimdo.control"]
         self.control.init = Mock()
         self.control.init_devices = Mock(return_value=True)
@@ -200,15 +282,40 @@ class DynamicMemoryTests(unittest.TestCase):
 
     def test_backend_initializes_once_before_shared_state(self):
         order = []
-        support = types.SimpleNamespace(inspect_installed_rocm=lambda platform: None,
-            inspect_installed_cuda=lambda platform: None, select_torch_platform=lambda *args: "rocm10.1")
-        with patch.dict(os.environ, {}, clear=True), \
-                patch.dict(sys.modules, {"torchruntime": types.SimpleNamespace(), "ruinedfooocus.packaging.runtime_support": support}), \
-                patch.object(comfy_compat, "_runtime_platform", None), \
-                patch.object(comfy_compat, "configure_torch_allocator", side_effect=lambda *args: order.append("allocator")), \
-                patch.object(comfy_compat, "configure_torch_compatibility", side_effect=lambda: order.append("compatibility")), \
-                patch.object(comfy_compat, "configure_comfy_runtime", side_effect=lambda *args: order.append("flags")), \
-                patch.object(comfy_compat, "initialize_comfy_memory", side_effect=lambda: order.append("memory")):
+        support = types.SimpleNamespace(
+            inspect_installed_rocm=lambda platform: None,
+            inspect_installed_cuda=lambda platform: None,
+            select_torch_platform=lambda *args: "rocm10.1",
+        )
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch.dict(
+                sys.modules,
+                {
+                    "torchruntime": types.SimpleNamespace(),
+                    "ruinedfooocus.packaging.runtime_support": support,
+                },
+            ),
+            patch.object(comfy_compat, "_runtime_platform", None),
+            patch.object(
+                comfy_compat,
+                "configure_torch_allocator",
+                side_effect=lambda *args: order.append("allocator"),
+            ),
+            patch.object(
+                comfy_compat,
+                "configure_torch_compatibility",
+                side_effect=lambda: order.append("compatibility"),
+            ),
+            patch.object(
+                comfy_compat,
+                "configure_comfy_runtime",
+                side_effect=lambda *args: order.append("flags"),
+            ),
+            patch.object(
+                comfy_compat, "initialize_comfy_memory", side_effect=lambda: order.append("memory")
+            ),
+        ):
             first = comfy_compat.initialize_backend(self.args)
             self.assertEqual(comfy_compat.initialize_backend(self.args), first)
             self.assertEqual(os.environ["OCL_SET_SVM_SIZE"], "4194304")
@@ -216,7 +323,9 @@ class DynamicMemoryTests(unittest.TestCase):
 
     def test_nvidia_activation_applies_headroom_and_patcher(self):
         self.assertTrue(initialize_comfy_memory())
-        self.control.init.assert_called_once_with(simple_vram_headroom=int(1.5 * 1024**3), nvml_pressure=True)
+        self.control.init.assert_called_once_with(
+            simple_vram_headroom=int(1.5 * 1024**3), nvml_pressure=True
+        )
         self.control.init_devices.assert_called_once_with([(0, 512 * 1024**2)])
         self.assertTrue(self.memory.aimdo_enabled)
         self.assertIs(self.patcher.CoreModelPatcher, self.patcher.ModelPatcherDynamic)
@@ -250,9 +359,14 @@ class DynamicMemoryTests(unittest.TestCase):
         self.control.init.assert_not_called()
 
     def test_activation_sets_controller_log_level_like_native_startup(self):
-        self.modules["comfy.cli_args"].get_console_log_level = lambda outputs: outputs[0][0] if outputs else "INFO"
-        for verbose, setter in (([], "set_log_info"), ([("WARNING", None)], "set_log_warning"),
-                                ([("DETAIL", None)], "set_log_info")):  # DETAIL falls back when unsupported
+        self.modules["comfy.cli_args"].get_console_log_level = lambda outputs: (
+            outputs[0][0] if outputs else "INFO"
+        )
+        for verbose, setter in (
+            ([], "set_log_info"),
+            ([("WARNING", None)], "set_log_warning"),
+            ([("DETAIL", None)], "set_log_info"),
+        ):  # DETAIL falls back when unsupported
             with self.subTest(verbose=verbose):
                 for name in ("set_log_info", "set_log_warning"):
                     setattr(self.control, name, Mock())
@@ -277,11 +391,16 @@ class RocmAttentionTests(unittest.TestCase):
         import torch
         import torch.nn.functional as functional
         from torch.nn.attention import SDPBackend
+
         backends, calls = [], []
 
         def original(*args, **kwargs):  # A plain function: Mock attributes would look installed.
             calls.append(kwargs)
-            backends.append(torch.backends.cuda.math_sdp_enabled() and not torch.backends.cuda.flash_sdp_enabled())
+            backends.append(
+                torch.backends.cuda.math_sdp_enabled()
+                and not torch.backends.cuda.flash_sdp_enabled()
+            )
+
         wide = types.SimpleNamespace(shape=(1, 16, 77, 512), is_cuda=True)
         narrow = types.SimpleNamespace(shape=(1, 16, 77, 128), is_cuda=True)
         with patch.object(functional, "scaled_dot_product_attention", original):
@@ -301,22 +420,30 @@ class RocmAttentionTests(unittest.TestCase):
 class AimdoLogShutdownTests(unittest.TestCase):
     def setUp(self):
         import ctypes
+
         self.callback_type = ctypes.CFUNCTYPE(None, ctypes.c_int, ctypes.c_char_p)
         self.callback = self.callback_type(lambda level, message: None)
         self.library = Mock()
-        self.control = types.SimpleNamespace(lib=self.library, _LOG_CALLBACK=self.callback_type,
-            _log_callback=self.callback, devctxs=[123])
+        self.control = types.SimpleNamespace(
+            lib=self.library,
+            _LOG_CALLBACK=self.callback_type,
+            _log_callback=self.callback,
+            devctxs=[123],
+        )
         self.callbacks = []
         self.state = patch.object(comfy_compat, "_aimdo_log_detach_registered", False)
         self.state.start()
         self.addCleanup(self.state.stop)
-        self.registration = patch.object(comfy_compat.atexit, "register", side_effect=self.callbacks.append)
+        self.registration = patch.object(
+            comfy_compat.atexit, "register", side_effect=self.callbacks.append
+        )
         self.registration.start()
         self.addCleanup(self.registration.stop)
 
     def test_keeps_callback_alive_and_detaches_only_logging_at_exit(self):
         import gc
         import weakref
+
         callback_ref = weakref.ref(self.callback)
         self.assertTrue(comfy_compat.register_aimdo_log_shutdown(self.control, "Windows", True))
         self.library.set_log_callback.assert_not_called()
@@ -340,9 +467,19 @@ class AimdoLogShutdownTests(unittest.TestCase):
     def test_other_platforms_and_uninitialized_abi_are_untouched(self):
         for system, amd in (("Linux", True), ("Windows", False), ("Darwin", True)):
             with self.subTest(system=system, amd=amd):
-                self.assertFalse(comfy_compat.register_aimdo_log_shutdown(self.control, system, amd))
-        self.assertFalse(comfy_compat.register_aimdo_log_shutdown(types.SimpleNamespace(lib=None), "Windows", True))
-        self.assertFalse(comfy_compat.register_aimdo_log_shutdown(types.SimpleNamespace(lib=self.library), "Windows", True))
+                self.assertFalse(
+                    comfy_compat.register_aimdo_log_shutdown(self.control, system, amd)
+                )
+        self.assertFalse(
+            comfy_compat.register_aimdo_log_shutdown(
+                types.SimpleNamespace(lib=None), "Windows", True
+            )
+        )
+        self.assertFalse(
+            comfy_compat.register_aimdo_log_shutdown(
+                types.SimpleNamespace(lib=self.library), "Windows", True
+            )
+        )
         self.assertEqual(self.callbacks, [])
 
     def test_activation_registers_only_after_success(self):
@@ -353,12 +490,20 @@ class AimdoLogShutdownTests(unittest.TestCase):
             fixture.management.is_nvidia.return_value = False
             fixture.management.is_amd.return_value = True
             order = []
-            fixture.control.init_devices.side_effect = lambda devices: order.append("devices") or True
-            with patch.object(comfy_compat, "register_aimdo_log_shutdown", side_effect=lambda *args: order.append("shutdown")):
+            fixture.control.init_devices.side_effect = lambda devices: (
+                order.append("devices") or True
+            )
+            with patch.object(
+                comfy_compat,
+                "register_aimdo_log_shutdown",
+                side_effect=lambda *args: order.append("shutdown"),
+            ):
                 self.assertTrue(initialize_comfy_memory())
             self.assertEqual(order, ["devices", "shutdown"])
             order.clear()
-            fixture.control.init_devices.side_effect = lambda devices: order.append("devices") or False
+            fixture.control.init_devices.side_effect = lambda devices: (
+                order.append("devices") or False
+            )
             with patch.object(comfy_compat, "register_aimdo_log_shutdown") as register:
                 self.assertFalse(initialize_comfy_memory())
             register.assert_not_called()

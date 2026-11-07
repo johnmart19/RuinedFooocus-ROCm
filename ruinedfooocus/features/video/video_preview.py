@@ -38,13 +38,22 @@ def video_callback(model, gen_data, label="Generating video"):
         # The first callback also includes model loading; estimate from later steps.
         seconds_per_step = elapsed / step if step else 0
         remaining = seconds_per_step * (total_steps - completed)
-        timing = (f"Elapsed {duration(elapsed)} · About {duration(remaining)} left · "
-                  f"{seconds_per_step:.1f} s/step") if step else "Estimating time ..."
+        timing = (
+            (
+                f"Elapsed {duration(elapsed)} · About {duration(remaining)} left · "
+                f"{seconds_per_step:.1f} s/step"
+            )
+            if step
+            else "Estimating time ..."
+        )
         worker.add_result(
             gen_data["task_id"],
             "preview",
-            (int(100 * completed / total_steps),
-             f"{label} - {completed}/{total_steps} · {timing}", image),
+            (
+                int(100 * completed / total_steps),
+                f"{label} - {completed}/{total_steps} · {timing}",
+                image,
+            ),
         )
 
     return callback

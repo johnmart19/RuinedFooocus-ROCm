@@ -24,15 +24,26 @@ def validate_cuda_backend(backend):
     if not backend.startswith("CUDA "):
         return
     from ruinedfooocus.packaging.cuda_selection import nvidia_devices
+
     capabilities, driver = nvidia_devices()
     required = tuple(int(part) for part in backend.split()[1].split("."))
     if not capabilities or driver is None:
-        raise RuntimeError("Cannot validate the NVIDIA GPU/driver. Check nvidia-smi or select Vulkan/CPU.")
+        raise RuntimeError(
+            "Cannot validate the NVIDIA GPU/driver. Check nvidia-smi or select Vulkan/CPU."
+        )
     if driver < required:
-        raise RuntimeError(f"{backend} requires a newer NVIDIA driver; select Vulkan or update the driver.")
-    if any(capability < 5 or (required[0] >= 13 and capability < 7.5)
-           or (required == (12, 4) and capability >= 10) for capability in capabilities):
-        raise RuntimeError(f"{backend} does not support this GPU architecture. Select a compatible CUDA backend or Vulkan.")
+        raise RuntimeError(
+            f"{backend} requires a newer NVIDIA driver; select Vulkan or update the driver."
+        )
+    if any(
+        capability < 5
+        or (required[0] >= 13 and capability < 7.5)
+        or (required == (12, 4) and capability >= 10)
+        for capability in capabilities
+    ):
+        raise RuntimeError(
+            f"{backend} does not support this GPU architecture. Select a compatible CUDA backend or Vulkan."
+        )
 
 
 def backend_choices(system=None, machine=None):
@@ -47,6 +58,7 @@ def backend_choices(system=None, machine=None):
         if x64:
             choices += ["ROCm", "CUDA 12.8", "CUDA 13.4"]
             from ruinedfooocus.backends.llama.llama_build import LABEL, built_server
+
             if built_server():
                 choices.append(LABEL)
         elif machine in ("arm64", "aarch64"):
@@ -56,18 +68,25 @@ def backend_choices(system=None, machine=None):
 
 def package_name(system, machine, gpu, rocm=False, backend="Auto"):
     if backend not in backend_choices(system, machine):
-        raise RuntimeError(f"No official {backend} build for {system}/{machine}; use LLAMA_SERVER for a custom build.")
+        raise RuntimeError(
+            f"No official {backend} build for {system}/{machine}; use LLAMA_SERVER for a custom build."
+        )
     if backend == "CPU":
         gpu = False
     elif backend != "Auto":
         gpu = True
-    arch = {"amd64": "x64", "x86_64": "x64", "aarch64": "arm64", "arm64": "arm64"}.get(machine.lower())
+    arch = {"amd64": "x64", "x86_64": "x64", "aarch64": "arm64", "arm64": "arm64"}.get(
+        machine.lower()
+    )
     if not arch:
         raise RuntimeError("Set LLAMA_SERVER to a llama-server binary for this CPU.")
     if system == "Windows":
-        backend = ({"ROCm": "rocm-10.0", "CUDA 12.4": "cuda-12.4",
-                    "CUDA 13.4": "cuda-13.4", "Vulkan": "vulkan"}.get(backend)
-                   or ("vulkan" if gpu else "cpu"))
+        backend = {
+            "ROCm": "rocm-10.0",
+            "CUDA 12.4": "cuda-12.4",
+            "CUDA 13.4": "cuda-13.4",
+            "Vulkan": "vulkan",
+        }.get(backend) or ("vulkan" if gpu else "cpu")
         return f"llama-{VERSION}-bin-win-{backend}-{arch}.zip"
     if system == "Linux":
         use_rocm = gpu and (backend == "ROCm" or backend == "Auto" and rocm)
@@ -85,6 +104,7 @@ def rocm_target(gpu, windows=False):
     if not gpu or platform.system() != "Linux" and not windows:
         return None
     import torch
+
     if not torch.version.hip or not torch.cuda.is_available():
         return None
     target = torch.cuda.get_device_properties(0).gcnArchName.split(":")[0]
@@ -95,12 +115,23 @@ def rocm_target(gpu, windows=False):
 
 def runtime_environment(gpu, reinstall=False, backend="Auto"):
     env = os.environ.copy()
-    if backend == "ROCm" and platform.system() == "Windows" and gpu and not os.environ.get("LLAMA_SERVER"):
+    if (
+        backend == "ROCm"
+        and platform.system() == "Windows"
+        and gpu
+        and not os.environ.get("LLAMA_SERVER")
+    ):
         return windows_rocm_environment(env, reinstall)
-    if (backend in ("CUDA 12.8", "CUDA 13.4") and platform.system() == "Linux"
-            and gpu and not os.environ.get("LLAMA_SERVER")):
+    if (
+        backend in ("CUDA 12.8", "CUDA 13.4")
+        and platform.system() == "Linux"
+        and gpu
+        and not os.environ.get("LLAMA_SERVER")
+    ):
         # Official Linux CUDA builds load the cudart/cuBLAS bundle extracted beside them.
-        directory = package_directory(package_name(platform.system(), platform.machine(), gpu, backend=backend))
+        directory = package_directory(
+            package_name(platform.system(), platform.machine(), gpu, backend=backend)
+        )
         libraries = sorted({str(path.parent) for path in directory.rglob("libcudart.so*")})
         env["LD_LIBRARY_PATH"] = ":".join(libraries + [env.get("LD_LIBRARY_PATH", "")]).rstrip(":")
         return env
@@ -115,9 +146,15 @@ def runtime_environment(gpu, reinstall=False, backend="Auto"):
         marker.unlink(missing_ok=True)
         if not python.exists():
             venv.EnvBuilder(with_pip=True).create(directory)
-        command = [str(python), "-m", "pip", "install",
-            f"rocm[libraries,device-{target}]==10.0.0", "--index-url",
-            "https://stable.repo.amd.com/rocm/whl-next/"]
+        command = [
+            str(python),
+            "-m",
+            "pip",
+            "install",
+            f"rocm[libraries,device-{target}]==10.0.0",
+            "--index-url",
+            "https://stable.repo.amd.com/rocm/whl-next/",
+        ]
         if reinstall:
             command.append("--force-reinstall")
         subprocess.run(command, check=True)
@@ -133,13 +170,20 @@ def runtime_environment(gpu, reinstall=False, backend="Auto"):
 
 def windows_rocm_environment(env, reinstall=False, install=True):
     # Reuse a complete ROCm 10 SDK, otherwise install into a separate environment.
-    script = ("import json, rocm_sdk as r; assert r.__version__ == '10.0.0'; "
-              "print(json.dumps(list(dict.fromkeys(str(p.parent) for p in "
-              "r.find_libraries('amdhip64', 'hipblas', 'hipblaslt')))))")
+    script = (
+        "import json, rocm_sdk as r; assert r.__version__ == '10.0.0'; "
+        "print(json.dumps(list(dict.fromkeys(str(p.parent) for p in "
+        "r.find_libraries('amdhip64', 'hipblas', 'hipblaslt')))))"
+    )
 
     def paths(python):
-        result = subprocess.run([str(python), "-c", script], capture_output=True,
-                                text=True, timeout=30, creationflags=subprocess.CREATE_NO_WINDOW)
+        result = subprocess.run(
+            [str(python), "-c", script],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            creationflags=subprocess.CREATE_NO_WINDOW,
+        )
         if result.returncode:
             return None
         return json.loads(result.stdout)
@@ -153,22 +197,32 @@ def windows_rocm_environment(env, reinstall=False, install=True):
     if not libraries:
         target = rocm_target(True, windows=True)
         if not target:
-            raise RuntimeError("Cannot detect the AMD GPU target for ROCm 10. Select Vulkan or install a compatible ROCm SDK.")
+            raise RuntimeError(
+                "Cannot detect the AMD GPU target for ROCm 10. Select Vulkan or install a compatible ROCm SDK."
+            )
         directory = Path("cache/llama.cpp/rocm-10.0-windows").resolve()
         python = directory / "Scripts/python.exe"
         libraries = paths(python) if python.exists() and not reinstall else None
         if not libraries:
             if not python.exists():
                 venv.EnvBuilder(with_pip=True).create(directory)
-            command = [str(python), "-m", "pip", "install",
-                       f"rocm[libraries,device-{target}]==10.0.0", "--index-url",
-                       "https://stable.repo.amd.com/rocm/whl-next/"]
+            command = [
+                str(python),
+                "-m",
+                "pip",
+                "install",
+                f"rocm[libraries,device-{target}]==10.0.0",
+                "--index-url",
+                "https://stable.repo.amd.com/rocm/whl-next/",
+            ]
             if reinstall:
                 command.append("--force-reinstall")
             subprocess.run(command, check=True)
             libraries = paths(python)
         if not libraries:
-            raise RuntimeError("ROCm 10 runtime libraries are unavailable. Select Vulkan or check the SDK installation.")
+            raise RuntimeError(
+                "ROCm 10 runtime libraries are unavailable. Select Vulkan or check the SDK installation."
+            )
     env["PATH"] = os.pathsep.join(libraries + [env.get("PATH", "")])
     return env
 
@@ -185,15 +239,23 @@ def server_path(gpu=True, backend="Auto"):
             raise FileNotFoundError(f"LLAMA_SERVER does not exist: {override}")
         return Path(executable).resolve()
     from ruinedfooocus.backends.llama.llama_build import LABEL, built_server
+
     if gpu and backend == LABEL:
         executable = built_server()
         if not executable:
-            raise RuntimeError("The local CUDA runtime is unavailable. Build it in Settings or select another backend.")
+            raise RuntimeError(
+                "The local CUDA runtime is unavailable. Build it in Settings or select another backend."
+            )
         return executable
     if gpu:
         validate_cuda_backend(backend)
-    package = package_name(platform.system(), platform.machine(), gpu,
-                           bool(rocm_target(gpu)) if backend == "Auto" else False, backend)
+    package = package_name(
+        platform.system(),
+        platform.machine(),
+        gpu,
+        bool(rocm_target(gpu)) if backend == "Auto" else False,
+        backend,
+    )
     directory = package_directory(package)
     executable = "llama-server.exe" if platform.system() == "Windows" else "llama-server"
     found = list(directory.rglob(executable))
@@ -238,6 +300,8 @@ def download_package(package, assets, temporary, extracted):
             bundle.extractall(extracted)
     else:
         if not hasattr(tarfile, "data_filter"):
-            raise RuntimeError("Update Python to a version supporting safe tar extraction, or set LLAMA_SERVER.")
+            raise RuntimeError(
+                "Update Python to a version supporting safe tar extraction, or set LLAMA_SERVER."
+            )
         with tarfile.open(archive) as bundle:
             bundle.extractall(extracted, filter="data")

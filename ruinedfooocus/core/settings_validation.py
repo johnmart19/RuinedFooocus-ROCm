@@ -1,19 +1,31 @@
 """Validate Settings form values before changing or writing configuration."""
 
 import math
-from ruinedfooocus.features.image_editing.image_guidance import MOSS_EDIT_FORMATS, STARTUP_SHIFT_LABELS, validate_guidance
+from ruinedfooocus.features.image_editing.image_guidance import (
+    MOSS_EDIT_FORMATS,
+    STARTUP_SHIFT_LABELS,
+    validate_guidance,
+)
 
 
 INTEGER_RANGES = {
-    "image_number": (1, None), "image_number_max": (1, None),
-    "seed": (-1, None), "preset_mode": (1, 7),
-    "images_per_page": (1, 1000), "hint_chance": (0, 100),
-    "llm_n_predict": (-1, None), "llm_n_ctx": (0, None),
-    "llm_n_gpu_layers": (-1, None), "llm_chat_history": (0, None),
+    "image_number": (1, None),
+    "image_number_max": (1, None),
+    "seed": (-1, None),
+    "preset_mode": (1, 7),
+    "images_per_page": (1, 1000),
+    "hint_chance": (0, 100),
+    "llm_n_predict": (-1, None),
+    "llm_n_ctx": (0, None),
+    "llm_n_gpu_layers": (-1, None),
+    "llm_chat_history": (0, None),
     "llm_hp_max_tokens": (1, None),
 }
-FLOAT_RANGES = {"video_fps": (0.01, None), "update_interval": (0.01, None),
-                "moss_image_edit_strength": (0, 100)}
+FLOAT_RANGES = {
+    "video_fps": (0.01, None),
+    "update_interval": (0.01, None),
+    "moss_image_edit_strength": (0, 100),
+}
 LIST_FIELDS = {"archive_folders", "path_checkpoints", "path_loras", "path_wildcards"}
 # Reasoning effort for local prompt rewrites (gpt-oss reasoning_effort; Low also disables Qwen3 thinking).
 REWRITE_REASONING = ("Low", "Medium", "High")
@@ -22,9 +34,10 @@ REWRITE_REASONING = ("Low", "Medium", "High")
 def validate_settings(values):
     result = dict(values)
     from ruinedfooocus.backends.comfy.image_compute import validate_compute
+
     result.update(validate_compute(result))
-    if result.get('rembg_backend', 'Auto') not in ('Auto', 'CPU', 'Windows GPU'):
-        raise ValueError('Choose Auto, CPU or Windows GPU for background removal.')
+    if result.get("rembg_backend", "Auto") not in ("Auto", "CPU", "Windows GPU"):
+        raise ValueError("Choose Auto, CPU or Windows GPU for background removal.")
     result.update(validate_guidance(result))
     if result.get("moss_image_edit_format", "Disabled") not in MOSS_EDIT_FORMATS:
         raise ValueError("Choose a supported MOSS Image edit format.")
@@ -47,7 +60,9 @@ def validate_settings(values):
                 raise ValueError(f"{key}: enter a finite number.")
             low, high = bounds
             if (low is not None and number < low) or (high is not None and number > high):
-                raise ValueError(f"{key}: value must be between {low} and {high or 'no upper limit'}.")
+                raise ValueError(
+                    f"{key}: value must be between {low} and {high or 'no upper limit'}."
+                )
             if key in INTEGER_RANGES:
                 if not number.is_integer():
                     raise ValueError(f"{key}: enter a whole number.")
@@ -58,7 +73,10 @@ def validate_settings(values):
             result[key] = [line.strip() for line in lines if line.strip()]
             if key in ("path_checkpoints", "path_loras") and not result[key]:
                 raise ValueError(f"{key}: provide at least one folder.")
-        if key in ("path_outputs", "path_inbox", "path_geometry_estimation") and not str(value or "").strip():
+        if (
+            key in ("path_outputs", "path_inbox", "path_geometry_estimation")
+            and not str(value or "").strip()
+        ):
             raise ValueError(f"{key}: provide a folder.")
     if result.get("image_number", 1) > result.get("image_number_max", 50):
         raise ValueError("Image Number cannot exceed Image Number Max.")

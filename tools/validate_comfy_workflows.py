@@ -17,6 +17,7 @@ Use identical seed/settings and independent fresh pipeline/model objects in each
 adapter. The harness unloads Comfy models between adapters. No graph executor is
 reimplemented here. Importing this module or using --help does not import Torch.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -43,16 +44,25 @@ def capture(value, arrays, path="root"):
         # Byte views preserve bfloat16 and float8 without unsupported NumPy casts.
         raw = tensor.reshape(-1).view(__import__("torch").uint8).numpy().tobytes()
         arrays[path] = tensor.double().numpy().copy()
-        return {"kind": "tensor", "shape": list(tensor.shape), "dtype": str(tensor.dtype),
-                "sha256": hashlib.sha256(raw).hexdigest()}
+        return {
+            "kind": "tensor",
+            "shape": list(tensor.shape),
+            "dtype": str(tensor.dtype),
+            "sha256": hashlib.sha256(raw).hexdigest(),
+        }
     if hasattr(value, "__array__"):
         import numpy as np
+
         array = np.asarray(value)
         if array.dtype.kind not in "buifc":
             raise TypeError(f"Unsupported array dtype at {path}: {array.dtype}")
         arrays[path] = array.copy()
-        return {"kind": "array", "shape": list(array.shape), "dtype": str(array.dtype),
-                "sha256": hashlib.sha256(array.tobytes()).hexdigest()}
+        return {
+            "kind": "array",
+            "shape": list(array.shape),
+            "dtype": str(array.dtype),
+            "sha256": hashlib.sha256(array.tobytes()).hexdigest(),
+        }
     if isinstance(value, dict):
         if any(not isinstance(key, str) for key in value):
             raise TypeError(f"Artifact keys must be strings at {path}")
@@ -61,11 +71,14 @@ def capture(value, arrays, path="root"):
         return [capture(item, arrays, f"{path}/{index}") for index, item in enumerate(value)]
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
-    raise TypeError(f"Unsupported artifact at {path}: {type(value).__name__}; return tensors/settings, not model objects")
+    raise TypeError(
+        f"Unsupported artifact at {path}: {type(value).__name__}; return tensors/settings, not model objects"
+    )
 
 
 def compare(left, right, left_arrays, right_arrays, atol=0.0, rtol=0.0):
     import numpy as np
+
     differences = []
     numeric = {}
     for path in sorted(left_arrays.keys() | right_arrays.keys()):
@@ -78,29 +91,46 @@ def compare(left, right, left_arrays, right_arrays, atol=0.0, rtol=0.0):
         numeric[path] = {"within_tolerance": close, "same_shape": same_shape}
         if same_shape and a.size:
             delta = np.abs(a.astype(np.float64) - b.astype(np.float64))
-            numeric[path]["max_abs_error"] = float(delta.max()) if np.isfinite(delta).all() else None
-            numeric[path]["mean_abs_error"] = float(delta.mean()) if np.isfinite(delta).all() else None
+            numeric[path]["max_abs_error"] = (
+                float(delta.max()) if np.isfinite(delta).all() else None
+            )
+            numeric[path]["mean_abs_error"] = (
+                float(delta.mean()) if np.isfinite(delta).all() else None
+            )
         if not close:
             differences.append(path)
 
     def structure(value):
         if isinstance(value, dict):
-            return {k: structure(v) for k, v in value.items() if not (k == "sha256" and value.get("kind") in ("tensor", "array"))}
+            return {
+                k: structure(v)
+                for k, v in value.items()
+                if not (k == "sha256" and value.get("kind") in ("tensor", "array"))
+            }
         if isinstance(value, list):
             return [structure(v) for v in value]
         return value
 
     settings_equal = structure(left) == structure(right)
-    return {"passed": settings_equal and not differences, "structure_settings_equal": settings_equal,
-            "exact_fingerprints_equal": left == right, "atol": atol, "rtol": rtol,
-            "numeric": numeric, "failed_artifacts": differences}
+    return {
+        "passed": settings_equal and not differences,
+        "structure_settings_equal": settings_equal,
+        "exact_fingerprints_equal": left == right,
+        "atol": atol,
+        "rtol": rtol,
+        "numeric": numeric,
+        "failed_artifacts": differences,
+    }
 
 
 def load_entrypoint(entrypoint):
     module_name, function = entrypoint.rsplit(":", 1)
     if module_name.endswith(".py"):
         source = Path(module_name).resolve()
-        spec = importlib.util.spec_from_file_location("_comfy_validation_adapter_" + hashlib.sha256(str(source).encode()).hexdigest()[:12], source)
+        spec = importlib.util.spec_from_file_location(
+            "_comfy_validation_adapter_" + hashlib.sha256(str(source).encode()).hexdigest()[:12],
+            source,
+        )
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
     else:
@@ -113,32 +143,62 @@ def initialize(runtime_args):
     sys.path.insert(0, str(ROOT))
     sys.path.append(str(ROOT / "repositories" / "ComfyUI"))
     sys.path.append(str(ROOT / "repositories"))
-    os.environ.update(RF_OFFLINE="1", HF_HUB_OFFLINE="1", TRANSFORMERS_OFFLINE="1",
-                      HF_HUB_DISABLE_TELEMETRY="1", GRADIO_ANALYTICS_ENABLED="False")
+    os.environ.update(
+        RF_OFFLINE="1",
+        HF_HUB_OFFLINE="1",
+        TRANSFORMERS_OFFLINE="1",
+        HF_HUB_DISABLE_TELEMETRY="1",
+        GRADIO_ANALYTICS_ENABLED="False",
+    )
     sys.argv = [str(ROOT / "ruinedfooocus/app/bootstrap.py"), "--offline", *runtime_args]
     from ruinedfooocus.app.arguments import args
-    from ruinedfooocus.backends.comfy.comfy_compat import configure_device_environment, initialize_backend
+    from ruinedfooocus.backends.comfy.comfy_compat import (
+        configure_device_environment,
+        initialize_backend,
+    )
+
     configure_device_environment(args)
     initialize_backend(args)
 
 
 def revision(path):
     try:
-        return subprocess.check_output(["git", "-C", str(path), "rev-parse", "HEAD"], text=True).strip()
+        return subprocess.check_output(
+            ["git", "-C", str(path), "rev-parse", "HEAD"], text=True
+        ).strip()
     except (OSError, subprocess.SubprocessError):
         return None
 
 
-
 def provenance(root=ROOT):
     files = set(root.glob("modules/**/*.py")) | set(root.glob("tools/*.py"))
-    files.update(root / name for name in ("ruinedfooocus/app/state.py", "ruinedfooocus/app/arguments.py", "ruinedfooocus/ui/app.py", "ruinedfooocus/app/bootstrap.py",
-        "entry_with_update.py", "ruinedfooocus/resources/defaults/performance.default", "pip/modules.txt", "requirements_versions.txt"))
-    hashes = {path.relative_to(root).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
-              for path in sorted(files) if path.is_file()}
-    tree = hashlib.sha256(json.dumps(hashes, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    files.update(
+        root / name
+        for name in (
+            "ruinedfooocus/app/state.py",
+            "ruinedfooocus/app/arguments.py",
+            "ruinedfooocus/ui/app.py",
+            "ruinedfooocus/app/bootstrap.py",
+            "entry_with_update.py",
+            "ruinedfooocus/resources/defaults/performance.default",
+            "pip/modules.txt",
+            "requirements_versions.txt",
+        )
+    )
+    hashes = {
+        path.relative_to(root).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in sorted(files)
+        if path.is_file()
+    }
+    tree = hashlib.sha256(
+        json.dumps(hashes, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
     try:
-        dirty = bool(subprocess.check_output(["git", "-C", str(root), "status", "--porcelain"], text=True).strip())
+        dirty = bool(
+            subprocess.check_output(
+                ["git", "-C", str(root), "status", "--porcelain"], text=True
+            ).strip()
+        )
     except (OSError, subprocess.SubprocessError):
         dirty = None
     runtime = {}
@@ -147,8 +207,12 @@ def provenance(root=ROOT):
         runtime.update(torch=str(torch.__version__), hip=getattr(torch.version, "hip", None))
         if torch.cuda.is_initialized():
             runtime["gpu_name"] = torch.cuda.get_device_name()
-    return {"source_tree_sha256": tree, "source_files_sha256": hashes,
-            "app_dirty": dirty, "runtime": runtime}
+    return {
+        "source_tree_sha256": tree,
+        "source_files_sha256": hashes,
+        "app_dirty": dirty,
+        "runtime": runtime,
+    }
 
 
 def run(spec):
@@ -156,8 +220,14 @@ def run(spec):
     import gc
     import torch
     import comfy.model_management as memory
-    report = {"app_revision": revision(ROOT), "comfy_revision": revision(ROOT / "repositories/ComfyUI"),
-              "spec": spec, "runs": {}, "provenance": provenance()}
+
+    report = {
+        "app_revision": revision(ROOT),
+        "comfy_revision": revision(ROOT / "repositories/ComfyUI"),
+        "spec": spec,
+        "runs": {},
+        "provenance": provenance(),
+    }
     snapshots = {}
     cleanup_errors = []
     for side in ("app", "native"):
@@ -173,8 +243,10 @@ def run(spec):
             if not isinstance(result, dict) or not result:
                 raise ValueError("Adapters must return a nonempty named artifact mapping")
             fingerprints = capture(result, arrays)
-            report["runs"][side] = {"seconds_including_capture": time.perf_counter() - started,
-                                    "artifacts": fingerprints}
+            report["runs"][side] = {
+                "seconds_including_capture": time.perf_counter() - started,
+                "artifacts": fingerprints,
+            }
             snapshots[side] = arrays
             del result
         except Exception:
@@ -187,10 +259,19 @@ def run(spec):
             except Exception:
                 cleanup_errors.append({"side": side, "error": traceback.format_exc()})
     if len(snapshots) == 2:
-        report["comparison"] = compare(report["runs"]["app"]["artifacts"], report["runs"]["native"]["artifacts"],
-                                       snapshots["app"], snapshots["native"], spec.get("atol", 0.0), spec.get("rtol", 0.0))
+        report["comparison"] = compare(
+            report["runs"]["app"]["artifacts"],
+            report["runs"]["native"]["artifacts"],
+            snapshots["app"],
+            snapshots["native"],
+            spec.get("atol", 0.0),
+            spec.get("rtol", 0.0),
+        )
     else:
-        report["comparison"] = {"passed": False, "reason": "An adapter failed; equivalence was not established"}
+        report["comparison"] = {
+            "passed": False,
+            "reason": "An adapter failed; equivalence was not established",
+        }
     try:
         report["runtime_cleanup"] = cleanup_runtime(memory, torch, gc)
     except Exception:
@@ -220,12 +301,17 @@ def cleanup_runtime(memory, torch, gc):
     mmap_module = sys.modules.get("comfy_aimdo.model_mmap")
     mmap_class = getattr(mmap_module, "ModelMMAP", None)
     live = sum(type(value) is mmap_class for value in gc.get_objects()) if mmap_class else None
-    return {"completed": True, "live_model_mmaps": live,
-            "process_exit_requires_external_verification": True}
+    return {
+        "completed": True,
+        "live_model_mmaps": live,
+        "process_exit_requires_external_verification": True,
+    }
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("spec", type=Path)
     parser.add_argument("--report", type=Path, required=True)
     args = parser.parse_args()

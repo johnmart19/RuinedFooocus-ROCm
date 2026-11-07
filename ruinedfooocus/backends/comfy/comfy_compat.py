@@ -20,12 +20,20 @@ def initialize_backend(launch_args):
         return _runtime_platform
     os_platform = platform.system()
     if launch_args.cpu:
-        torch_platform = 'cpu'
+        torch_platform = "cpu"
     else:
         import torchruntime
-        from ruinedfooocus.packaging.runtime_support import inspect_installed_rocm, inspect_installed_cuda, select_torch_platform
+        from ruinedfooocus.packaging.runtime_support import (
+            inspect_installed_rocm,
+            inspect_installed_cuda,
+            select_torch_platform,
+        )
+
         torch_platform = select_torch_platform(
-            torchruntime, os_platform, inspect_installed_rocm(os_platform), inspect_installed_cuda(os_platform),
+            torchruntime,
+            os_platform,
+            inspect_installed_rocm(os_platform),
+            inspect_installed_cuda(os_platform),
         )
     configure_torch_allocator(torch_platform, os_platform, launch_args)
     if torch_platform.startswith("rocm"):
@@ -34,6 +42,7 @@ def initialize_backend(launch_args):
         os.environ["OCL_SET_SVM_SIZE"] = "4194304"
     configure_torch_compatibility()
     import comfy.cli_args
+
     configure_comfy_runtime(launch_args, comfy.cli_args.args)
     if torch_platform == "cpu":
         comfy.cli_args.args.cpu = True
@@ -50,23 +59,34 @@ def _physical_device_count():
     """Enumerate before importing Torch; visibility overrides select physical IDs."""
     from ruinedfooocus.packaging.cuda_selection import nvidia_devices
 
-    visibility = ("CUDA_VISIBLE_DEVICES", "HIP_VISIBLE_DEVICES", "ASCEND_RT_VISIBLE_DEVICES", "ROCR_VISIBLE_DEVICES")
+    visibility = (
+        "CUDA_VISIBLE_DEVICES",
+        "HIP_VISIBLE_DEVICES",
+        "ASCEND_RT_VISIBLE_DEVICES",
+        "ROCR_VISIBLE_DEVICES",
+    )
     saved = {key: os.environ.pop(key) for key in visibility if key in os.environ}
     try:
         capabilities, _ = nvidia_devices()
         if capabilities:
             if len(capabilities) > 1 and os.environ.get("CUDA_DEVICE_ORDER") != "PCI_BUS_ID":
-                raise ValueError("--default-device on multiple NVIDIA GPUs requires CUDA_DEVICE_ORDER=PCI_BUS_ID.")
+                raise ValueError(
+                    "--default-device on multiple NVIDIA GPUs requires CUDA_DEVICE_ORDER=PCI_BUS_ID."
+                )
             return len(capabilities)
         # AMD uses torch.cuda too. A child keeps Torch DLLs out of the installer.
         try:
             output = subprocess.check_output(
                 [sys.executable, "-c", "import torch; print(torch.cuda.device_count())"],
-                text=True, stderr=subprocess.DEVNULL, timeout=30,
+                text=True,
+                stderr=subprocess.DEVNULL,
+                timeout=30,
             )
             return int(output.strip().splitlines()[-1])
         except (OSError, subprocess.SubprocessError, ValueError, IndexError) as error:
-            raise ValueError("Cannot enumerate GPUs for --default-device. Install a working GPU runtime or specify --cuda-device explicitly.") from error
+            raise ValueError(
+                "Cannot enumerate GPUs for --default-device. Install a working GPU runtime or specify --cuda-device explicitly."
+            ) from error
     finally:
         os.environ.update(saved)
 
@@ -91,7 +111,9 @@ def configure_device_environment(args):
     if devices is None and args.gpu_device_id is None and args.default_device is not None:
         count = _physical_device_count()
         if args.default_device >= count:
-            raise ValueError(f"--default-device {args.default_device} is unavailable; found {count} GPU(s).")
+            raise ValueError(
+                f"--default-device {args.default_device} is unavailable; found {count} GPU(s)."
+            )
         order = list(range(count))
         order.remove(args.default_device)
         devices = ",".join(map(str, [args.default_device, *order]))
@@ -118,7 +140,9 @@ def configure_comfy_runtime(launch_args, comfy_args):
     from comfy.cli_args import PerformanceFeature, LatentPreviewMethod
 
     # The embedded backend defaults to no previews; the app displays them.
-    comfy_args.preview_method = LatentPreviewMethod.from_string(getattr(launch_args, "preview_method", "auto"))
+    comfy_args.preview_method = LatentPreviewMethod.from_string(
+        getattr(launch_args, "preview_method", "auto")
+    )
 
     for name in COMFY_DESTINATIONS:
         setattr(comfy_args, name, getattr(launch_args, name))
@@ -151,7 +175,9 @@ def initialize_comfy_memory():
 
     headroom = None if args.reserve_vram is None else int(args.reserve_vram * 1024**3)
     try:
-        if not control.init(simple_vram_headroom=headroom, nvml_pressure=not args.disable_nvml_pressure):
+        if not control.init(
+            simple_vram_headroom=headroom, nvml_pressure=not args.disable_nvml_pressure
+        ):
             logging.warning("DynamicVRAM controller unavailable; using legacy model loading.")
             return False
     except Exception as error:
@@ -162,18 +188,26 @@ def initialize_comfy_memory():
     import comfy.memory_management as memory
     import comfy.model_patcher as patcher
 
-    supported = (args.directml is None and not args.cpu and
-                 (management.is_nvidia() or
-                  (management.is_amd() and management.rocm_version >= (7, 14))))
+    supported = (
+        args.directml is None
+        and not args.cpu
+        and (management.is_nvidia() or (management.is_amd() and management.rocm_version >= (7, 14)))
+    )
     if not supported or management.torch_version_numeric < (2, 8):
-        logging.warning("DynamicVRAM requires NVIDIA or ROCm HIP 7.14+, and Torch 2.8+; using legacy model loading.")
+        logging.warning(
+            "DynamicVRAM requires NVIDIA or ROCm HIP 7.14+, and Torch 2.8+; using legacy model loading."
+        )
         return False
     try:
-        devices = [(device.index, int(args.vram_headroom * 1024**3))
-                   for device in management.get_all_torch_devices()]
+        devices = [
+            (device.index, int(args.vram_headroom * 1024**3))
+            for device in management.get_all_torch_devices()
+        ]
         initialized = bool(devices) and control.init_devices(devices)
     except Exception as error:
-        logging.warning("DynamicVRAM device initialization failed; using legacy model loading: %s", error)
+        logging.warning(
+            "DynamicVRAM device initialization failed; using legacy model loading: %s", error
+        )
         return False
     if not initialized:
         logging.warning("DynamicVRAM devices unavailable; using legacy model loading.")
@@ -189,9 +223,15 @@ def initialize_comfy_memory():
 def set_aimdo_log_level(control, verbose):
     """Match the controller's native log level to the backend console level, as native startup does."""
     import comfy.cli_args
+
     levels = getattr(comfy.cli_args, "get_console_log_level", lambda outputs: "INFO")
-    setter = {"DEBUG": "set_log_debug", "DETAIL": "set_log_detail", "CRITICAL": "set_log_critical",
-              "ERROR": "set_log_error", "WARNING": "set_log_warning"}.get(levels(verbose), "set_log_info")
+    setter = {
+        "DEBUG": "set_log_debug",
+        "DETAIL": "set_log_detail",
+        "CRITICAL": "set_log_critical",
+        "ERROR": "set_log_error",
+        "WARNING": "set_log_warning",
+    }.get(levels(verbose), "set_log_info")
     # Older controllers lack DETAIL; native startup falls back to INFO as well.
     setter = getattr(control, setter, None) or getattr(control, "set_log_info", None)
     if setter is not None:
@@ -228,14 +268,11 @@ def register_aimdo_log_shutdown(control, os_platform, is_amd):
     _aimdo_log_detach_registered = True
     return True
 
+
 def configure_torch_allocator(torch_platform, os_platform, launch_args=None):
-    if launch_args is not None and (
-        launch_args.cuda_malloc or launch_args.disable_cuda_malloc
-    ):
+    if launch_args is not None and (launch_args.cuda_malloc or launch_args.disable_cuda_malloc):
         backend = "cudaMallocAsync" if launch_args.cuda_malloc else "native"
-        config = os.environ.get(
-            "PYTORCH_CUDA_ALLOC_CONF", os.environ.get("PYTORCH_ALLOC_CONF", "")
-        )
+        config = os.environ.get("PYTORCH_CUDA_ALLOC_CONF", os.environ.get("PYTORCH_ALLOC_CONF", ""))
         parts = [
             part
             for part in config.split(",")
@@ -270,9 +307,12 @@ def configure_rocm_attention():
     import torch
     import torch.nn.functional as functional
 
-    if not torch.version.hip or getattr(functional.scaled_dot_product_attention, "_rf_rocm_head_dim", False):
+    if not torch.version.hip or getattr(
+        functional.scaled_dot_product_attention, "_rf_rocm_head_dim", False
+    ):
         return False
     from torch.nn.attention import sdpa_kernel, SDPBackend
+
     original = functional.scaled_dot_product_attention
 
     def scaled_dot_product_attention(query, key, value, *args, **kwargs):

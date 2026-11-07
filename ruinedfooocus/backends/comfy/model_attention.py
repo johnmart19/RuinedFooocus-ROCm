@@ -12,6 +12,7 @@ def configure_minimax_workspace(patcher, quantized=False):
     import torch
     from comfy import model_management
     from comfy.cli_args import args
+
     model = patcher.model
     if model.__class__.__name__ != "MiniMaxH3" or getattr(model, "_rf_workspace_reserved", False):
         return False
@@ -56,6 +57,7 @@ def configure_qwen_attention(patcher):
     # AOTriton probe. Other backends and explicit choices were handled above.
     native_attention = model_management.pytorch_attention_enabled()
     if not native_attention:
+
         def bounded_attention(original, *inputs, **kwargs):
             return attention_sub_quad(*inputs, **kwargs)
 
@@ -63,13 +65,15 @@ def configure_qwen_attention(patcher):
     # Keep the existing conservative workspace estimate even with native SDPA.
     # Kernel availability alone does not establish adequate WDDM headroom.
     # DynamicVRAM manages residency itself; this estimate protects legacy mode.
-    if not getattr(patcher.model, '_rf_qwen_workspace_reserved', False) and (
-        model_management.pytorch_attention_flash_attention()
-        or model_management.xformers_enabled()
+    if not getattr(patcher.model, "_rf_qwen_workspace_reserved", False) and (
+        model_management.pytorch_attention_flash_attention() or model_management.xformers_enabled()
     ):
         dtype_size = model_management.dtype_size(patcher.model.get_dtype_inference())
         patcher.model.memory_usage_factor *= 1.25 * 0.15 / (0.01 * dtype_size)
         patcher.model._rf_qwen_workspace_reserved = True
-    print("Qwen Image: using {} attention with Windows ROCm workspace protection.".format(
-        "native PyTorch" if native_attention else "memory-bounded"))
+    print(
+        "Qwen Image: using {} attention with Windows ROCm workspace protection.".format(
+            "native PyTorch" if native_attention else "memory-bounded"
+        )
+    )
     return True

@@ -7,13 +7,14 @@ import math
 _NUMBER = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)"
 re_attention_span = re.compile(r"(?<!\\)(\([^()]*:)(" + _NUMBER + r"(?:~" + _NUMBER + r")+)(\))")
 
+
 def shift_attention(text, distance):
 
     def inject_value(distance, match_obj):
-        a = match_obj.group(2).split('~')
+        a = match_obj.group(2).split("~")
         l = len(a) - 1
-        q1 = int(math.floor(distance*l))
-        q2 = int(math.ceil(distance*l))
+        q1 = int(math.floor(distance * l))
+        q2 = int(math.ceil(distance * l))
         value = float(a[q1]) + ((float(a[q2]) - float(a[q1])) * (distance * l - q1))
         return match_obj.group(1) + str(value) + match_obj.group(3)
 

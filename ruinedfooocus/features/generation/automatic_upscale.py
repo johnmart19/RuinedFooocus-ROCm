@@ -16,16 +16,21 @@ ALIASES = {"2×": "2× General (RealESRGAN)", "4×": "4× General (RealESRGAN)"}
 
 def choices():
     from ruinedfooocus.app.state import path_manager
+
     names = set(path_manager.upscaler_filenames) | {
-        name for name, entry in path_manager.DOWNLOADABLE_FILES.items()
-        if entry["path"] == "path_upscalers"}
+        name
+        for name, entry in path_manager.DOWNLOADABLE_FILES.items()
+        if entry["path"] == "path_upscalers"
+    }
     preset_models = {model for model, _ in PRESETS.values()}
-    return list(PRESETS) + sorted(name for name in names
-        if name not in preset_models and filename_scale(name) is not None)
+    return list(PRESETS) + sorted(
+        name for name in names if name not in preset_models and filename_scale(name) is not None
+    )
 
 
 def filename_scale(name):
     import re
+
     match = re.search(r"(?:^|[-_])([2348])x|(?:^|[-_])x([2348])", name, re.IGNORECASE)
     return int(match.group(1) or match.group(2)) if match else None
 
@@ -49,7 +54,8 @@ def describe_size(selection, resolution, width, height, resolutions):
         width, height = resolutions[resolution]
     width, height = int(width), int(height)
     return f"{width * scale} × {height * scale} pixels" + (
-        f" (from {width} × {height}, {scale}× upscale)" if scale > 1 else "")
+        f" (from {width} × {height}, {scale}× upscale)" if scale > 1 else ""
+    )
 
 
 def model_for(selection):
@@ -61,12 +67,16 @@ def upscale_decoded(owner, image, gen_data):
     name = model_for(gen_data.get("automatic_upscale"))
     if name is None:
         return image
-    from ruinedfooocus.features.image_processing.upscale_pipeline import pipeline, InterruptibleUpscaler
+    from ruinedfooocus.features.image_processing.upscale_pipeline import (
+        pipeline,
+        InterruptibleUpscaler,
+    )
     from comfy_extras.nodes_upscale_model import ImageUpscaleWithModel
     import ruinedfooocus.app.async_worker as worker
+
     worker.check_interrupt(gen_data)
     worker.add_result(gen_data["task_id"], "preview", (-1, "Automatic upscaling ...", None))
-    if getattr(owner, 'automatic_upscale_pipeline', None) is None:
+    if getattr(owner, "automatic_upscale_pipeline", None) is None:
         owner.automatic_upscale_pipeline = pipeline()
     model = owner.automatic_upscale_pipeline.load_upscaler_model(name)
     if model.scale != scale_for(gen_data["automatic_upscale"]):

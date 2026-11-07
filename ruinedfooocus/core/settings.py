@@ -5,6 +5,7 @@ from pathlib import Path
 import ruinedfooocus.app.state as shared
 from ruinedfooocus.core.config_io import save_json
 
+
 class SettingsManager:
     DEFAULT_SETTINGS = {
         "rembg_backend": "Auto",
@@ -43,6 +44,7 @@ class SettingsManager:
 
     def __init__(self):
         from ruinedfooocus.app.arguments import args
+
         self.name = args.settings
         self.set_settings_path(args.settings)
         self.load_settings()
@@ -73,7 +75,7 @@ class SettingsManager:
                 changed = True
 
         # Some sanity checks
-        for key in ['style', 'archive_folders']:
+        for key in ["style", "archive_folders"]:
             if key in self.default_settings and not isinstance(self.default_settings[key], list):
                 self.default_settings[key] = [self.default_settings[key]]
 

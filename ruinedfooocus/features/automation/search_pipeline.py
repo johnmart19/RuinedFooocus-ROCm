@@ -11,6 +11,7 @@ from PIL import Image
 
 # Copy this file, add suitable code and add logic to ruinedfooocus/features/generation/pipelines.py to select it
 
+
 def search_for_words(searchfor, prompt):
     searchfor = searchfor.lower()
     prompt = prompt.lower()
@@ -23,18 +24,19 @@ def search_for_words(searchfor, prompt):
             break
     return result
 
+
 def search(search_string, maxresults=10, callback=None):
     images = []
     skip = 0
 
-    folder=shared.path_manager.model_paths["temp_outputs_path"]
+    folder = shared.path_manager.model_paths["temp_outputs_path"]
     current_time = datetime.datetime.now()
     daystr = current_time.strftime("%Y-%m-%d")
 
     # Parse search arguments
     searchfor = re.sub(r"search: *", "", search_string, count=1, flags=re.IGNORECASE)
 
-    chomp = True # Do this until we can't chomp off any more options
+    chomp = True  # Do this until we can't chomp off any more options
     while chomp:
         chomp = False
 
@@ -96,10 +98,14 @@ def search(search_string, maxresults=10, callback=None):
             metadata = json.loads(im.info["parameters"])
 
             # Show image if metadata is missing. (like for gifs)
-        if searchfor == "" or "Prompt" not in metadata or search_for_words(searchfor, metadata["Prompt"]):
+        if (
+            searchfor == ""
+            or "Prompt" not in metadata
+            or search_for_words(searchfor, metadata["Prompt"])
+        ):
             # Return finished image to preview
             if callback is not None and found > skip:
-                callback(found - skip, 0, 0, maxresults, None) # Returning im here is a bit much...
+                callback(found - skip, 0, 0, maxresults, None)  # Returning im here is a bit much...
             images.append(file)
             found += 1
         if found >= (maxresults + skip):
@@ -126,19 +132,14 @@ class pipeline:
     def load_loras(self, loras):
         return
 
-
     def process(
         self,
         gen_data=None,
         callback=None,
     ):
-        worker.add_result(
-            gen_data["task_id"],
-            "preview",
-            (-1, f"Searching ...", None)
-        )
+        worker.add_result(gen_data["task_id"], "preview", (-1, f"Searching ...", None))
         maxresults = gen_data["original_image_number"]
-        maxresults = 100 if maxresults <= 1 else maxresults # 0 and 1 is 100 matches (max)
+        maxresults = 100 if maxresults <= 1 else maxresults  # 0 and 1 is 100 matches (max)
 
         images = search(gen_data["positive_prompt"], maxresults=maxresults, callback=callback)
 

@@ -35,18 +35,22 @@ def refine(latent, guider, vae, upscaler_path, gen_data, seed, image=None):
     worker.check_interrupt(gen_data)
     if gen_data["input_image"] is not None:
         if image is None:
-            image = torch.from_numpy(np.asarray(gen_data["input_image"], dtype=np.float32) / 255.0)[None]
+            image = torch.from_numpy(np.asarray(gen_data["input_image"], dtype=np.float32) / 255.0)[
+                None
+            ]
         video = LTXVImgToVideoInplace.execute(vae, image, video, strength=1.0)[0]
     latent = LTXVConcatAVLatent.execute(video, audio)[0] if audio is not None else video
     worker.check_interrupt(gen_data)
     noise = Noise_RandomNoise(seed + 1)
     samples = guider.sample(
-        noise.generate_noise(latent), latent["samples"],
+        noise.generate_noise(latent),
+        latent["samples"],
         # Native LTX-2.5 distilled stage 2, workflow_templates 67984637.
         KSamplerSelect().get_sampler("euler_ancestral")[0],
         torch.tensor([0.85, 0.7250, 0.4219, 0.0]),
         denoise_mask=latent.get("noise_mask"),
         callback=video_callback(guider.model_patcher, gen_data, "Refining video (stage 2/2)"),
-        disable_pbar=not comfy.utils.PROGRESS_BAR_ENABLED, seed=noise.seed,
+        disable_pbar=not comfy.utils.PROGRESS_BAR_ENABLED,
+        seed=noise.seed,
     )
     return {**latent, "samples": samples.to(model_management.intermediate_device())}

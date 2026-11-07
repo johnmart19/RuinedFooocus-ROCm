@@ -1,5 +1,6 @@
 from ruinedfooocus.core.paths import asset_path, resource_path
 from ruinedfooocus.core.paths import asset_path
+
 """App-owned HTML follows the HTML Living Standard basics; no server or browser needed."""
 import ast
 from html.parser import HTMLParser
@@ -8,8 +9,12 @@ import re
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-PAGES = (str(asset_path('last_image.html')), str(asset_path('slideshow.html')), str(asset_path('chat_python.html')))
-FRAGMENTS = (str(asset_path('chat_local_models.html')), str(asset_path('chat_model_remove.html')))
+PAGES = (
+    str(asset_path("last_image.html")),
+    str(asset_path("slideshow.html")),
+    str(asset_path("chat_python.html")),
+)
+FRAGMENTS = (str(asset_path("chat_local_models.html")), str(asset_path("chat_model_remove.html")))
 OBSOLETE = {"font", "center", "big", "strike", "marquee", "tt", "frame", "frameset"}
 PRESENTATIONAL = {"bgcolor", "align", "border", "cellpadding", "cellspacing", "valign"}
 
@@ -60,7 +65,11 @@ class HtmlTemplateTests(unittest.TestCase):
                         self.assertEqual(attrs.get("type"), "button")
 
     def test_python_built_markup_avoids_obsolete_tags(self):
-        for path in ("ruinedfooocus/ui/app.py", "ruinedfooocus/features/prompting/ui_random.py", "ruinedfooocus/ui/html.py"):
+        for path in (
+            "ruinedfooocus/ui/app.py",
+            "ruinedfooocus/features/prompting/ui_random.py",
+            "ruinedfooocus/ui/html.py",
+        ):
             with self.subTest(file=path):
                 text = (ROOT / path).read_text(encoding="utf-8")
                 self.assertNotRegex(text, r"<(?:font|center|big|strike|marquee)\b")
@@ -70,12 +79,26 @@ class HtmlTemplateTests(unittest.TestCase):
     def test_progress_bar_is_labelled_and_escapes_status_text(self):
         source = (ROOT / "ruinedfooocus/ui/html.py").read_text(encoding="utf-8")
         tree = ast.parse(source)
-        nodes = [node for node in tree.body
-                 if isinstance(node, ast.Assign) and node.targets[0].id == "progress_html"
-                 or isinstance(node, ast.FunctionDef) and node.name == "make_progress_html"]
+        nodes = [
+            node
+            for node in tree.body
+            if isinstance(node, ast.Assign)
+            and node.targets[0].id == "progress_html"
+            or isinstance(node, ast.FunctionDef)
+            and node.name == "make_progress_html"
+        ]
         import html as html_text
-        scope = {'asset_path': asset_path, 'resource_path': resource_path, "state": {"last_progress": 0}, "html_text": html_text}
-        exec(compile(ast.Module(body=nodes, type_ignores=[]), "ruinedfooocus/ui/html.py", "exec"), scope)
+
+        scope = {
+            "asset_path": asset_path,
+            "resource_path": resource_path,
+            "state": {"last_progress": 0},
+            "html_text": html_text,
+        }
+        exec(
+            compile(ast.Module(body=nodes, type_ignores=[]), "ruinedfooocus/ui/html.py", "exec"),
+            scope,
+        )
         markup = scope["make_progress_html"](40, 'Loading <model> "a&b"')
         self.assertIn("&lt;model&gt; &quot;a&amp;b&quot;", markup)
         tags = [tag for tag, _ in parse_text(markup).tags]

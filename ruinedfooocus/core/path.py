@@ -7,6 +7,7 @@ import errno
 import time
 from ruinedfooocus.core.config_io import save_json
 from tempfile import NamedTemporaryFile
+
 try:
     # This can fail during the first run
     import requests
@@ -50,24 +51,23 @@ class PathManager:
 
     def __init__(self):
         from ruinedfooocus.app.arguments import args
+
         self.name = args.settings
         self.set_settings_path(args.settings)
         self.paths = self.load_paths()
         self.model_paths = self.get_model_paths()
-        self.upscaler_filenames = self.get_model_filenames(
-            self.model_paths["upscaler_path"]
-        )
+        self.upscaler_filenames = self.get_model_filenames(self.model_paths["upscaler_path"])
 
         pathdb_folder = resource_path("model_catalogue")
         files = os.listdir(pathdb_folder)
         for file in files:
             # Check if the file has a .json extension
-            if file.endswith('.json'):
+            if file.endswith(".json"):
                 file_path = os.path.join(pathdb_folder, file)
 
                 try:
                     # Open and read the JSON file
-                    with open(file_path, 'r') as json_file:
+                    with open(file_path, "r") as json_file:
                         data = json.load(json_file)
                         self.DOWNLOADABLE_FILES.update(data)
                 except Exception as e:
@@ -92,8 +92,8 @@ class PathManager:
             if key not in paths:
                 paths[key] = self.DEFAULT_PATHS[key]
         # Fix paths
-        for key in ['path_checkpoints', 'path_loras']:
-            if key in paths and not isinstance(paths[key], list): # Some folders should be lists
+        for key in ["path_checkpoints", "path_loras"]:
+            if key in paths and not isinstance(paths[key], list):  # Some folders should be lists
                 paths[key] = [paths[key]]
 
         save_json(self.settings_path, paths)
@@ -102,9 +102,9 @@ class PathManager:
     def save_paths(self):
         paths = self.paths
 
-#        for key in newpaths:
-#            if key not in paths:
-#                paths[key] = newpaths[key]
+        #        for key in newpaths:
+        #            if key not in paths:
+        #                paths[key] = newpaths[key]
         save_json(self.settings_path, paths)
         return paths
 
@@ -117,7 +117,9 @@ class PathManager:
             ),
             "lorafile_path": self.get_abspath_folder(self.paths["path_loras"]),
             "controlnet_path": self.get_abspath_folder(self.paths["path_controlnet"]),
-            "geometry_estimation_path": self.get_abspath_folder(self.paths["path_geometry_estimation"]),
+            "geometry_estimation_path": self.get_abspath_folder(
+                self.paths["path_geometry_estimation"]
+            ),
             "vae_approx_path": self.get_abspath_folder(self.paths["path_vae_approx"]),
             "vae_path": self.get_abspath_folder(self.paths["path_vae"]),
             "temp_outputs_path": self.get_abspath_folder(self.paths["path_outputs"], required=True),
@@ -175,14 +177,12 @@ class PathManager:
         return sorted(
             filenames,
             key=lambda x: (
-                f"0{x.casefold()}"
-                if not str(Path(x).parent) == "."
-                else f"1{x.casefold()}"
+                f"0{x.casefold()}" if not str(Path(x).parent) == "." else f"1{x.casefold()}"
             ),
         )
 
     def get_presets(self):
-        folder_path = data_path(self.paths['path_presets'])
+        folder_path = data_path(self.paths["path_presets"])
         if not folder_path.is_dir():
             raise ValueError(f"{folder_path} is not a valid directory.")
         filenames = []
@@ -192,15 +192,10 @@ class PathManager:
         presets = sorted(
             filenames,
             key=lambda x: (
-                f"0{str(x).casefold()}"
-                if not str(x.parent) == "."
-                else f"1{str(x).casefold()}"
+                f"0{str(x).casefold()}" if not str(x.parent) == "." else f"1{str(x).casefold()}"
             ),
         )
-        return map(
-            lambda x: (x, str(Path(x).with_suffix('').name)), presets
-        )
-
+        return map(lambda x: (x, str(Path(x).with_suffix("").name)), presets)
 
     def get_file_path(self, file_key, default=None, progress=None):
         """
@@ -217,19 +212,22 @@ class PathManager:
                     return candidate
         if file_key not in self.DOWNLOADABLE_FILES and separator:
             # Older catalogs use aliases (e.g. lcm_lora) instead of folder/name.
-            file_key = next((key for key, entry in self.DOWNLOADABLE_FILES.items()
-                             if entry["path"] == "path_" + folder
-                             and entry["filename"] == filename), file_key)
+            file_key = next(
+                (
+                    key
+                    for key, entry in self.DOWNLOADABLE_FILES.items()
+                    if entry["path"] == "path_" + folder and entry["filename"] == filename
+                ),
+                file_key,
+            )
         if file_key not in self.DOWNLOADABLE_FILES:
             return default
 
         file_info = self.DOWNLOADABLE_FILES[file_key]
         folder = self.paths[file_info["path"]]
-        if isinstance(folder, list): # folder might be a list of folders
-            folder = folder[0] # ...select the first one
-        file_path = (
-            self.get_abspath(folder) / file_info["filename"]
-        )
+        if isinstance(folder, list):  # folder might be a list of folders
+            folder = folder[0]  # ...select the first one
+        file_path = self.get_abspath(folder) / file_info["filename"]
 
         if not file_path.exists():
             self.download_file(file_key, progress=progress)
@@ -237,7 +235,9 @@ class PathManager:
         return file_path
 
     def get_folder_file_path(self, folder, filename, default=None, progress=None):
-        return self.get_file_path(f"{str(folder)}/{str(filename)}", default=default, progress=progress)
+        return self.get_file_path(
+            f"{str(folder)}/{str(filename)}", default=default, progress=progress
+        )
 
     def get_folder_list(self, folder):
         result = []
@@ -249,10 +249,12 @@ class PathManager:
             folders = [folders]
         for directory in folders:
             root = self.get_abspath(directory)
-            result.extend(str(path.relative_to(root)) for path in root.rglob("*")
-                          if path.is_file() and path.suffix.lower() in self.EXTENSIONS)
+            result.extend(
+                str(path.relative_to(root))
+                for path in root.rglob("*")
+                if path.is_file() and path.suffix.lower() in self.EXTENSIONS
+            )
         return sorted(set(result), key=str.casefold)
-
 
     def download_file(self, file_key, progress=None):
         """
@@ -260,11 +262,9 @@ class PathManager:
         """
         file_info = self.DOWNLOADABLE_FILES[file_key]
         folder = self.paths[file_info["path"]]
-        if isinstance(folder, list): # folder might be a list of folders
-            folder = folder[0] # ...select the first one
-        file_path = (
-            self.get_abspath(folder) / file_info["filename"]
-        )
+        if isinstance(folder, list):  # folder might be a list of folders
+            folder = folder[0]  # ...select the first one
+        file_path = self.get_abspath(folder) / file_info["filename"]
 
         print(f"Downloading {file_info['url']}...")
         file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -273,21 +273,30 @@ class PathManager:
         huggingface = urlparse(file_info["url"]).hostname == "huggingface.co"
         if huggingface:
             from ruinedfooocus.core.hub_download import download_hub_file
+
             download_hub_file(file_info["url"], file_path, progress)
             print(f"Downloaded {file_info['filename']} to {file_path}")
             return
         try:
-            with requests.get(file_info["url"], headers=headers, stream=True, timeout=(15, 60)) as response:
+            with requests.get(
+                file_info["url"], headers=headers, stream=True, timeout=(15, 60)
+            ) as response:
                 response.raise_for_status()
                 total_size = int(response.headers.get("content-length", 0))
                 received = 0
                 started = last_update = time.monotonic()
                 if progress:
                     progress(0, total_size, 0)
-                with NamedTemporaryFile(dir=file_path.parent, suffix=".part", delete=False) as file, tqdm(
-                    desc=file_info["filename"], total=total_size,
-                    unit="iB", unit_scale=True, unit_divisor=1024,
-                ) as progress_bar:
+                with (
+                    NamedTemporaryFile(dir=file_path.parent, suffix=".part", delete=False) as file,
+                    tqdm(
+                        desc=file_info["filename"],
+                        total=total_size,
+                        unit="iB",
+                        unit_scale=True,
+                        unit_divisor=1024,
+                    ) as progress_bar,
+                ):
                     temporary = Path(file.name)
                     for data in response.iter_content(chunk_size=1024 * 1024):
                         progress_bar.update(file.write(data))
@@ -300,7 +309,9 @@ class PathManager:
                     raise IOError("Incomplete model download; retry to download again.")
                 os.replace(temporary, file_path)
                 if progress:
-                    progress(received, total_size, received / max(time.monotonic() - started, 0.001))
+                    progress(
+                        received, total_size, received / max(time.monotonic() - started, 0.001)
+                    )
         finally:
             if temporary is not None:
                 temporary.unlink(missing_ok=True)

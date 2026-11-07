@@ -1,4 +1,5 @@
 """Release external GPU allocations before the serial worker changes tasks."""
+
 import atexit
 from weakref import WeakSet
 

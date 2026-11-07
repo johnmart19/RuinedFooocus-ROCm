@@ -66,22 +66,31 @@ class pipeline:
     conditions = None
     wan_version = None
 
-
     # Optional function
     def parse_gen_data(self, gen_data):
         if gen_data.get("video_duration") is not None:
-            gen_data["original_image_number"] = frame_count(gen_data["video_duration"], gen_data.get("video_fps", 16))
+            gen_data["original_image_number"] = frame_count(
+                gen_data["video_duration"], gen_data.get("video_fps", 16)
+            )
         else:
             gen_data["original_image_number"] = 1 + ((int(gen_data["image_number"] / 4.0) + 1) * 4)
         gen_data["image_number"] = 1
         return gen_data
 
-    def load_base_model(self, name, unet_only=True, hash=None): # Wan_Video never has the clip and vae models?
+    def load_base_model(
+        self, name, unet_only=True, hash=None
+    ):  # Wan_Video never has the clip and vae models?
         # Check if model is already loaded
-        components = {key: value for key, value in settings.default_settings.items()
-                      if key.startswith(("clip_", "vae_"))}
-        if (self.model_hash == name and self.model_base is not None
-                and components == getattr(self, "component_settings", None)):
+        components = {
+            key: value
+            for key, value in settings.default_settings.items()
+            if key.startswith(("clip_", "vae_"))
+        }
+        if (
+            self.model_hash == name
+            and self.model_base is not None
+            and components == getattr(self, "component_settings", None)
+        ):
             return
         self.component_settings = components
 
@@ -111,10 +120,10 @@ class pipeline:
 
                     self.wan_version = type(unet.model).__name__
 
-                    if self.wan_version == 'WAN21':
+                    if self.wan_version == "WAN21":
                         # https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged
                         vae_name = resource_name("vae_wan", settings.default_settings)
-                    elif self.wan_version == 'WAN22':
+                    elif self.wan_version == "WAN22":
                         vae_name = resource_name("vae_wan_22", settings.default_settings)
                     else:
                         print(f"ERROR: Not a Wan Video model?")
@@ -126,34 +135,37 @@ class pipeline:
                     clip_path = path_manager.get_folder_file_path(
                         "clip",
                         clip_name,
-                        default = os.path.join(path_manager.model_paths["clip_path"], clip_name)
+                        default=os.path.join(path_manager.model_paths["clip_path"], clip_name),
                     )
                     clip_paths.append(str(clip_path))
                     clip_type = comfy.sd.CLIPType.WAN
 
                     print(f"Loading CLIP: {clip_names}")
-                    clip = comfy.sd.load_clip(ckpt_paths=clip_paths, clip_type=clip_type, model_options={})
-                    #clip_loader = DualClipLoaderGGUF()
-                    #clip = clip_loader.load_patcher(
+                    clip = comfy.sd.load_clip(
+                        ckpt_paths=clip_paths, clip_type=clip_type, model_options={}
+                    )
+                    # clip_loader = DualClipLoaderGGUF()
+                    # clip = clip_loader.load_patcher(
                     #    clip_paths,
                     #    clip_type,
                     #    clip_loader.load_data(clip_paths)
-                    #)
+                    # )
 
                     print(f"Loading VAE: {vae_name}")
                     vae_path = path_manager.get_folder_file_path(
                         "vae",
                         vae_name,
-                        default = os.path.join(path_manager.model_paths["vae_path"], vae_name)
+                        default=os.path.join(path_manager.model_paths["vae_path"], vae_name),
                     )
                     if str(vae_path).endswith(".gguf"):
                         sd, extra = load_gguf_sd(str(vae_path), handle_prefix=None)
                         metadata = extra.get("metadata", {})
                     else:
-                        sd, metadata = comfy.utils.load_torch_file(str(vae_path), return_metadata=True)
+                        sd, metadata = comfy.utils.load_torch_file(
+                            str(vae_path), return_metadata=True
+                        )
                     vae = comfy.sd.VAE(sd=sd, metadata=metadata)
                     vae.throw_exception_if_invalid()
-
 
                     clip_vision = None
                     if unet.model.diffusion_model.img_emb is not None:
@@ -161,7 +173,9 @@ class pipeline:
                         clip_vision_path = path_manager.get_folder_file_path(
                             "clip_vision",
                             clip_vision_name,
-                            default = os.path.join(path_manager.model_paths["clip_vision_path"], clip_vision_name)
+                            default=os.path.join(
+                                path_manager.model_paths["clip_vision_path"], clip_vision_name
+                            ),
                         )
                         print(f"Loading CLIP Vision: {clip_vision_name}")
                         if str(clip_vision_path).endswith(".gguf"):
@@ -169,7 +183,9 @@ class pipeline:
                         else:
                             sd = comfy.utils.load_torch_file(str(clip_vision_path))
                         if "visual.transformer.resblocks.0.attn.in_proj_weight" in sd:
-                            clip_vision = comfy.clip_vision.load_clipvision_from_sd(sd, prefix="visual.", convert_keys=True)
+                            clip_vision = comfy.clip_vision.load_clipvision_from_sd(
+                                sd, prefix="visual.", convert_keys=True
+                            )
                         else:
                             clip_vision = comfy.clip_vision.load_clipvision_from_sd(sd=sd)
                 except Exception as e:
@@ -184,10 +200,7 @@ class pipeline:
                     raise
             except:
                 print(f"Failed. Trying to load as unet.")
-                self.load_base_model(
-                    filename,
-                    unet_only=True
-                )
+                self.load_base_model(filename, unet_only=True)
                 return
 
         if unet == None:
@@ -199,7 +212,8 @@ class pipeline:
                 unet=unet, clip=clip, vae=vae, clip_vision=clip_vision
             )
             if not (
-                isinstance(self.model_base.unet.model, WAN21) or isinstance(self.model_base.unet.model, WAN22)
+                isinstance(self.model_base.unet.model, WAN21)
+                or isinstance(self.model_base.unet.model, WAN22)
             ):
                 print(
                     f"Model {type(self.model_base.unet.model)} not supported. Expected Wan Video model."
@@ -299,7 +313,7 @@ class pipeline:
             worker.add_result(
                 gen_data["task_id"],
                 "preview",
-                (-1, f"Processing text encoding ...", str(asset_path('logo.png')))
+                (-1, f"Processing text encoding ...", str(asset_path("logo.png"))),
             )
 
         if self.conditions is None:
@@ -317,8 +331,8 @@ class pipeline:
         # ModelSamplingSD3
         shift = 8.0
         model_sampling = ModelSamplingSD3().patch(
-            model = self.model_base_patched.unet,
-            shift = shift,
+            model=self.model_base_patched.unet,
+            shift=shift,
         )[0]
 
         if gen_data["input_image"]:
@@ -329,71 +343,75 @@ class pipeline:
 
         if self.wan_version == "WAN21":
             if image is not None:
-                clip_vision_output = (self.model_base_patched.clip_vision.encode_image(image)
-                                      if self.model_base_patched.clip_vision is not None else None)
+                clip_vision_output = (
+                    self.model_base_patched.clip_vision.encode_image(image)
+                    if self.model_base_patched.clip_vision is not None
+                    else None
+                )
 
                 (positive, negative, latent_image) = WanImageToVideo().execute(
-                    positive = self.conditions["+"]["cache"],
-                    negative = self.conditions["-"]["cache"],
-                    vae = self.model_base_patched.vae,
-                    width = gen_data["width"],
-                    height = gen_data["height"],
-                    length = gen_data["original_image_number"],
-                    batch_size = 1,
-                    start_image = image,
-                    clip_vision_output = clip_vision_output,
+                    positive=self.conditions["+"]["cache"],
+                    negative=self.conditions["-"]["cache"],
+                    vae=self.model_base_patched.vae,
+                    width=gen_data["width"],
+                    height=gen_data["height"],
+                    length=gen_data["original_image_number"],
+                    batch_size=1,
+                    start_image=image,
+                    clip_vision_output=clip_vision_output,
                 )
             else:
                 # latent_image
                 latent_image = EmptyHunyuanLatentVideo().execute(
-                    width = gen_data["width"],
-                    height = gen_data["height"],
-                    length = gen_data["original_image_number"],
-                    batch_size = 1,
+                    width=gen_data["width"],
+                    height=gen_data["height"],
+                    length=gen_data["original_image_number"],
+                    batch_size=1,
                 )[0]
                 positive = self.conditions["+"]["cache"]
                 negative = self.conditions["-"]["cache"]
-        else: # WAN22
+        else:  # WAN22
             latent_image = Wan22ImageToVideoLatent().execute(
-                vae = self.model_base_patched.vae,
-                width = gen_data["width"],
-                height = gen_data["height"],
-                length = gen_data["original_image_number"],
-                batch_size = 1,
-                start_image = image, # Image is None if t2v
+                vae=self.model_base_patched.vae,
+                width=gen_data["width"],
+                height=gen_data["height"],
+                length=gen_data["original_image_number"],
+                batch_size=1,
+                start_image=image,  # Image is None if t2v
             )[0]
             positive = self.conditions["+"]["cache"]
             negative = self.conditions["-"]["cache"]
 
         worker.add_result(
-            gen_data["task_id"],
-            "preview",
-            (-1, f"Generating ...", str(asset_path('logo.png')))
+            gen_data["task_id"], "preview", (-1, f"Generating ...", str(asset_path("logo.png")))
         )
 
         latent_image = latent_image.copy()
         latent_image["samples"] = comfy.sample.fix_empty_latent_channels(
-            model_sampling, latent_image["samples"],
-            latent_image.get("downscale_ratio_spacial"), latent_image.get("downscale_ratio_temporal"),
+            model_sampling,
+            latent_image["samples"],
+            latent_image.get("downscale_ratio_spacial"),
+            latent_image.get("downscale_ratio_temporal"),
         )
-        noise = comfy.sample.prepare_noise(latent_image["samples"], seed, latent_image.get("batch_index"))
+        noise = comfy.sample.prepare_noise(
+            latent_image["samples"], seed, latent_image.get("batch_index")
+        )
 
         try:
             sampled = comfy.sample.sample(
-                model = model_sampling,
-                noise = noise,
-                steps = gen_data["steps"],
-                cfg = gen_data["cfg"],
-                sampler_name = gen_data["sampler_name"],
-                scheduler = gen_data["scheduler"],
-                positive = positive,
-                negative = negative,
-                latent_image = latent_image["samples"],
-
-                denoise = 1,
-                noise_mask = latent_image.get("noise_mask"),
-                seed = seed,
-                callback = callback_function,
+                model=model_sampling,
+                noise=noise,
+                steps=gen_data["steps"],
+                cfg=gen_data["cfg"],
+                sampler_name=gen_data["sampler_name"],
+                scheduler=gen_data["scheduler"],
+                positive=positive,
+                negative=negative,
+                latent_image=latent_image["samples"],
+                denoise=1,
+                noise_mask=latent_image.get("noise_mask"),
+                seed=seed,
+                callback=callback_function,
                 disable_pbar=not comfy.utils.PROGRESS_BAR_ENABLED,
             )
 
@@ -402,11 +420,7 @@ class pipeline:
             # the decode workspace fits, and offload them under pressure.
 
             if callback is not None:
-                worker.add_result(
-                    gen_data["task_id"],
-                    "preview",
-                    (-1, f"VAE Decoding ...", None)
-                )
+                worker.add_result(gen_data["task_id"], "preview", (-1, f"VAE Decoding ...", None))
 
             latent_image["samples"] = sampled
             latent_image.pop("downscale_ratio_spacial", None)
@@ -421,31 +435,27 @@ class pipeline:
 
             pil_images = []
             for image in decoded_latent:
-                i = 255. * image.cpu().numpy()
+                i = 255.0 * image.cpu().numpy()
                 img = Image.fromarray(np.clip(i, 0, 255).astype(np.uint8))
                 pil_images.append(img)
 
             if callback is not None:
-                worker.add_result(
-                    gen_data["task_id"],
-                    "preview",
-                    (-1, f"Saving ...", None)
-                )
+                worker.add_result(gen_data["task_id"], "preview", (-1, f"Saving ...", None))
 
             file = generate_temp_filename(
                 folder=path_manager.model_paths["temp_outputs_path"], extension="gif"
             )
             os.makedirs(os.path.dirname(file), exist_ok=True)
 
-            fps=float(gen_data.get("video_fps", 16.0))
-            compress_level=9 # Min = 0, Max = 9
+            fps = float(gen_data.get("video_fps", 16.0))
+            compress_level = 9  # Min = 0, Max = 9
 
             # Save GIF
             pil_images[0].save(
                 file,
                 compress_level=compress_level,
                 save_all=True,
-                duration=int(1000.0/fps),
+                duration=int(1000.0 / fps),
                 append_images=pil_images[1:],
                 optimize=True,
                 loop=0,

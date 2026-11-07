@@ -39,13 +39,18 @@ class WorkflowReportTests(unittest.TestCase):
         self.assertFalse(compare(a, {}, aa, {})["passed"])
 
     def test_provenance_tracks_dirty_source_bytes_without_weight_hashing(self):
-        with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parents[1] / "tmp") as directory:
+        with tempfile.TemporaryDirectory(
+            dir=Path(__file__).resolve().parents[1] / "tmp"
+        ) as directory:
             root = Path(directory)
             (root / "modules" / "nested").mkdir(parents=True)
             source = root / "modules" / "nested" / "example.py"
             source.write_text("value = 1\n", encoding="utf-8")
             (root / "weight.safetensors").write_bytes(b"excluded")
-            with patch("tools.validate_comfy_workflows.subprocess.check_output", return_value=" M modules/nested/example.py\n"):
+            with patch(
+                "tools.validate_comfy_workflows.subprocess.check_output",
+                return_value=" M modules/nested/example.py\n",
+            ):
                 first = provenance(root)
                 source.write_text("value = 2\n", encoding="utf-8")
                 second = provenance(root)

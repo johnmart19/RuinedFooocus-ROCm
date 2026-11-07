@@ -9,16 +9,20 @@ from ruinedfooocus.features.prompting.one_button.build_dynamic_prompt import cre
 @lru_cache(maxsize=1)
 def evolve_tokenizer(offline):
     from transformers import CLIPTokenizer
-    return CLIPTokenizer.from_pretrained('openai/clip-vit-large-patch14', local_files_only=offline)
+
+    return CLIPTokenizer.from_pretrained("openai/clip-vit-large-patch14", local_files_only=offline)
 
 
 def add_evolve_tab(prompt, image_number, run_event):
     def tokenize_and_randomize(prompt, strength):
         from ruinedfooocus.app.arguments import args
+
         try:
-            tokenizer = evolve_tokenizer(args.offline or os.environ.get('RF_OFFLINE') == '1')
+            tokenizer = evolve_tokenizer(args.offline or os.environ.get("RF_OFFLINE") == "1")
         except OSError as error:
-            raise gr.Error("Token evolution requires the tokenizer. Connect once to download it, or use Words or OBP Variant mode.") from error
+            raise gr.Error(
+                "Token evolution requires the tokenizer. Connect once to download it, or use Words or OBP Variant mode."
+            ) from error
         special_tokens = set(tokenizer.all_special_tokens)
         all_tokens = [token for token in tokenizer.get_vocab() if token not in special_tokens]
         tokens = tokenizer.tokenize(prompt)
@@ -28,7 +32,7 @@ def add_evolve_tab(prompt, image_number, run_event):
                 res.append(random.choice(all_tokens))
             else:
                 res += [token]
-        return tokenizer.convert_tokens_to_string(res).replace('</w>', ' ').strip()
+        return tokenizer.convert_tokens_to_string(res).replace("</w>", " ").strip()
 
     def randomize_words(prompt, strength):
         with open("wildcards_official/words.txt", "r", encoding="utf-8") as f:
@@ -103,12 +107,7 @@ def add_evolve_tab(prompt, image_number, run_event):
                     )
 
         with gr.Group():
-            evolve_modes = [
-                "Tokens",
-                "Words",
-                "OBP Variant",
-                "Copy to Prompt..."
-            ]
+            evolve_modes = ["Tokens", "Words", "OBP Variant", "Copy to Prompt..."]
             evolve_mode = gr.Dropdown(
                 evolve_modes,
                 value=evolve_modes[0],
@@ -122,7 +121,7 @@ def add_evolve_tab(prompt, image_number, run_event):
         for i in range(1, 10):
             evolve_btn[i].click(
                 evolve,
-                api_visibility='undocumented',
+                api_visibility="undocumented",
                 inputs=[
                     evolve_btn[i],
                     evolve_mode,

@@ -21,6 +21,7 @@ controlnet_models = {
     "rembg": None,
 }
 
+
 def load_cnsettings():
     settings = {}
     if not os.path.isfile(CNSETTINGS_FILE):
@@ -39,9 +40,9 @@ def load_cnsettings():
     if settings.get("Img2Img") == {"type": "img2img", "start": 0.06, "denoise": 0.64}:
         settings["Img2Img"] = dict(default_settings["Img2Img"])
         settings_updated = True
-    for key in ('Depth (low)', 'Depth (high)'):
+    for key in ("Depth (low)", "Depth (high)"):
         updated = default_settings.get(key, {})
-        previous = {key: value for key, value in updated.items() if key != 'depth_preprocess'}
+        previous = {key: value for key, value in updated.items() if key != "depth_preprocess"}
         if updated and settings.get(key) == previous:
             settings[key] = dict(updated)
             settings_updated = True
@@ -67,6 +68,8 @@ def save_cnsettings(cn_save_options):
     save_json(CNSETTINGS_FILE, cn_save_options)
     controlnet_settings = cn_save_options
     cn_options = {f"{k}": v for k, v in controlnet_settings.items()}
+
+
 def get_model(type):
     if type not in controlnet_models or controlnet_models[type] is None:
         return None
@@ -76,6 +79,7 @@ def get_model(type):
 def get_settings(gen_data):
     if gen_data.get("automatic_upscale_target") == "Input image only":
         from ruinedfooocus.features.generation.automatic_upscale import model_for
+
         model = model_for(gen_data.get("automatic_upscale"))
         if model is None:
             raise ValueError("Choose an upscale model before upscaling the input image.")
@@ -108,10 +112,24 @@ def get_settings(gen_data):
                         options[key] = gen_data["cn_" + key]
         elif options.get("type") == "upscale" and "cn_upscale" in gen_data:
             options["upscaler"] = gen_data["cn_upscale"]
-    if options.get('type') == 'depth':
-        from ruinedfooocus.features.image_editing.depth_control import DEPTH_DEFAULTS, depth_settings
-        options.update(depth_settings({**options, **{key:gen_data['cn_' + key] for key in DEPTH_DEFAULTS
-                                                    if 'cn_' + key in gen_data}}))
+    if options.get("type") == "depth":
+        from ruinedfooocus.features.image_editing.depth_control import (
+            DEPTH_DEFAULTS,
+            depth_settings,
+        )
+
+        options.update(
+            depth_settings(
+                {
+                    **options,
+                    **{
+                        key: gen_data["cn_" + key]
+                        for key in DEPTH_DEFAULTS
+                        if "cn_" + key in gen_data
+                    },
+                }
+            )
+        )
     return options
 
 

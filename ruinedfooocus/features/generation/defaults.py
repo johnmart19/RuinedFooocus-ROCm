@@ -6,11 +6,18 @@ import math
 from ruinedfooocus.core.settings_validation import validate_settings
 
 DEFAULT_CONTROLS = {
-    "base_model": "base_model_name", "performance": "performance_selection",
-    "resolution": "aspect_ratios_selection", "prompt": "prompt",
-    "negative_prompt": "negative", "style": "style_selection",
-    "seed": "seed", "seed_random": "seed_random", "image_number": "image_number",
-    "auto_negative_prompt": "auto_negative", "custom_width": "custom_width", "custom_height": "custom_height",
+    "base_model": "base_model_name",
+    "performance": "performance_selection",
+    "resolution": "aspect_ratios_selection",
+    "prompt": "prompt",
+    "negative_prompt": "negative",
+    "style": "style_selection",
+    "seed": "seed",
+    "seed_random": "seed_random",
+    "image_number": "image_number",
+    "auto_negative_prompt": "auto_negative",
+    "custom_width": "custom_width",
+    "custom_height": "custom_height",
 }
 SAMPLING_KEYS = ("custom_steps", "cfg", "sampler_name", "scheduler", "clip_skip")
 
@@ -18,14 +25,21 @@ SAMPLING_KEYS = ("custom_steps", "cfg", "sampler_name", "scheduler", "clip_skip"
 def startup_loras(settings):
     if "startup_loras" in settings:
         return [(entry["name"], entry["weight"]) for entry in settings["startup_loras"]]
-    return [(settings[f"lora_{i}_model"], settings.get(f"lora_{i}_weight", 0.5))
-            for i in range(1, 6) if settings.get(f"lora_{i}_model") not in (None, "", "None")]
+    return [
+        (settings[f"lora_{i}_model"], settings.get(f"lora_{i}_weight", 0.5))
+        for i in range(1, 6)
+        if settings.get(f"lora_{i}_model") not in (None, "", "None")
+    ]
 
 
 def generation_defaults(values):
     if values.get("preset_selection"):
         raise ValueError("Clear the generation preset before saving current controls as defaults.")
-    result = {key: copy.deepcopy(values[control]) for key, control in DEFAULT_CONTROLS.items() if control in values}
+    result = {
+        key: copy.deepcopy(values[control])
+        for key, control in DEFAULT_CONTROLS.items()
+        if control in values
+    }
     # Forever is an action, not a safe startup batch count.
     result["image_number"] = max(1, int(result.get("image_number", 1)))
     loras = []

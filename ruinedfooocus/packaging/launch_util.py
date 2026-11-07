@@ -28,9 +28,11 @@ dir_repos = "repositories"
 
 re_requirement = re.compile(r"\s*([-_a-zA-Z0-9]+)\s*(?:==\s*([-+_.a-zA-Z0-9]+))?\s*")
 
+
 def git_clone(url, dir, name, hash=None):
     try:
         import pygit2
+
         pygit2.option(pygit2.GIT_OPT_SET_OWNER_VALIDATION, 0)
 
         try:
@@ -71,15 +73,13 @@ def is_installed(package):
         return False
 
     try:
-        version_installed = re.sub(
-            r"\+.*$",
-            "",
-            importlib.metadata.version(package)
-        )
+        version_installed = re.sub(r"\+.*$", "", importlib.metadata.version(package))
     except Exception:
         return False
 
-    if version_required != "" and packaging.version.parse(version_required) != packaging.version.parse(version_installed):
+    if version_required != "" and packaging.version.parse(
+        version_required
+    ) != packaging.version.parse(version_installed):
         return False
 
     return True
@@ -121,8 +121,7 @@ def run(
 
 def run_pip(command, desc=None, live=default_command_live):
     index_url_line = (
-        f" --index-url {index_url}"
-        if index_url and "--index-url" not in command else ""
+        f" --index-url {index_url}" if index_url and "--index-url" not in command else ""
     )
     return run(
         f'"{python}" -m pip {command} --prefer-binary{index_url_line}',
@@ -130,6 +129,7 @@ def run_pip(command, desc=None, live=default_command_live):
         errdesc=f"Couldn't install {desc}",
         live=live,
     )
+
 
 def reinstall_requirements(requirements_file, constraints=""):
     """Reinstall exact versions after dependency resolution, without replacing Torch."""
@@ -143,14 +143,20 @@ def reinstall_requirements(requirements_file, constraints=""):
             continue
         installed = importlib.metadata.version(requirement.name)
         if not requirement.specifier.contains(installed, prereleases=True):
-            raise RuntimeError(f"Resolve {requirements_file} before reinstalling {requirement.name}.")
+            raise RuntimeError(
+                f"Resolve {requirements_file} before reinstalling {requirement.name}."
+            )
         resolved[requirement.name] = installed
     # --no-deps does not check dependency bounds. Reusing version ranges here
     # could replace DirectML-compatible OpenCV/rembg/Tokenizers with newer builds.
     with TemporaryDirectory(prefix="ruinedfooocus-reinstall-") as directory:
         pinned = Path(directory) / "requirements.txt"
-        pinned.write_text("".join(f"{name}=={version}\n" for name, version in resolved.items()), encoding="utf-8")
-        run_pip(f'install --force-reinstall --no-deps -r "{pinned}"{constraints}', "resolved modules")
+        pinned.write_text(
+            "".join(f"{name}=={version}\n" for name, version in resolved.items()), encoding="utf-8"
+        )
+        run_pip(
+            f'install --force-reinstall --no-deps -r "{pinned}"{constraints}', "resolved modules"
+        )
 
 
 def _requirement_met(requirement, checked):
@@ -166,7 +172,9 @@ def _requirement_met(requirement, checked):
     extras = {"", *requirement.extras}
     for raw in importlib.metadata.requires(requirement.name) or []:
         dependency = Requirement(raw)
-        if dependency.marker and not any(dependency.marker.evaluate({"extra": extra}) for extra in extras):
+        if dependency.marker and not any(
+            dependency.marker.evaluate({"extra": extra}) for extra in extras
+        ):
             continue
         if not _requirement_met(dependency, checked):
             return False

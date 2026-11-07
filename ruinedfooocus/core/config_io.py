@@ -12,8 +12,9 @@ def save_json(path, data):
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = None
     try:
-        with NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent,
-                                suffix=".tmp", delete=False) as file:
+        with NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=path.parent, suffix=".tmp", delete=False
+        ) as file:
             temporary = Path(file.name)
             file.write(text)
             file.flush()

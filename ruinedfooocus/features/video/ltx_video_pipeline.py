@@ -37,8 +37,18 @@ from nodes import (
     VAEDecode,
 )
 
-from comfy_extras.nodes_custom_sampler import RandomNoise, BasicScheduler, KSamplerSelect, BasicGuider
-from comfy_extras.nodes_lt import EmptyLTXVLatentVideo, LTXVImgToVideo, LTXVConditioning, LTXVScheduler
+from comfy_extras.nodes_custom_sampler import (
+    RandomNoise,
+    BasicScheduler,
+    KSamplerSelect,
+    BasicGuider,
+)
+from comfy_extras.nodes_lt import (
+    EmptyLTXVLatentVideo,
+    LTXVImgToVideo,
+    LTXVConditioning,
+    LTXVScheduler,
+)
 from comfy_extras.nodes_lt import ModelSamplingLTXV
 from comfy_extras.nodes_flux import FluxGuidance
 
@@ -67,7 +77,6 @@ class pipeline:
     model_base_patched = None
     conditions = None
 
-
     # Optional function
     def parse_gen_data(self, gen_data):
         gen_data["original_image_number"] = gen_data.get("video_duration", gen_data["image_number"])
@@ -75,12 +84,20 @@ class pipeline:
         gen_data["show_preview"] = False
         return gen_data
 
-    def load_base_model(self, name, unet_only=True, hash=None): # LTXV never has the clip and vae models?
+    def load_base_model(
+        self, name, unet_only=True, hash=None
+    ):  # LTXV never has the clip and vae models?
         # Check if model is already loaded
-        components = {key: value for key, value in settings.default_settings.items()
-                      if key.startswith(("clip_", "vae_"))}
-        if (self.model_hash == name and self.model_base is not None
-                and components == getattr(self, "component_settings", None)):
+        components = {
+            key: value
+            for key, value in settings.default_settings.items()
+            if key.startswith(("clip_", "vae_"))
+        }
+        if (
+            self.model_hash == name
+            and self.model_base is not None
+            and components == getattr(self, "component_settings", None)
+        ):
             return
         self.component_settings = components
 
@@ -116,7 +133,7 @@ class pipeline:
                         clip_path = path_manager.get_folder_file_path(
                             "clip",
                             clip_name,
-                            default = os.path.join(path_manager.model_paths["clip_path"], clip_name)
+                            default=os.path.join(path_manager.model_paths["clip_path"], clip_name),
                         )
                         clip_paths.append(str(clip_path))
                         clip_type = comfy.sd.CLIPType.HUNYUAN_VIDEO
@@ -134,20 +151,22 @@ class pipeline:
                         model_options = {}
                         device = comfy.model_management.get_torch_device()
                         if device.type == "cpu":
-                            model_options["load_device"] = model_options["offload_device"] = torch.device("cpu")
-                        clip = comfy.sd.load_clip(ckpt_paths=clip_paths, clip_type=clip_type, model_options=model_options)
+                            model_options["load_device"] = model_options["offload_device"] = (
+                                torch.device("cpu")
+                            )
+                        clip = comfy.sd.load_clip(
+                            ckpt_paths=clip_paths, clip_type=clip_type, model_options=model_options
+                        )
                     else:
                         clip_loader = DualCLIPLoaderGGUF()
                         clip = clip_loader.load_patcher(
-                            clip_paths,
-                            clip_type,
-                            clip_loader.load_data(clip_paths)
+                            clip_paths, clip_type, clip_loader.load_data(clip_paths)
                         )
 
                     vae_path = path_manager.get_folder_file_path(
                         "vae",
                         vae_name,
-                        default = os.path.join(path_manager.model_paths["vae_path"], vae_name)
+                        default=os.path.join(path_manager.model_paths["vae_path"], vae_name),
                     )
 
                     print(f"Loading VAE: {vae_name}")
@@ -155,7 +174,9 @@ class pipeline:
                         sd, extra = load_gguf_sd(str(vae_path), handle_prefix=None)
                         metadata = extra.get("metadata", {})
                     else:
-                        sd, metadata = comfy.utils.load_torch_file(str(vae_path), return_metadata=True)
+                        sd, metadata = comfy.utils.load_torch_file(
+                            str(vae_path), return_metadata=True
+                        )
                     vae = comfy.sd.VAE(sd=sd, metadata=metadata)
                     vae.throw_exception_if_invalid()
 
@@ -172,10 +193,7 @@ class pipeline:
                     raise
             except:
                 print(f"Failed. Trying to load as unet.")
-                self.load_base_model(
-                    filename,
-                    unet_only=True
-                )
+                self.load_base_model(filename, unet_only=True)
                 return
 
         if unet == None:
@@ -186,9 +204,7 @@ class pipeline:
             self.model_base = self.StableDiffusionModel(
                 unet=unet, clip=clip, vae=vae, clip_vision=clip_vision
             )
-            if not (
-                isinstance(self.model_base.unet.model, LTXV)
-            ):
+            if not (isinstance(self.model_base.unet.model, LTXV)):
                 print(
                     f"Model {type(self.model_base.unet.model)} not supported. Expected LTX Video model."
                 )
@@ -212,10 +228,10 @@ class pipeline:
         loaded_loras = []
 
         model = self.model_base
-#        for name, weight in loras:
-#            if name == "None" or weight == 0:
-#                continue
-#            filename = str(shared.models.get_file("loras", name))
+        #        for name, weight in loras:
+        #            if name == "None" or weight == 0:
+        #                continue
+        #            filename = str(shared.models.get_file("loras", name))
 
         for lora in loras:
             name = lora.get("name", "None")
@@ -286,14 +302,16 @@ class pipeline:
             raise RuntimeError("Video model is not loaded. Check its required components.")
         seed = gen_data["seed"] if isinstance(gen_data["seed"], int) else random.randint(1, 2**32)
 
-        fps = float(gen_data.get("video_fps", settings.default_settings.get("video_fps", VIDEO_FPS["LTXV"])))
+        fps = float(
+            gen_data.get("video_fps", settings.default_settings.get("video_fps", VIDEO_FPS["LTXV"]))
+        )
         gen_data["frames"] = frame_count(gen_data["original_image_number"], fps, multiple=8)
 
         if callback is not None:
             worker.add_result(
                 gen_data["task_id"],
                 "preview",
-                (-1, f"Processing text encoding ...", str(asset_path('logo.png')))
+                (-1, f"Processing text encoding ...", str(asset_path("logo.png"))),
             )
 
         if self.conditions is None:
@@ -314,23 +332,23 @@ class pipeline:
             image = np.array(gen_data["input_image"]).astype(np.float32) / 255.0
             image = torch.from_numpy(image)[None,]
             (positive, negative, latent_image) = LTXVImgToVideo().generate(
-                positive = self.conditions["+"]["cache"],
-                negative = self.conditions["-"]["cache"],
-                image = image,
-                vae = self.model_base_patched.vae,
-                width = gen_data["width"],
-                height = gen_data["height"],
-                length = gen_data["frames"],
-                batch_size = 1,
-                strength = 1,
+                positive=self.conditions["+"]["cache"],
+                negative=self.conditions["-"]["cache"],
+                image=image,
+                vae=self.model_base_patched.vae,
+                width=gen_data["width"],
+                height=gen_data["height"],
+                length=gen_data["frames"],
+                batch_size=1,
+                strength=1,
             )
         else:
             # latent_image
             latent_image = EmptyLTXVLatentVideo().generate(
-                width = gen_data["width"],
-                height = gen_data["height"],
-                length = gen_data["frames"],
-                batch_size = 1,
+                width=gen_data["width"],
+                height=gen_data["height"],
+                length=gen_data["frames"],
+                batch_size=1,
             )[0]
             positive = self.conditions["+"]["cache"]
 
@@ -338,39 +356,35 @@ class pipeline:
 
         # LTXVConditioning
         positive, negative = LTXVConditioning().execute(
-            positive = positive,
-            negative = negative,
-            frame_rate = fps
+            positive=positive, negative=negative, frame_rate=fps
         )
 
         # Sampler
         ksampler = KSamplerSelect().get_sampler(
-            sampler_name = gen_data["sampler_name"],
+            sampler_name=gen_data["sampler_name"],
         )[0]
 
         # Sigmas
         sigmas = LTXVScheduler().execute(
-            steps = gen_data["steps"],
-            max_shift = 2.05,
-            base_shift = 0.95,
-            stretch = True,
-            terminal = 0.1,
-            latent = latent_image
+            steps=gen_data["steps"],
+            max_shift=2.05,
+            base_shift=0.95,
+            stretch=True,
+            terminal=0.1,
+            latent=latent_image,
         )[0]
 
-        worker.add_result(
-            gen_data["task_id"],
-            "preview",
-            (-1, f"Generating ...", None)
-        )
+        worker.add_result(gen_data["task_id"], "preview", (-1, f"Generating ...", None))
 
         # Follow SamplerCustom's latent preparation while keeping our cancellation
         # and webpage progress callback connected to every sampling step.
         worker.check_interrupt(gen_data)
         samples = latent_image.copy()
         latent = comfy.sample.fix_empty_latent_channels(
-            self.model_base_patched.unet, samples["samples"],
-            samples.get("downscale_ratio_spacial"), samples.get("downscale_ratio_temporal"),
+            self.model_base_patched.unet,
+            samples["samples"],
+            samples.get("downscale_ratio_spacial"),
+            samples.get("downscale_ratio_temporal"),
         )
         noise = comfy.sample.prepare_noise(latent, seed, samples.get("batch_index"))
         samples["samples"] = comfy.sample.sample_custom(
@@ -392,11 +406,7 @@ class pipeline:
         worker.check_interrupt(gen_data)
 
         if callback is not None:
-            worker.add_result(
-                gen_data["task_id"],
-                "preview",
-                (-1, f"VAE Decoding ...", None)
-            )
+            worker.add_result(gen_data["task_id"], "preview", (-1, f"VAE Decoding ...", None))
 
         decoded_latent = VAEDecodeTiled().decode(
             samples=samples,
@@ -409,30 +419,26 @@ class pipeline:
 
         pil_images = []
         for image in decoded_latent:
-            i = 255. * image.cpu().numpy()
+            i = 255.0 * image.cpu().numpy()
             img = Image.fromarray(np.clip(i, 0, 255).astype(np.uint8))
             pil_images.append(img)
 
         if callback is not None:
-            worker.add_result(
-                gen_data["task_id"],
-                "preview",
-                (-1, f"Saving ...", None)
-            )
+            worker.add_result(gen_data["task_id"], "preview", (-1, f"Saving ...", None))
 
         file = generate_temp_filename(
             folder=path_manager.model_paths["temp_outputs_path"], extension="gif"
         )
         os.makedirs(os.path.dirname(file), exist_ok=True)
 
-        compress_level=9 # Min = 0, Max = 9
+        compress_level = 9  # Min = 0, Max = 9
 
         # Save GIF
         pil_images[0].save(
             file,
             compress_level=compress_level,
             save_all=True,
-            duration=int(1000.0/fps),
+            duration=int(1000.0 / fps),
             append_images=pil_images[1:],
             optimize=True,
             loop=0,

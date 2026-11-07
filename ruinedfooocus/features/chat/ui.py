@@ -11,8 +11,15 @@ import base64
 import re
 from functools import wraps
 from ruinedfooocus.core.task_errors import describe_error
-from ruinedfooocus.features.chat.llama_models import (DEFAULT_MODEL, model_catalogue, model_label, preferred_quant,
-                                 import_model, local_models, remove_local_model)
+from ruinedfooocus.features.chat.llama_models import (
+    DEFAULT_MODEL,
+    model_catalogue,
+    model_label,
+    preferred_quant,
+    import_model,
+    local_models,
+    remove_local_model,
+)
 from ruinedfooocus.features.chat.llama_file_picker import select_gguf
 from ruinedfooocus.features.chat.chat_code import python_runner
 
@@ -24,8 +31,12 @@ def display_history(history, show_reasoning):
         if message["role"] == "assistant" and isinstance(message["content"], str):
             # Close partial streamed thoughts so Gradio keeps them collapsed, too.
             replacement = (lambda m: f"<{m[1]}>{m[2]}</{m[1]}>") if show_reasoning else ""
-            text = re.sub(r"<(think|thinking)>(.*?)(?:</\1>|$)", replacement,
-                          message["content"], flags=re.DOTALL).strip()
+            text = re.sub(
+                r"<(think|thinking)>(.*?)(?:</\1>|$)",
+                replacement,
+                message["content"],
+                flags=re.DOTALL,
+            ).strip()
             if not text:
                 continue
             message = dict(message, content=text)
@@ -35,6 +46,7 @@ def display_history(history, show_reasoning):
 
 def create_chat(image_controls=None):
     image_controls = image_controls or {}
+
     def gr_llama_get_assistants(source, model):
         return {
             llama_assistants: gr.update(
@@ -55,26 +67,38 @@ def create_chat(image_controls=None):
                 visible=info["avatar"] is not None,
             ),
             llama_system: gr.update(value=info["system"]),
-            llama_embed: gr.update(value=info["embed"])
+            llama_embed: gr.update(value=info["embed"]),
         }
 
-
     selected_file = settings.default_settings.get("llama_localfile") or DEFAULT_MODEL
-    custom_file = (Path(selected_file).is_file() and Path(selected_file).resolve() not in
-                   {Path(path).resolve() for path in local_models().values()})
-    default_model = None if custom_file else next((name for name, choices in model_catalogue().items()
-        if any(Path(value).name == Path(selected_file).name for _, value in choices)),
-        "Qwen2.5-7B-Instruct-abliterated-v2")
-    saved_local = any(Path(value).name == Path(selected_file).name
-                      for _, value in model_catalogue("Local models").get(default_model, []))
+    custom_file = Path(selected_file).is_file() and Path(selected_file).resolve() not in {
+        Path(path).resolve() for path in local_models().values()
+    }
+    default_model = (
+        None
+        if custom_file
+        else next(
+            (
+                name
+                for name, choices in model_catalogue().items()
+                if any(Path(value).name == Path(selected_file).name for _, value in choices)
+            ),
+            "Qwen2.5-7B-Instruct-abliterated-v2",
+        )
+    )
+    saved_local = any(
+        Path(value).name == Path(selected_file).name
+        for _, value in model_catalogue("Local models").get(default_model, [])
+    )
     default_source = "Local models" if custom_file or saved_local else "Downloadable"
     catalogue = model_catalogue(default_source)
     if not custom_file and default_model not in catalogue:
         default_model = next(iter(catalogue), None)
     default_choices = catalogue.get(default_model, [])
-    default_quant = next((value for _, value in default_choices
-                          if Path(value).name == Path(selected_file).name),
-                         preferred_quant(default_choices) if default_choices else None)
+    default_quant = next(
+        (value for _, value in default_choices if Path(value).name == Path(selected_file).name),
+        preferred_quant(default_choices) if default_choices else None,
+    )
     if not custom_file:
         selected_file = default_quant
     html_dir = ASSET_ROOT
@@ -90,60 +114,110 @@ def create_chat(image_controls=None):
                     resizable=True,
                     elem_id="chat-messages",
                     reasoning_tags=[("<think>", "</think>"), ("<thinking>", "</thinking>")],
-                    buttons=['copy_all'],
+                    buttons=["copy_all"],
                     value=assistant_info(default_bot)["chatstart"],
                 )
                 llama_msg = gr.Textbox(
-                    label="Message", show_label=False, placeholder="Message", elem_id="chat-message-input",
-                    lines=2, max_lines=8,
+                    label="Message",
+                    show_label=False,
+                    placeholder="Message",
+                    elem_id="chat-message-input",
+                    lines=2,
+                    max_lines=8,
                 )
                 with gr.Row(elem_id="chat-message-actions"):
                     send_message = gr.Button("Send", variant="primary", min_width=80)
                     clear_chat = gr.Button("New conversation", min_width=140)
-                enable_image_tools = gr.Checkbox(label="Allow image tools", value=settings.default_settings.get("enable_llm_tools", False),
-                    info="Let the assistant create or edit images when you ask. Uses the Create settings.")
-                force_image = gr.Checkbox(label="Force image generation", value=False,
-                    info="Generate for your next message, then return to normal chat.")
-                with gr.Accordion('Image reference', open=False):
-                    image_source = gr.Dropdown(label='Image source', value='New image',
-                        choices=['New image', 'Previous generated image', 'Uploaded image'],
-                        info='Optional for this message only. New image ignores previous generations and retained uploads.')
-                    image_reference = gr.Image(label='Chat image reference', type='pil', image_mode='RGBA',
-                        format='png', visible=False, height=200)
-                    edit_mode = gr.Markdown('', visible=False)
-                    image_denoise = gr.Slider(label='Image-to-image denoise', minimum=0.01, maximum=1.0,
-                        value=0.25, step=0.01, visible=False,
-                        info='Lower values preserve the source; higher values redraw more.')
-                    checkpoint_control = image_controls.get('base_model_name')
-                    format_control = image_controls.get('moss_image_edit_format')
+                enable_image_tools = gr.Checkbox(
+                    label="Allow image tools",
+                    value=settings.default_settings.get("enable_llm_tools", False),
+                    info="Let the assistant create or edit images when you ask. Uses the Create settings.",
+                )
+                force_image = gr.Checkbox(
+                    label="Force image generation",
+                    value=False,
+                    info="Generate for your next message, then return to normal chat.",
+                )
+                with gr.Accordion("Image reference", open=False):
+                    image_source = gr.Dropdown(
+                        label="Image source",
+                        value="New image",
+                        choices=["New image", "Previous generated image", "Uploaded image"],
+                        info="Optional for this message only. New image ignores previous generations and retained uploads.",
+                    )
+                    image_reference = gr.Image(
+                        label="Chat image reference",
+                        type="pil",
+                        image_mode="RGBA",
+                        format="png",
+                        visible=False,
+                        height=200,
+                    )
+                    edit_mode = gr.Markdown("", visible=False)
+                    image_denoise = gr.Slider(
+                        label="Image-to-image denoise",
+                        minimum=0.01,
+                        maximum=1.0,
+                        value=0.25,
+                        step=0.01,
+                        visible=False,
+                        info="Lower values preserve the source; higher values redraw more.",
+                    )
+                    checkpoint_control = image_controls.get("base_model_name")
+                    format_control = image_controls.get("moss_image_edit_format")
 
                     def reference_controls(mode, checkpoint=None, moss_format=None):
                         # Native edit models edit the reference directly; others use denoise.
                         from ruinedfooocus.features.image_editing.ui import checkpoint_features
-                        native = bool(checkpoint) and checkpoint_features(checkpoint, moss_format)['native_edit']
-                        using = mode != 'New image'
-                        note = ('Native image edit: the selected checkpoint edits the reference directly.' if native
-                                else 'Image to image: this checkpoint has no native editing, so the denoise below applies.')
-                        return (gr.update(visible=mode == 'Uploaded image'),
-                                gr.update(visible=using and not native),
-                                gr.update(visible=using, value=note))
+
+                        native = (
+                            bool(checkpoint)
+                            and checkpoint_features(checkpoint, moss_format)["native_edit"]
+                        )
+                        using = mode != "New image"
+                        note = (
+                            "Native image edit: the selected checkpoint edits the reference directly."
+                            if native
+                            else "Image to image: this checkpoint has no native editing, so the denoise below applies."
+                        )
+                        return (
+                            gr.update(visible=mode == "Uploaded image"),
+                            gr.update(visible=using and not native),
+                            gr.update(visible=using, value=note),
+                        )
 
                     reference_inputs = [image_source]
                     if checkpoint_control is not None:
-                        reference_inputs += [checkpoint_control] + ([format_control] if format_control is not None else [])
-                    gr.on(triggers=[control.change for control in reference_inputs], fn=reference_controls,
-                          inputs=reference_inputs, outputs=[image_reference, image_denoise, edit_mode],
-                          api_visibility='undocumented')
+                        reference_inputs += [checkpoint_control] + (
+                            [format_control] if format_control is not None else []
+                        )
+                    gr.on(
+                        triggers=[control.change for control in reference_inputs],
+                        fn=reference_controls,
+                        inputs=reference_inputs,
+                        outputs=[image_reference, image_denoise, edit_mode],
+                        api_visibility="undocumented",
+                    )
                 with gr.Accordion("Run Python", open=True, visible=False) as python_panel:
                     load_code = gr.Button("Load code from chat")
-                    code_runner = gr.HTML("", js_on_load=(ASSET_ROOT / "chat_python_theme.js").read_text(encoding="utf-8"))
-            gr.HTML('<div role="separator" tabindex="0" aria-label="Resize chat" '
-                    'aria-orientation="vertical" aria-valuemin="35" aria-valuemax="85" '
-                    'aria-valuenow="72"></div>', elem_id="chat-divider", min_width=12, scale=0,
-                    js_on_load=(ASSET_ROOT / "chat_splitter.js").read_text(encoding="utf-8"))
+                    code_runner = gr.HTML(
+                        "",
+                        js_on_load=(ASSET_ROOT / "chat_python_theme.js").read_text(
+                            encoding="utf-8"
+                        ),
+                    )
+            gr.HTML(
+                '<div role="separator" tabindex="0" aria-label="Resize chat" '
+                'aria-orientation="vertical" aria-valuemin="35" aria-valuemax="85" '
+                'aria-valuenow="72"></div>',
+                elem_id="chat-divider",
+                min_width=12,
+                scale=0,
+                js_on_load=(ASSET_ROOT / "chat_splitter.js").read_text(encoding="utf-8"),
+            )
             with gr.Column(scale=2, min_width=0, elem_id="chat-controls"), gr.Group():
                 llama_avatar = gr.Image(
-                    buttons=['download', 'fullscreen'],
+                    buttons=["download", "fullscreen"],
                     value=assistant_info(default_bot)["avatar"],
                     label=assistant_info(default_bot)["name"],
                     height="clamp(160px, 24dvh, 280px)",
@@ -170,17 +244,34 @@ def create_chat(image_controls=None):
                     if model:
                         settings.default_settings["llama_localfile"] = model
 
-                llama_active_model.change(share_chat_model, inputs=llama_active_model, queue=False,
-                                          api_visibility='undocumented')
-                llama_source = gr.Radio([("Installed", "Local models"), ("Download", "Downloadable")],
-                    value=default_source, label="Model library", show_label=True, elem_id="chat-model-source")
+                llama_active_model.change(
+                    share_chat_model,
+                    inputs=llama_active_model,
+                    queue=False,
+                    api_visibility="undocumented",
+                )
+                llama_source = gr.Radio(
+                    [("Installed", "Local models"), ("Download", "Downloadable")],
+                    value=default_source,
+                    label="Model library",
+                    show_label=True,
+                    elem_id="chat-model-source",
+                )
                 llama_model = gr.Dropdown(
-                    label="Model", choices=[(model_label(name), name) for name in catalogue],
-                    value=default_model, interactive=True, visible=default_source == "Downloadable",
+                    label="Model",
+                    choices=[(model_label(name), name) for name in catalogue],
+                    value=default_model,
+                    interactive=True,
+                    visible=default_source == "Downloadable",
                 )
                 local_picker = gr.HTML(
-                    {"choices": [(model_label(name), name) for name in model_catalogue("Local models")],
-                     "selected": default_model}, visible=default_source == "Local models",
+                    {
+                        "choices": [
+                            (model_label(name), name) for name in model_catalogue("Local models")
+                        ],
+                        "selected": default_model,
+                    },
+                    visible=default_source == "Local models",
                     elem_id="chat-local-models",
                     html_template=(html_dir / "chat_local_models.html").read_text(encoding="utf-8"),
                     js_on_load=(html_dir / "chat_local_models.js").read_text(encoding="utf-8"),
@@ -206,39 +297,77 @@ def create_chat(image_controls=None):
                       .choose-model[aria-pressed="true"] { color: var(--color-accent); font-weight: 600; }
                       .choose-model { flex: 1; min-width: 0; text-align: left; overflow-wrap: anywhere; }
                       .remove-model { flex: 0 0 34px; font-size: 20px; }
-                    """)
-                llama_quant = gr.Dropdown(label="Quantization", interactive=True, visible=len(default_choices) > 1,
-                    choices=default_choices, value=default_quant)
+                    """,
+                )
+                llama_quant = gr.Dropdown(
+                    label="Quantization",
+                    interactive=True,
+                    visible=len(default_choices) > 1,
+                    choices=default_choices,
+                    value=default_quant,
+                )
                 with gr.Row(elem_id="chat-model-actions"):
-                    llama_use = gr.Button("Load",
-                                          size="md", scale=1, min_width=0,
-                                          interactive=bool(default_quant))
+                    llama_use = gr.Button(
+                        "Load", size="md", scale=1, min_width=0, interactive=bool(default_quant)
+                    )
                     llama_import = gr.Button("Import GGUF", size="md", scale=1, min_width=0)
                 llama_model_status = gr.Markdown(
                     f"Configured custom model: `{selected_file}`. Send a message to load it."
-                    if custom_file else "Models run locally. Load downloads the selected model if needed.")
+                    if custom_file
+                    else "Models run locally. Load downloads the selected model if needed."
+                )
                 llama_download = gr.HTML(visible=False)
-                show_reasoning = gr.Checkbox(label="Show reasoning", value=False,
-                    info="Only shown when the model returns reasoning.")
+                show_reasoning = gr.Checkbox(
+                    label="Show reasoning",
+                    value=False,
+                    info="Only shown when the model returns reasoning.",
+                )
                 from ruinedfooocus.features.chat.llama_vision import model_has_vision, vision_models
                 from ruinedfooocus.app.state import path_manager
+
                 enable_vision = gr.Checkbox(label="Enable Model Vision", value=False)
-                vision_include_system = gr.Checkbox(label="Include system prompt", value=False,
-                    visible=False, info="Include the chatbot's character instructions as image review context.")
-                vision_model = gr.Dropdown(label="Select Model", visible=False,
-                    choices=[(model_label(Path(name).stem), name) for name in vision_models(path_manager)],
-                    value=None, info="Used to inspect images; downloaded when needed.")
+                vision_include_system = gr.Checkbox(
+                    label="Include system prompt",
+                    value=False,
+                    visible=False,
+                    info="Include the chatbot's character instructions as image review context.",
+                )
+                vision_model = gr.Dropdown(
+                    label="Select Model",
+                    visible=False,
+                    choices=[
+                        (model_label(Path(name).stem), name) for name in vision_models(path_manager)
+                    ],
+                    value=None,
+                    info="Used to inspect images; downloaded when needed.",
+                )
+
                 def vision_controls(enabled, model):
                     return gr.update(visible=enabled and not model_has_vision(model))
-                enable_vision.change(vision_controls, inputs=[enable_vision, llama_active_model],
-                    outputs=vision_model, api_visibility='undocumented')
-                enable_vision.change(lambda enabled: gr.update(visible=enabled), inputs=enable_vision,
-                    outputs=vision_include_system, api_visibility='undocumented')
-                llama_active_model.change(vision_controls, inputs=[enable_vision, llama_active_model],
-                    outputs=vision_model, api_visibility='undocumented')
+
+                enable_vision.change(
+                    vision_controls,
+                    inputs=[enable_vision, llama_active_model],
+                    outputs=vision_model,
+                    api_visibility="undocumented",
+                )
+                enable_vision.change(
+                    lambda enabled: gr.update(visible=enabled),
+                    inputs=enable_vision,
+                    outputs=vision_include_system,
+                    api_visibility="undocumented",
+                )
+                llama_active_model.change(
+                    vision_controls,
+                    inputs=[enable_vision, llama_active_model],
+                    outputs=vision_model,
+                    api_visibility="undocumented",
+                )
                 enable_python = gr.Checkbox(label="Enable Python runner", value=False)
                 pending_remove = gr.State(None)
-                remove_dialog = gr.HTML("", elem_id="chat-model-confirm",
+                remove_dialog = gr.HTML(
+                    "",
+                    elem_id="chat-model-confirm",
                     html_template=(html_dir / "chat_model_remove.html").read_text(encoding="utf-8"),
                     js_on_load=(html_dir / "chat_model_remove.js").read_text(encoding="utf-8"),
                     css_template="""
@@ -254,13 +383,14 @@ def create_chat(image_controls=None):
                       button { padding: 8px 12px; border-radius: 6px; cursor: pointer;
                         background: var(--button-secondary-background-fill); color: var(--body-text-color); }
                       button[data-action="delete"] { background: #b91c1c; color: white; }
-                    """)
+                    """,
+                )
                 llama_system = gr.Textbox(
-                    visible='hidden',
+                    visible="hidden",
                     value=assistant_info(default_bot)["system"],
                 )
                 llama_embed = gr.Textbox(
-                    visible='hidden',
+                    visible="hidden",
                     value=assistant_info(default_bot)["embed"],
                 )
 
@@ -272,18 +402,31 @@ def create_chat(image_controls=None):
                 raise ValueError("Load the selected model before sending a message.")
             return message, bool(force)
 
-        load_code.click(python_runner, inputs=[llama_history], outputs=[code_runner],
-                        api_visibility='undocumented')
+        load_code.click(
+            python_runner,
+            inputs=[llama_history],
+            outputs=[code_runner],
+            api_visibility="undocumented",
+        )
         enable_python.change(
-            lambda enabled, history: (gr.update(visible=enabled), python_runner(history) if enabled else ""),
-            inputs=[enable_python, llama_history], outputs=[python_panel, code_runner],
-            api_visibility='undocumented')
+            lambda enabled, history: (
+                gr.update(visible=enabled),
+                python_runner(history) if enabled else "",
+            ),
+            inputs=[enable_python, llama_history],
+            outputs=[python_panel, code_runner],
+            api_visibility="undocumented",
+        )
 
         def error_controls(message):
             gr.Warning(message)
-            return {llama_model_status: message, llama_download: gr.update(visible=False),
-                    llama_active_model: None, llama_msg: gr.update(interactive=False),
-                    llama_use: gr.update(value="Load", interactive=True)}
+            return {
+                llama_model_status: message,
+                llama_download: gr.update(visible=False),
+                llama_active_model: None,
+                llama_msg: gr.update(interactive=False),
+                llama_use: gr.update(value="Load", interactive=True),
+            }
 
         def recover_controls(fn):
             @wraps(fn)
@@ -292,11 +435,27 @@ def create_chat(image_controls=None):
                     yield from fn(*args, **kwargs)
                 except Exception as error:
                     yield error_controls(describe_error(error))
+
             return guarded
 
         @recover_controls
-        def llama_respond(message, system, embed, chat_history, model, show_thinking, vision_enabled, review_model, include_system, force,
-                          source_mode, source_image, source_denoise, allow_images, *image_values):
+        def llama_respond(
+            message,
+            system,
+            embed,
+            chat_history,
+            model,
+            show_thinking,
+            vision_enabled,
+            review_model,
+            include_system,
+            force,
+            source_mode,
+            source_image,
+            source_denoise,
+            allow_images,
+            *image_values,
+        ):
             chat_history = list(chat_history)
             chat_history.append({"role": "user", "content": message})
 
@@ -305,7 +464,7 @@ def create_chat(image_controls=None):
                 "force_image": force,
                 "enable_image_tools": allow_images,
                 "image_source": source_mode,
-                "image_reference": source_image if source_mode == 'Uploaded image' else None,
+                "image_reference": source_image if source_mode == "Uploaded image" else None,
                 "image_denoise": source_denoise,
                 "vision_enabled": vision_enabled,
                 "vision_include_system": include_system,
@@ -325,44 +484,65 @@ def create_chat(image_controls=None):
             while not finished:
                 flag, product = worker.task_result(task_id)
                 if flag == "preview":
-                    yield {llama_chat: display_history(product, show_thinking), llama_history: product,
-                           llama_model_status: "Thinking…", llama_download: gr.update(visible=False)}
+                    yield {
+                        llama_chat: display_history(product, show_thinking),
+                        llama_history: product,
+                        llama_model_status: "Thinking…",
+                        llama_download: gr.update(visible=False),
+                    }
                 elif flag == "download":
                     yield download_update(product)
                 elif flag == "results":
                     finished = True
 
             if isinstance(product, dict) and product.get("error"):
-                yield {**error_controls(product["error"]),
-                       llama_chat: display_history(chat_history, show_thinking), llama_history: chat_history}
+                yield {
+                    **error_controls(product["error"]),
+                    llama_chat: display_history(chat_history, show_thinking),
+                    llama_history: chat_history,
+                }
                 return
             chat_history.append({"role": "assistant", "content": product})
-            yield {llama_chat: display_history(chat_history, show_thinking), llama_history: chat_history,
-                   llama_model_status: "", llama_download: gr.update(visible=False)}
+            yield {
+                llama_chat: display_history(chat_history, show_thinking),
+                llama_history: chat_history,
+                llama_model_status: "",
+                llama_download: gr.update(visible=False),
+            }
 
         def download_update(progress):
             received, total, speed = progress
             if received is None:
-                return {llama_download: gr.update(visible=False), llama_model_status: "Loading model…"}
+                return {
+                    llama_download: gr.update(visible=False),
+                    llama_model_status: "Loading model…",
+                }
             amount = f"{received / 1000000:.1f} MB"
             value = ""
             if total:
                 percent = min(100, received * 100 / total)
                 value = f'value="{percent:.1f}"'
                 amount = f"{percent:.0f}%"
-            return {llama_model_status: f"Downloading: {amount} · Speed: {speed / 1000000:.1f} MB/s",
-                    llama_download: gr.update(visible=True, value=
-                        f'<progress max="100" {value} style="width:100%;accent-color:var(--color-accent)"></progress>')}
+            return {
+                llama_model_status: f"Downloading: {amount} · Speed: {speed / 1000000:.1f} MB/s",
+                llama_download: gr.update(
+                    visible=True,
+                    value=f'<progress max="100" {value} style="width:100%;accent-color:var(--color-accent)"></progress>',
+                ),
+            }
 
         def select_model(model, source, selected_quant=None):
             choices = model_catalogue(source).get(model, [])
-            value = selected_quant if selected_quant else preferred_quant(choices) if choices else None
+            value = (
+                selected_quant if selected_quant else preferred_quant(choices) if choices else None
+            )
             return {
                 llama_quant: gr.update(choices=choices, value=value, visible=len(choices) > 1),
-                llama_model_status: "Click Load to load this model." if choices else "Choose a model or import a local GGUF.",
+                llama_model_status: "Click Load to load this model."
+                if choices
+                else "Choose a model or import a local GGUF.",
                 llama_msg: gr.update(interactive=False),
-                llama_use: gr.update(value="Load",
-                                     interactive=bool(choices)),
+                llama_use: gr.update(value="Load", interactive=bool(choices)),
             }
 
         def select_source(source, model=None):
@@ -370,9 +550,15 @@ def create_chat(image_controls=None):
             if model not in catalogue:
                 model = next(iter(catalogue), None)
             choices = [(model_label(name), name) for name in catalogue]
-            return {llama_model: gr.update(choices=choices, value=model, visible=source == "Downloadable"),
-                    local_picker: gr.update(value={"choices": choices, "selected": model}, visible=source == "Local models"),
-                    **select_model(model, source)}
+            return {
+                llama_model: gr.update(
+                    choices=choices, value=model, visible=source == "Downloadable"
+                ),
+                local_picker: gr.update(
+                    value={"choices": choices, "selected": model}, visible=source == "Local models"
+                ),
+                **select_model(model, source),
+            }
 
         def import_gguf():
             try:
@@ -382,37 +568,55 @@ def create_chat(image_controls=None):
                 model, quant = import_model(path)
             except (OSError, ValueError, RuntimeError) as error:
                 return {llama_model_status: str(error)}
-            return {llama_source: "Local models", **select_source("Local models", model),
-                    **select_model(model, "Local models", quant)}
+            return {
+                llama_source: "Local models",
+                **select_source("Local models", model),
+                **select_model(model, "Local models", quant),
+            }
 
         @recover_controls
         def use_model(model, selection, source, action):
             if action == "Unload":
-                yield {llama_model_status: "Unloading model…", llama_msg: gr.update(interactive=False),
-                       llama_use: gr.update(interactive=False)}
+                yield {
+                    llama_model_status: "Unloading model…",
+                    llama_msg: gr.update(interactive=False),
+                    llama_use: gr.update(interactive=False),
+                }
                 task_id = worker.add_task({"task_type": "llama", "unload": True})
                 while True:
                     flag, result = worker.task_result(task_id)
                     if flag == "results":
                         break
                 if isinstance(result, dict) and result.get("unloaded"):
-                    yield {llama_active_model: None, llama_model_status: "Model unloaded.",
-                           llama_use: gr.update(value="Load", interactive=bool(model))}
+                    yield {
+                        llama_active_model: None,
+                        llama_model_status: "Model unloaded.",
+                        llama_use: gr.update(value="Load", interactive=bool(model)),
+                    }
                 else:
-                    message = result.get("error", str(result)) if isinstance(result, dict) else str(result)
+                    message = (
+                        result.get("error", str(result))
+                        if isinstance(result, dict)
+                        else str(result)
+                    )
                     yield error_controls(message)
                 return
             if not model:
                 yield {llama_model_status: "Choose a model and quantization first."}
                 return
             if Path(model).is_absolute() and not Path(model).is_file():
-                yield {llama_model_status: "The model file is missing. Import it again from its current location."}
+                yield {
+                    llama_model_status: "The model file is missing. Import it again from its current location."
+                }
                 return
             if model not in [value for _, value in model_catalogue(source).get(selection, [])]:
                 yield {llama_model_status: "Choose an available quantization, then click Load."}
                 return
-            yield {llama_model_status: "Downloading / loading model…", llama_msg: gr.update(interactive=False),
-                   llama_use: gr.update(value="Loading…", interactive=False)}
+            yield {
+                llama_model_status: "Downloading / loading model…",
+                llama_msg: gr.update(interactive=False),
+                llama_use: gr.update(value="Loading…", interactive=False),
+            }
             task_id = worker.add_task({"task_type": "llama", "model": model, "load_only": True})
             while True:
                 flag, result = worker.task_result(task_id)
@@ -422,15 +626,29 @@ def create_chat(image_controls=None):
                     break
             yield {llama_download: gr.update(visible=False)}
             if isinstance(result, dict) and result.get("ready"):
-                yield {llama_source: "Local models", **select_source("Local models", selection),
-                       **select_model(selection, "Local models", model), llama_active_model: model,
-                       llama_model_status: f"Ready: {Path(model).name}", llama_msg: gr.update(interactive=True),
-                       llama_use: gr.update(value="Unload", interactive=True)}
+                yield {
+                    llama_source: "Local models",
+                    **select_source("Local models", selection),
+                    **select_model(selection, "Local models", model),
+                    llama_active_model: model,
+                    llama_model_status: f"Ready: {Path(model).name}",
+                    llama_msg: gr.update(interactive=True),
+                    llama_use: gr.update(value="Unload", interactive=True),
+                }
             else:
-                message = result.get("error", str(result)) if isinstance(result, dict) else str(result)
+                message = (
+                    result.get("error", str(result)) if isinstance(result, dict) else str(result)
+                )
                 yield error_controls(message)
 
-        model_outputs = [llama_model, local_picker, llama_quant, llama_model_status, llama_msg, llama_use]
+        model_outputs = [
+            llama_model,
+            local_picker,
+            llama_quant,
+            llama_model_status,
+            llama_msg,
+            llama_use,
+        ]
 
         def local_model_action(source, current_quant, event: gr.EventData):
             data = event._data or {}
@@ -443,17 +661,32 @@ def create_chat(image_controls=None):
             if data.get("action") != "remove":
                 return {llama_model_status: gr.skip()}
             files = local_models()
-            entries = [(label, str(Path(files.get(value, value)).resolve())) for label, value in choices]
+            entries = [
+                (label, str(Path(files.get(value, value)).resolve())) for label, value in choices
+            ]
             paths = [path for _, path in entries]
-            current_path = str(Path(files.get(current_quant, current_quant)).resolve()) if current_quant else None
-            return {pending_remove: paths,
-                    remove_dialog: {"files": entries, "selected": current_path if current_path in paths else paths[0]}}
+            current_path = (
+                str(Path(files.get(current_quant, current_quant)).resolve())
+                if current_quant
+                else None
+            )
+            return {
+                pending_remove: paths,
+                remove_dialog: {
+                    "files": entries,
+                    "selected": current_path if current_path in paths else paths[0],
+                },
+            }
 
         def confirm_remove(paths, selection, quant, event: gr.EventData):
             data = event._data or {}
             action, index = data.get("action"), data.get("file_index")
             result = {pending_remove: None, remove_dialog: ""}
-            if action not in ("hide", "delete") or type(index) is not int or not 0 <= index < len(paths or []):
+            if (
+                action not in ("hide", "delete")
+                or type(index) is not int
+                or not 0 <= index < len(paths or [])
+            ):
                 return result
             path = paths[index]
             try:
@@ -463,78 +696,203 @@ def create_chat(image_controls=None):
             updates = select_source("Local models", selection)
             choices = model_catalogue("Local models").get(selection, [])
             if quant in [value for _, value in choices]:
-                updates[llama_quant] = gr.update(choices=choices, value=quant, visible=len(choices) > 1)
+                updates[llama_quant] = gr.update(
+                    choices=choices, value=quant, visible=len(choices) > 1
+                )
                 updates[llama_msg] = gr.skip()
                 updates[llama_use] = gr.skip()
-            return {**result, **updates,
-                    llama_model_status: "File deleted." if action == "delete" else "Removed from list. The file was kept."}
+            return {
+                **result,
+                **updates,
+                llama_model_status: "File deleted."
+                if action == "delete"
+                else "Removed from list. The file was kept.",
+            }
 
-        local_picker.click(local_model_action, inputs=[llama_source, llama_quant],
-            outputs=[pending_remove, remove_dialog, *model_outputs], api_visibility='undocumented')
-        remove_dialog.click(confirm_remove, inputs=[pending_remove, llama_model, llama_quant],
-            outputs=[pending_remove, remove_dialog, *model_outputs], api_visibility='undocumented')
-        llama_import.click(import_gguf, outputs=[llama_source, *model_outputs], api_visibility='undocumented')
-        llama_source.input(select_source, inputs=[llama_source, llama_model],
-                           outputs=model_outputs, api_visibility='undocumented')
-        llama_model.input(select_model, inputs=[llama_model, llama_source],
-                          outputs=model_outputs, api_visibility='undocumented')
-        llama_quant.input(lambda quant: ("Click Load to load this quantization." if quant else "Choose a quantization.",
-                                        gr.update(interactive=False), gr.update(value="Load", interactive=bool(quant))),
-            inputs=[llama_quant], outputs=[llama_model_status, llama_msg, llama_use], api_visibility='undocumented')
-        llama_use.click(use_model, inputs=[llama_quant, llama_model, llama_source, llama_use],
-            outputs=[llama_active_model, llama_source, llama_download, *model_outputs], api_visibility='undocumented',
-            show_progress="hidden")
+        local_picker.click(
+            local_model_action,
+            inputs=[llama_source, llama_quant],
+            outputs=[pending_remove, remove_dialog, *model_outputs],
+            api_visibility="undocumented",
+        )
+        remove_dialog.click(
+            confirm_remove,
+            inputs=[pending_remove, llama_model, llama_quant],
+            outputs=[pending_remove, remove_dialog, *model_outputs],
+            api_visibility="undocumented",
+        )
+        llama_import.click(
+            import_gguf, outputs=[llama_source, *model_outputs], api_visibility="undocumented"
+        )
+        llama_source.input(
+            select_source,
+            inputs=[llama_source, llama_model],
+            outputs=model_outputs,
+            api_visibility="undocumented",
+        )
+        llama_model.input(
+            select_model,
+            inputs=[llama_model, llama_source],
+            outputs=model_outputs,
+            api_visibility="undocumented",
+        )
+        llama_quant.input(
+            lambda quant: (
+                "Click Load to load this quantization." if quant else "Choose a quantization.",
+                gr.update(interactive=False),
+                gr.update(value="Load", interactive=bool(quant)),
+            ),
+            inputs=[llama_quant],
+            outputs=[llama_model_status, llama_msg, llama_use],
+            api_visibility="undocumented",
+        )
+        llama_use.click(
+            use_model,
+            inputs=[llama_quant, llama_model, llama_source, llama_use],
+            outputs=[llama_active_model, llama_source, llama_download, *model_outputs],
+            api_visibility="undocumented",
+            show_progress="hidden",
+        )
 
-        def submit_message(message, force, selected_model, system, embed, history, model,
-                           show_thinking, vision_enabled, review_model, include_system,
-                           source_mode='New image', source_image=None, source_denoise=0.25, allow_images=False, *image_values):
+        def submit_message(
+            message,
+            force,
+            selected_model,
+            system,
+            embed,
+            history,
+            model,
+            show_thinking,
+            vision_enabled,
+            review_model,
+            include_system,
+            source_mode="New image",
+            source_image=None,
+            source_denoise=0.25,
+            allow_images=False,
+            *image_values,
+        ):
             try:
                 message, force = llama_get_text(message, force, model, selected_model)
                 from ruinedfooocus.features.chat.llama_vision import image_reference_source
+
                 image_reference_source(source_mode, source_image, history)
             except ValueError as error:
                 gr.Warning(str(error))
                 yield {llama_msg: gr.skip()}
                 return
-            yield {llama_msg: "", force_image: False, image_source: 'New image',
-                   send_message: gr.update(interactive=False), clear_chat: gr.update(interactive=False)}
-            yield from llama_respond(message, system, embed, history, model, show_thinking,
-                                    vision_enabled, review_model, include_system, force,
-                                    source_mode, source_image, source_denoise, allow_images, *image_values)
-            yield {send_message: gr.update(interactive=True), clear_chat: gr.update(interactive=True)}
+            yield {
+                llama_msg: "",
+                force_image: False,
+                image_source: "New image",
+                send_message: gr.update(interactive=False),
+                clear_chat: gr.update(interactive=False),
+            }
+            yield from llama_respond(
+                message,
+                system,
+                embed,
+                history,
+                model,
+                show_thinking,
+                vision_enabled,
+                review_model,
+                include_system,
+                force,
+                source_mode,
+                source_image,
+                source_denoise,
+                allow_images,
+                *image_values,
+            )
+            yield {
+                send_message: gr.update(interactive=True),
+                clear_chat: gr.update(interactive=True),
+            }
 
-        gr.on(triggers=[llama_msg.submit, send_message.click], fn=submit_message,
-            api_visibility='undocumented',
-            inputs=[llama_msg, force_image, llama_quant, llama_system, llama_embed, llama_history,
-                    llama_active_model, show_reasoning, enable_vision, vision_model, vision_include_system,
-                    image_source, image_reference, image_denoise, enable_image_tools,
-                    *image_controls.values()],
-            outputs=[llama_chat, llama_history, llama_model_status, llama_download,
-                     llama_active_model, llama_msg, llama_use, force_image, image_source, send_message, clear_chat],
-            show_progress="hidden")
+        gr.on(
+            triggers=[llama_msg.submit, send_message.click],
+            fn=submit_message,
+            api_visibility="undocumented",
+            inputs=[
+                llama_msg,
+                force_image,
+                llama_quant,
+                llama_system,
+                llama_embed,
+                llama_history,
+                llama_active_model,
+                show_reasoning,
+                enable_vision,
+                vision_model,
+                vision_include_system,
+                image_source,
+                image_reference,
+                image_denoise,
+                enable_image_tools,
+                *image_controls.values(),
+            ],
+            outputs=[
+                llama_chat,
+                llama_history,
+                llama_model_status,
+                llama_download,
+                llama_active_model,
+                llama_msg,
+                llama_use,
+                force_image,
+                image_source,
+                send_message,
+                clear_chat,
+            ],
+            show_progress="hidden",
+        )
 
         def new_conversation(bot, python_enabled):
             history = assistant_info(bot)["chatstart"]
-            return history, history, "", False, 'New image', None, python_runner(history) if python_enabled else ""
+            return (
+                history,
+                history,
+                "",
+                False,
+                "New image",
+                None,
+                python_runner(history) if python_enabled else "",
+            )
 
-        clear_chat.click(new_conversation, inputs=[llama_assistants, enable_python],
-            outputs=[llama_history, llama_chat, llama_msg, force_image, image_source, image_reference, code_runner],
-            api_visibility='undocumented')
+        clear_chat.click(
+            new_conversation,
+            inputs=[llama_assistants, enable_python],
+            outputs=[
+                llama_history,
+                llama_chat,
+                llama_msg,
+                force_image,
+                image_source,
+                image_reference,
+                code_runner,
+            ],
+            api_visibility="undocumented",
+        )
 
         llama_assistants.select(
             fn=llama_select_assistant,
-            api_visibility='undocumented',
+            api_visibility="undocumented",
             inputs=[llama_assistants],
-            outputs=[llama_chat, llama_msg, llama_avatar, llama_system, llama_embed, llama_history]
+            outputs=[llama_chat, llama_msg, llama_avatar, llama_system, llama_embed, llama_history],
         )
-        show_reasoning.change(display_history, inputs=[llama_history, show_reasoning],
-                              outputs=[llama_chat], api_visibility='undocumented')
-        llama_chat.clear(lambda: [], outputs=[llama_history], api_visibility='undocumented')
+        show_reasoning.change(
+            display_history,
+            inputs=[llama_history, show_reasoning],
+            outputs=[llama_chat],
+            api_visibility="undocumented",
+        )
+        llama_chat.clear(lambda: [], outputs=[llama_history], api_visibility="undocumented")
         llama_reload.click(
             fn=gr_llama_get_assistants,
             inputs=[llama_source, llama_model],
-            api_visibility='undocumented',
-            outputs=[llama_assistants, *model_outputs]
+            api_visibility="undocumented",
+            outputs=[llama_assistants, *model_outputs],
         )
 
     return app_llama_chat

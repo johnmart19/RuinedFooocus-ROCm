@@ -9,8 +9,9 @@ def save_mp4(path, frames, fps):
     """Encode RGB PIL frames as H.264 without changing their dimensions."""
     if not frames:
         raise ValueError("Cannot save an empty video.")
-    with av.open(str(path), mode="w", format="mp4",
-                 options={"movflags": "+faststart"}) as container:
+    with av.open(
+        str(path), mode="w", format="mp4", options={"movflags": "+faststart"}
+    ) as container:
         stream = container.add_stream("libx264", rate=Fraction(str(fps)))
         stream.width, stream.height = frames[0].size
         stream.pix_fmt = "yuv420p"

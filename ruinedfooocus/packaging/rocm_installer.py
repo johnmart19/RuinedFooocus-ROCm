@@ -10,11 +10,27 @@ from dataclasses import dataclass
 
 # Release-ready Radeon targets in TheRock/SUPPORTED_GPUS.md.
 # Windows RDNA 4 is additionally available as an unqualified build (reported below).
-_RADEON = frozenset({
-    "gfx1010", "gfx1011", "gfx1012",
-    "gfx1030", "gfx1031", "gfx1032", "gfx1033", "gfx1034", "gfx1035", "gfx1036",
-    "gfx1100", "gfx1101", "gfx1102", "gfx1103", "gfx1150", "gfx1151", "gfx1152",
-})
+_RADEON = frozenset(
+    {
+        "gfx1010",
+        "gfx1011",
+        "gfx1012",
+        "gfx1030",
+        "gfx1031",
+        "gfx1032",
+        "gfx1033",
+        "gfx1034",
+        "gfx1035",
+        "gfx1036",
+        "gfx1100",
+        "gfx1101",
+        "gfx1102",
+        "gfx1103",
+        "gfx1150",
+        "gfx1151",
+        "gfx1152",
+    }
+)
 SUPPORTED_TARGETS = {
     "Windows": _RADEON | {"gfx1200", "gfx1201"},
     "Linux": _RADEON | {"gfx942", "gfx1200", "gfx1201"},
@@ -41,7 +57,9 @@ def detect_rocm_targets(os_platform):
     try:
         import rocm_bootstrap
     except ModuleNotFoundError:
-        subprocess.run([sys.executable, "-m", "pip", "install", "rocm-bootstrap==0.3.0"], check=True)
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "rocm-bootstrap==0.3.0"], check=True
+        )
     from rocm_bootstrap import detect_gfx_targets
 
     targets = sorted({target.name for target in detect_gfx_targets()})
@@ -57,7 +75,10 @@ def detect_rocminfo_targets():
         return []
     try:
         result = subprocess.run(
-            [rocminfo], capture_output=True, text=True, timeout=30,
+            [rocminfo],
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
     except (OSError, subprocess.TimeoutExpired):
         return []
@@ -73,11 +94,17 @@ def automatic_rocm_plan(os_platform, selected_platform, force=False):
     if not force and override and override != target_platform:
         return None
     # Keep the existing choice on mixed AMD/NVIDIA or AMD/Intel machines.
-    if not force and not override and selected_platform not in ("cpu", "directml") and not selected_platform.startswith("rocm"):
+    if (
+        not force
+        and not override
+        and selected_platform not in ("cpu", "directml")
+        and not selected_platform.startswith("rocm")
+    ):
         return None
     targets = []
     if not force and not override and selected_platform in ("cpu", "directml"):
         from torchruntime.device_db import get_gpus
+
         if not any(gpu.vendor_id.lower() == "1002" for gpu in get_gpus()):
             # WSL can expose AMD through DXG without a PCI device entry.
             if os_platform == "Linux" and "microsoft" in platform.release().lower():
@@ -96,7 +123,9 @@ def automatic_rocm_plan(os_platform, selected_platform, force=False):
     unsupported = set(targets) - SUPPORTED_TARGETS[os_platform]
     if unsupported and not explicit:
         # Older Radeon GPUs keep the automatic DirectML/ROCm/CPU selection instead of blocking startup.
-        print(f"ROCm {target_platform} does not support {', '.join(sorted(unsupported))}; keeping {selected_platform}.")
+        print(
+            f"ROCm {target_platform} does not support {', '.join(sorted(unsupported))}; keeping {selected_platform}."
+        )
         return None
     if unsupported:
         raise RuntimeError(
@@ -109,18 +138,24 @@ def automatic_rocm_plan(os_platform, selected_platform, force=False):
             return None
         raise RuntimeError("Automatic ROCm wheels require x86_64 Python.")
     if os_platform == "Windows" and set(targets) & {"gfx1200", "gfx1201"}:
-        print("Windows RDNA 4 wheels are available but not yet qualified by TheRock; GPU validation is required after installation.")
+        print(
+            "Windows RDNA 4 wheels are available but not yet qualified by TheRock; GPU validation is required after installation."
+        )
     extras = ",".join(f"device-{target}" for target in targets)
     print(f"AMD GPU targets: {', '.join(targets)}")
-    return RocmInstallPlan(target_platform, [
-        f"torch[{extras}]==2.14.0+rocm10.1.0",
-        # AMD's stable index labels the matching 2.14 vision build as alpha.
-        # An unbounded install selects 0.28, whose native extension cannot load.
-        f"torchvision[{extras}]==0.29.0a0+rocm10.1.0",
-        "torchaudio==2.11.0.3+rocm10.1.0",
-        "--index-url", ROCM_INDEX,
-        "--only-binary=torch,torchvision,torchaudio",
-    ])
+    return RocmInstallPlan(
+        target_platform,
+        [
+            f"torch[{extras}]==2.14.0+rocm10.1.0",
+            # AMD's stable index labels the matching 2.14 vision build as alpha.
+            # An unbounded install selects 0.28, whose native extension cannot load.
+            f"torchvision[{extras}]==0.29.0a0+rocm10.1.0",
+            "torchaudio==2.11.0.3+rocm10.1.0",
+            "--index-url",
+            ROCM_INDEX,
+            "--only-binary=torch,torchvision,torchaudio",
+        ],
+    )
 
 
 def install_rocm(args, reinstall=False):
@@ -131,16 +166,20 @@ def install_rocm(args, reinstall=False):
     subprocess.run([*command, "--dry-run"], check=True)
     subprocess.run(command, check=True)
     # Do not continue with a CPU fallback if an incompatible driver/runtime loaded.
-    subprocess.run([
-        sys.executable, "-c",
-        "import torch, torchvision, torchaudio; "
-        "assert torch.version.hip and torch.cuda.is_available(), "
-        "'ROCm installed but no GPU is available; check the AMD driver/WSL runtime'; "
-        "weights=torch.ones(8192,768,dtype=torch.float16).to('cuda'); "
-        "assert weights[0,0].item()==1; "
-        "x=torch.ones(16,16,device='cuda'); y=x@x; torch.cuda.synchronize(); "
-        "assert y[0,0].item()==16; "
-        "boxes=torch.tensor([[0.,0.,1.,1.]],device='cuda'); "
-        "assert torchvision.ops.nms(boxes,torch.ones(1,device='cuda'),0.5).item()==0; "
-        "torch.cuda.synchronize(); print('ROCm verified:',torch.cuda.get_device_name(0))",
-    ], check=True)
+    subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import torch, torchvision, torchaudio; "
+            "assert torch.version.hip and torch.cuda.is_available(), "
+            "'ROCm installed but no GPU is available; check the AMD driver/WSL runtime'; "
+            "weights=torch.ones(8192,768,dtype=torch.float16).to('cuda'); "
+            "assert weights[0,0].item()==1; "
+            "x=torch.ones(16,16,device='cuda'); y=x@x; torch.cuda.synchronize(); "
+            "assert y[0,0].item()==16; "
+            "boxes=torch.tensor([[0.,0.,1.,1.]],device='cuda'); "
+            "assert torchvision.ops.nms(boxes,torch.ones(1,device='cuda'),0.5).item()==0; "
+            "torch.cuda.synchronize(); print('ROCm verified:',torch.cuda.get_device_name(0))",
+        ],
+        check=True,
+    )

@@ -2,25 +2,22 @@
   "base": "cd7abb27064155f62dea002f745a8ce1b040c990",
   "features": [
     {
+      "id": "owned-source-formatting",
+      "subject": "Standardize formatting for owned application source",
+      "requires": ["task-focused-ui"],
+      "tests": ["test_*.py"]
+    },
+    {
       "id": "task-focused-ui",
       "subject": "Unify task navigation and explicit prompt and generation preferences",
-      "requires": [
-        "worker-package-bindings"
-      ],
-      "tests": [
-        "test_*.py"
-      ]
+      "requires": ["worker-package-bindings"],
+      "tests": ["test_*.py"]
     },
     {
       "id": "worker-package-bindings",
       "subject": "Bind image tool routing explicitly in the worker",
-      "requires": [
-        "feature-package-layout"
-      ],
-      "tests": [
-        "test_worker_routing.py",
-        "test_chat_boundaries.py"
-      ]
+      "requires": ["feature-package-layout"],
+      "tests": ["test_worker_routing.py", "test_chat_boundaries.py"]
     },
     {
       "id": "feature-package-layout",
@@ -30,27 +27,18 @@
         "image-prompt-label-validation",
         "app-cleanup-validation"
       ],
-      "tests": [
-        "test_*.py"
-      ]
+      "tests": ["test_*.py"]
     },
     {
       "id": "checkpoint-exclusive-publication",
       "subject": "Prevent checkpoint copy overwrites on no-link filesystems",
-      "requires": [
-        "preset-selection-integrity"
-      ],
-      "tests": [
-        "test_model_files.py",
-        "test_model_cache.py"
-      ]
+      "requires": ["preset-selection-integrity"],
+      "tests": ["test_model_files.py", "test_model_cache.py"]
     },
     {
       "id": "preset-selection-integrity",
       "subject": "Preserve custom preset selection across legacy names",
-      "requires": [
-        "weird-hats-preset"
-      ],
+      "requires": ["weird-hats-preset"],
       "tests": [
         "test_prompt_formats.py",
         "test_local_prompt_enhancement.py",
@@ -61,12 +49,7 @@
     {
       "id": "weird-hats-preset",
       "subject": "Rename the Weird Hats preset without losing saved choices",
-      "requires": [
-        "docs-refresh",
-        "launchers",
-        "one-button-enhancer-join",
-        "retired-merge-assets"
-      ],
+      "requires": ["docs-refresh", "launchers", "one-button-enhancer-join", "retired-merge-assets"],
       "tests": [
         "test_prompt_formats.py",
         "test_prompt_wildcards.py",
@@ -76,12 +59,7 @@
     {
       "id": "retired-merge-assets",
       "subject": "Remove unused merge recipes and legacy model assets",
-      "requires": [
-        "docs-refresh",
-        "launchers",
-        "video",
-        "retired-setup-tools"
-      ],
+      "requires": ["docs-refresh", "launchers", "video", "retired-setup-tools"],
       "tests": [
         "test_model_files.py",
         "test_model_cache.py",
@@ -93,12 +71,7 @@
     {
       "id": "retired-setup-tools",
       "subject": "Retire obsolete portable setup tooling",
-      "requires": [
-        "docs-refresh",
-        "installer-tools",
-        "launchers",
-        "registration-4af05eb"
-      ],
+      "requires": ["docs-refresh", "installer-tools", "launchers", "registration-4af05eb"],
       "tests": [
         "test_cpu_startup.py",
         "test_dependency_requirements.py",
@@ -110,74 +83,49 @@
     {
       "id": "registration-4af05eb",
       "subject": "Register the documentation refresh",
-      "requires": [
-        "registration-2c50a2d",
-        "docs-refresh"
-      ],
+      "requires": ["registration-2c50a2d", "docs-refresh"],
       "tests": []
     },
     {
       "id": "registration-2c50a2d",
       "subject": "Register the UI native edit feature",
-      "requires": [
-        "registration-b89c5d3",
-        "ui-native-edits"
-      ],
+      "requires": ["registration-b89c5d3", "ui-native-edits"],
       "tests": []
     },
     {
       "id": "registration-b89c5d3",
       "subject": "Register the API native edit feature",
-      "requires": [
-        "registration-df89188",
-        "api-native-edits"
-      ],
+      "requires": ["registration-df89188", "api-native-edits"],
       "tests": []
     },
     {
       "id": "registration-df89188",
       "subject": "Register the model load feedback feature",
-      "requires": [
-        "registration-b812b27",
-        "model-load-feedback"
-      ],
+      "requires": ["registration-b812b27", "model-load-feedback"],
       "tests": []
     },
     {
       "id": "registration-b812b27",
       "subject": "Register the modern HTML feature",
-      "requires": [
-        "registration-87c5e3a",
-        "modern-html"
-      ],
+      "requires": ["registration-87c5e3a", "modern-html"],
       "tests": []
     },
     {
       "id": "registration-87c5e3a",
       "subject": "Register the updated prompt-range and evolve tests",
-      "requires": [
-        "registration-212ef76",
-        "stale-test-updates"
-      ],
+      "requires": ["registration-212ef76", "stale-test-updates"],
       "tests": []
     },
     {
       "id": "registration-212ef76",
       "subject": "Register explicit image edit compatibility checks",
-      "requires": [
-        "registration-43daa93",
-        "explicit-image-source-compat"
-      ],
+      "requires": ["registration-43daa93", "explicit-image-source-compat"],
       "tests": []
     },
     {
       "id": "registration-43daa93",
       "subject": "Register One Button format and chat bot feature dependencies",
-      "requires": [
-        "one-button-enhancer-join",
-        "offline-chatbots",
-        "one-button-prompt-formats"
-      ],
+      "requires": ["one-button-enhancer-join", "offline-chatbots", "one-button-prompt-formats"],
       "tests": []
     },
     {
@@ -190,19 +138,36 @@
       "id": "ui-native-edits",
       "subject": "Offer native image edit in the UI with an image-to-image fallback",
       "requires": ["api-native-edits"],
-      "tests": ["test_powerup_family_controls.py", "test_image_request_isolation.py", "test_api_image_edits.py", "test_chat_boundaries.py", "test_chatbots.py"]
+      "tests": [
+        "test_powerup_family_controls.py",
+        "test_image_request_isolation.py",
+        "test_api_image_edits.py",
+        "test_chat_boundaries.py",
+        "test_chatbots.py"
+      ]
     },
     {
       "id": "api-native-edits",
       "subject": "Edit API uploads natively on edit models and show icons on light theme",
       "requires": ["model-load-feedback"],
-      "tests": ["test_api_image_edits.py", "test_image_guidance.py", "test_powerup_family_controls.py", "test_image_tool_registry.py", "test_html_templates.py"]
+      "tests": [
+        "test_api_image_edits.py",
+        "test_image_guidance.py",
+        "test_powerup_family_controls.py",
+        "test_image_tool_registry.py",
+        "test_html_templates.py"
+      ]
     },
     {
       "id": "model-load-feedback",
       "subject": "Explain model load failures and speed up checkpoint inspection",
       "requires": ["modern-html", "offline-chatbots"],
-      "tests": ["test_model_files.py", "test_model_headers.py", "test_model_cache.py", "test_chatbots.py"]
+      "tests": [
+        "test_model_files.py",
+        "test_model_headers.py",
+        "test_model_cache.py",
+        "test_chatbots.py"
+      ]
     },
     {
       "id": "modern-html",
@@ -220,7 +185,11 @@
       "id": "explicit-image-source-compat",
       "subject": "Keep tool choices and the LoRA cache test working with explicit image edit",
       "requires": ["explicit-image-sources"],
-      "tests": ["test_image_tool_registry.py", "test_model_cache.py", "test_image_request_isolation.py"]
+      "tests": [
+        "test_image_tool_registry.py",
+        "test_model_cache.py",
+        "test_image_request_isolation.py"
+      ]
     },
     {
       "id": "one-button-enhancer-join",
@@ -238,22 +207,32 @@
       "id": "one-button-prompt-formats",
       "subject": "Match One Button prompts to the selected checkpoint family",
       "requires": ["local-chat-prompt-enhancement", "image-prompt-labels"],
-      "tests": ["test_prompt_formats.py", "test_prompt_wildcards.py", "test_local_prompt_enhancement.py"]
+      "tests": [
+        "test_prompt_formats.py",
+        "test_prompt_wildcards.py",
+        "test_local_prompt_enhancement.py"
+      ]
     },
     {
       "id": "explicit-image-sources",
       "subject": "Require explicit image references and isolate generation state",
       "requires": ["local-chat-prompt-enhancement", "image-native-cleanup"],
-      "tests": ["test_image_request_isolation.py", "test_image_hidream_references.py",
-        "test_image_inpaint_geometry.py", "test_image_controlnet_switch.py", "test_image_input_transport.py",
-        "test_image_settings.py", "test_chat_boundaries.py", "test_ui_workflows.py", "test_prompt_lengths.py"]
+      "tests": [
+        "test_image_request_isolation.py",
+        "test_image_hidream_references.py",
+        "test_image_inpaint_geometry.py",
+        "test_image_controlnet_switch.py",
+        "test_image_input_transport.py",
+        "test_image_settings.py",
+        "test_chat_boundaries.py",
+        "test_ui_workflows.py",
+        "test_prompt_lengths.py"
+      ]
     },
     {
       "id": "style-payload-integrity",
       "subject": "Render style templates without rewriting prompt content",
-      "requires": [
-        "prompt-expansion-integrity"
-      ],
+      "requires": ["prompt-expansion-integrity"],
       "tests": [
         "test_style_prompt_payloads.py",
         "test_prompt_expansion_cpu.py",
@@ -263,9 +242,7 @@
     {
       "id": "prompt-expansion-integrity",
       "subject": "Preserve literal prompts through replay and enhancement",
-      "requires": [
-        "prompt-text-integrity"
-      ],
+      "requires": ["prompt-text-integrity"],
       "tests": [
         "test_prompt_wildcards.py",
         "test_prompt_expansion_cpu.py",
@@ -276,23 +253,13 @@
     {
       "id": "ernie-prompt-enhancement",
       "subject": "Use Ernie instruction prompts and cache native CPU enhancement",
-      "requires": [
-        "prompt-expansion-integrity"
-      ],
-      "tests": [
-        "test_erniehancer.py",
-        "test_prompt_expansion_cpu.py",
-        "test_prompt_wildcards.py"
-      ]
+      "requires": ["prompt-expansion-integrity"],
+      "tests": ["test_erniehancer.py", "test_prompt_expansion_cpu.py", "test_prompt_wildcards.py"]
     },
     {
       "id": "local-chat-prompt-enhancement",
       "subject": "Replace Erniehancer with prompt-preserving local chat expansion",
-      "requires": [
-        "ernie-prompt-enhancement",
-        "style-payload-integrity",
-        "chat-rewrite-controls"
-      ],
+      "requires": ["ernie-prompt-enhancement", "style-payload-integrity", "chat-rewrite-controls"],
       "tests": [
         "test_local_prompt_enhancement.py",
         "test_prompt_expansion_cpu.py",
@@ -318,10 +285,7 @@
     {
       "id": "prompt-text-integrity",
       "subject": "Preserve native prompt text and bound schedule processing",
-      "requires": [
-        "image-native-cleanup",
-        "validation"
-      ],
+      "requires": ["image-native-cleanup", "validation"],
       "tests": [
         "test_prompt_scheduling.py",
         "test_prompt_schedule_sigmas.py",
@@ -339,24 +303,14 @@
     {
       "id": "image-prompt-labels",
       "subject": "Distinguish image checkpoints from prompt formats in the UI",
-      "requires": [
-        "ui"
-      ],
-      "tests": [
-        "test_ui_workflows.py",
-        "test_image_settings.py"
-      ]
+      "requires": ["ui"],
+      "tests": ["test_ui_workflows.py", "test_image_settings.py"]
     },
     {
       "id": "image-prompt-label-validation",
       "subject": "Register prompt format UI validation",
-      "requires": [
-        "validation",
-        "image-prompt-labels"
-      ],
-      "tests": [
-        "test_feature_cherry_pick_manifest.py"
-      ]
+      "requires": ["validation", "image-prompt-labels"],
+      "tests": ["test_feature_cherry_pick_manifest.py"]
     },
     {
       "id": "styles",
@@ -373,90 +327,55 @@
     {
       "id": "bootstrap-installer",
       "subject": "Cache and validate bootstrap and application dependencies",
-      "requires": [
-        "config"
-      ],
-      "tests": [
-        "test_dependency_requirements.py"
-      ]
+      "requires": ["config"],
+      "tests": ["test_dependency_requirements.py"]
     },
     {
       "id": "runtime",
       "subject": "Configure portable device selection and native ComfyUI optimizations",
-      "requires": [
-        "bootstrap-installer"
-      ],
-      "tests": [
-        "test_comfy_runtime.py",
-        "test_cpu_startup.py",
-        "test_runtime_support.py"
-      ]
+      "requires": ["bootstrap-installer"],
+      "tests": ["test_comfy_runtime.py", "test_cpu_startup.py", "test_runtime_support.py"]
     },
     {
       "id": "gpu-installer",
       "subject": "Install validated PyTorch CPU and CUDA bundles",
-      "requires": [
-        "runtime"
-      ],
-      "tests": [
-        "test_installer_gpu.py"
-      ]
+      "requires": ["runtime"],
+      "tests": ["test_installer_gpu.py"]
     },
     {
       "id": "rocm-installer",
       "subject": "Install matched AMD ROCm bundles and validate native operators",
       "requires": [],
-      "tests": [
-        "test_installer_rocm.py"
-      ]
+      "tests": ["test_installer_rocm.py"]
     },
     {
       "id": "llama-installer",
       "subject": "Install isolated native llama.cpp runtimes",
-      "requires": [
-        "runtime"
-      ],
-      "tests": [
-        "test_installer_llama.py"
-      ]
+      "requires": ["runtime"],
+      "tests": ["test_installer_llama.py"]
     },
     {
       "id": "onnx-installer",
       "subject": "Install an isolated optional Windows GPU ONNX runtime",
       "requires": [],
-      "tests": [
-        "test_onnx_installer.py"
-      ]
+      "tests": ["test_onnx_installer.py"]
     },
     {
       "id": "installer-tools",
       "subject": "Use validated bundles in standalone setup helpers",
-      "requires": [
-        "gpu-installer",
-        "rocm-installer"
-      ],
-      "tests": [
-        "test_installer_tools.py"
-      ]
+      "requires": ["gpu-installer", "rocm-installer"],
+      "tests": ["test_installer_tools.py"]
     },
     {
       "id": "models",
       "subject": "Resolve checkpoint identity and automatic model recommendations",
-      "requires": [
-        "config"
-      ],
-      "tests": [
-        "test_model_headers.py",
-        "test_model_recommendations.py"
-      ]
+      "requires": ["config"],
+      "tests": ["test_model_headers.py", "test_model_recommendations.py"]
     },
     {
       "id": "images",
       "subject": "Use native image workflows with faithful source geometry and sampling",
-      "requires": [
-        "models",
-        "runtime"
-      ],
+      "requires": ["models", "runtime"],
       "tests": [
         "test_hashbang_pipeline.py",
         "test_image_controlnet_switch.py",
@@ -473,9 +392,7 @@
     {
       "id": "video",
       "subject": "Align retained video pipelines with native backend contracts",
-      "requires": [
-        "images"
-      ],
+      "requires": ["images"],
       "tests": [
         "test_hunyuan_i2v_conditioning.py",
         "test_ltx_performance_defaults.py",
@@ -489,31 +406,19 @@
     {
       "id": "chat",
       "subject": "Add native local chat, vision and browser Python tools",
-      "requires": [
-        "images",
-        "llama-installer",
-        "styles"
-      ],
-      "tests": [
-        "test_browser_python.py",
-        "test_image_cleanup.py"
-      ]
+      "requires": ["images", "llama-installer", "styles"],
+      "tests": ["test_browser_python.py", "test_image_cleanup.py"]
     },
     {
       "id": "image-feeds",
       "subject": "Normalize image feed URLs and pin the browser client",
       "requires": [],
-      "tests": [
-        "test_api_image_urls.py"
-      ]
+      "tests": ["test_api_image_urls.py"]
     },
     {
       "id": "api",
       "subject": "Serialize local AI APIs and preserve image request boundaries",
-      "requires": [
-        "chat",
-        "image-feeds"
-      ],
+      "requires": ["chat", "image-feeds"],
       "tests": [
         "test_api_live_contracts.py",
         "test_chat_boundaries.py",
@@ -529,34 +434,19 @@
     {
       "id": "caption",
       "subject": "Accelerate image captioning with portable device selection",
-      "requires": [
-        "api",
-        "bootstrap-installer"
-      ],
-      "tests": [
-        "test_caption_runtime.py"
-      ]
+      "requires": ["api", "bootstrap-installer"],
+      "tests": ["test_caption_runtime.py"]
     },
     {
       "id": "background",
       "subject": "Reuse isolated background-removal sessions with CPU recovery",
-      "requires": [
-        "api",
-        "onnx-installer"
-      ],
-      "tests": [
-        "test_onnx_runtime.py"
-      ]
+      "requires": ["api", "onnx-installer"],
+      "tests": ["test_onnx_runtime.py"]
     },
     {
       "id": "startup",
       "subject": "Activate installed runtimes and authenticated application startup",
-      "requires": [
-        "api",
-        "gpu-installer",
-        "rocm-installer",
-        "bootstrap-installer"
-      ],
+      "requires": ["api", "gpu-installer", "rocm-installer", "bootstrap-installer"],
       "tests": []
     },
     {
@@ -568,21 +458,13 @@
     {
       "id": "gallery",
       "subject": "Refresh and replay image gallery metadata",
-      "requires": [
-        "models"
-      ],
+      "requires": ["models"],
       "tests": []
     },
     {
       "id": "ui",
       "subject": "Expose image and local AI workflows in a responsive configurable UI",
-      "requires": [
-        "startup",
-        "gallery",
-        "checkpoint-tools",
-        "caption",
-        "background"
-      ],
+      "requires": ["startup", "gallery", "checkpoint-tools", "caption", "background"],
       "tests": [
         "test_image_components.py",
         "test_image_compute.py",
@@ -610,11 +492,7 @@
     {
       "id": "validation",
       "subject": "Add reproducible CPU checks and standalone feature validation",
-      "requires": [
-        "ui",
-        "video",
-        "installer-tools"
-      ],
+      "requires": ["ui", "video", "installer-tools"],
       "tests": [
         "test_feature_cherry_pick_manifest.py",
         "test_feature_validation_summary.py",
@@ -627,21 +505,13 @@
     {
       "id": "image-native-cleanup",
       "subject": "Use native sampler defaults and remove obsolete image branches",
-      "requires": [
-        "api"
-      ],
-      "tests": [
-        "test_image_native_helpers.py",
-        "test_image_sampling.py",
-        "test_vae_decode.py"
-      ]
+      "requires": ["api"],
+      "tests": ["test_image_native_helpers.py", "test_image_sampling.py", "test_vae_decode.py"]
     },
     {
       "id": "unused-app-helpers",
       "subject": "Remove unused model lookup and UI compatibility helpers",
-      "requires": [
-        "ui"
-      ],
+      "requires": ["ui"],
       "tests": [
         "test_model_headers.py",
         "test_chat_boundaries.py",
@@ -653,27 +523,14 @@
     {
       "id": "installer-cleanup",
       "subject": "Remove the unused package-uninstall wrapper",
-      "requires": [
-        "startup"
-      ],
-      "tests": [
-        "test_dependency_requirements.py",
-        "test_cpu_startup.py",
-        "test_comfy_runtime.py"
-      ]
+      "requires": ["startup"],
+      "tests": ["test_dependency_requirements.py", "test_cpu_startup.py", "test_comfy_runtime.py"]
     },
     {
       "id": "app-cleanup-validation",
       "subject": "Register final app cleanup feature dependencies",
-      "requires": [
-        "validation",
-        "image-native-cleanup",
-        "unused-app-helpers",
-        "installer-cleanup"
-      ],
-      "tests": [
-        "test_feature_cherry_pick_manifest.py"
-      ]
+      "requires": ["validation", "image-native-cleanup", "unused-app-helpers", "installer-cleanup"],
+      "tests": ["test_feature_cherry_pick_manifest.py"]
     }
   ]
 }

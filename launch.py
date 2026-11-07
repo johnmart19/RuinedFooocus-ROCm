@@ -1,4 +1,5 @@
 """Launch RuinedFooocus from a clone or extracted distribution."""
+
 from pathlib import Path
 import os
 

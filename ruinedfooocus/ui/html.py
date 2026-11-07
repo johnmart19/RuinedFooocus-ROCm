@@ -75,4 +75,6 @@ def make_progress_html(number, text):
     else:
         state["last_progress"] = number
     # Status text can name files or prompts; it is text, never markup.
-    return progress_html.replace("*number*", str(number)).replace("*text*", html_text.escape(str(text)))
+    return progress_html.replace("*number*", str(number)).replace(
+        "*text*", html_text.escape(str(text))
+    )

@@ -8,7 +8,7 @@ Models tab, Model sub-tab: choose the image checkpoint. Image model components l
 
 LoRAs: pick them in Models > LoRAs, or type <lora:filename:0.8> in the prompt. Trigger words are read from a .txt file with the same name as the LoRA, or downloaded from Civitai when available.
 
-Prompt syntax: __name__ inserts a random line from wildcards/name.txt. <style:name> applies a style. Put --- on its own line to queue several prompts in one run. Pasting generation JSON into the prompt box reuses all of its settings, and dropping a RuinedFooocus PNG onto the main image restores its prompt and settings.
+Prompt syntax: **name** inserts a random line from wildcards/name.txt. <style:name> applies a style. Put --- on its own line to queue several prompts in one run. Pasting generation JSON into the prompt box reuses all of its settings, and dropping a RuinedFooocus PNG onto the main image restores its prompt and settings.
 
 Prompt tools tab: One Button builds random prompts. Prompt format Auto matches the selected checkpoint: SD/SDXL tags, Illustrious/NoobAI/Pony anime tags, Anima tags with description, or natural language for Flux, Qwen, Krea, MOSS and similar models. Prompt enhancement and Rewrite prompt use the chat model loaded in Chat bots. Rewrite presets are text files in the llamas folder.
 

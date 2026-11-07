@@ -52,9 +52,9 @@ def generate_temp_filename(folder="./outputs/", extension="png"):
 
 
 def load_keywords(lora):
-    filename = Path(
-        path_manager.model_paths["cache_path"] / "loras" / Path(lora).name
-    ).with_suffix(".txt")
+    filename = Path(path_manager.model_paths["cache_path"] / "loras" / Path(lora).name).with_suffix(
+        ".txt"
+    )
     try:
         with open(filename, "r") as file:
             data = file.read()
@@ -62,15 +62,9 @@ def load_keywords(lora):
     except FileNotFoundError:
         return " "
 
+
 def _get_model_hashes(cache_path, not_found=None):
-    hashes = {
-        "AutoV1": "",
-        "AutoV2": "",
-        "SHA256": "",
-        "CRC32": "",
-        "BLAKE3": "",
-        "AutoV3": ""
-    }
+    hashes = {"AutoV1": "", "AutoV2": "", "SHA256": "", "CRC32": "", "BLAKE3": "", "AutoV3": ""}
     filename = cache_path.with_suffix(".json")
     if Path(filename).is_file():
         try:
@@ -82,6 +76,7 @@ def _get_model_hashes(cache_path, not_found=None):
         if "files" not in data:
             data = {"files": [{"hashes": {}}]}
         from ruinedfooocus.features.models.model_identity import checkpoint_hashes
+
         hashes.update(checkpoint_hashes(data))
         return hashes
     else:
@@ -90,17 +85,20 @@ def _get_model_hashes(cache_path, not_found=None):
         else:
             return hashes
 
+
 def get_checkpoint_hashes(model):
     return _get_model_hashes(
         Path(path_manager.model_paths["cache_path"] / "checkpoints" / Path(model).name)
     )
+
 
 def get_lora_hashes(model):
     return _get_model_hashes(
         Path(path_manager.model_paths["cache_path"] / "loras" / Path(model).name)
     )
 
-def _get_model_thumbnail(cache_path, not_found=str(asset_path('warning.png'))):
+
+def _get_model_thumbnail(cache_path, not_found=str(asset_path("warning.png"))):
     cached = shared_cache.get(cache_path)
     if cached is not None and Path(cached).is_file():
         return cached
@@ -116,12 +114,13 @@ def _get_model_thumbnail(cache_path, not_found=str(asset_path('warning.png'))):
 
 
 def get_checkpoint_thumbnail(model):
-    not_found = str(asset_path('warning.jpeg'))
+    not_found = str(asset_path("warning.jpeg"))
 
     return _get_model_thumbnail(
         Path(path_manager.model_paths["cache_path"] / "checkpoints" / Path(model).name),
-        not_found=not_found
+        not_found=not_found,
     )
+
 
 def get_lora_thumbnail(model):
     return _get_model_thumbnail(
@@ -131,10 +130,12 @@ def get_lora_thumbnail(model):
 
 def url_to_filename(url):
     import string
+
     keep = "-_.() %s%s" % (string.ascii_letters, string.digits)
-    url = url.replace(' ','_')
-    url = ''.join(c for c in url if c in keep)
+    url = url.replace(" ", "_")
+    url = "".join(c for c in url if c in keep)
     return url
+
 
 def load_file_from_url(
     url: str,

@@ -36,9 +36,14 @@ def inspect_checkpoint(path):
     for tensor in tensors:
         start, end = tensor["data_offsets"]
         sizes[tensor["dtype"]] += end - start
-    return dict(name=path.name, tensors=len(tensors), bytes=path.stat().st_size,
-                dtypes=dict(sizes), saving_bytes=sizes["F32"] // 2,
-                previous_repair=header.get("__metadata__", {}).get("donor_repair") == "Applied")
+    return dict(
+        name=path.name,
+        tensors=len(tensors),
+        bytes=path.stat().st_size,
+        dtypes=dict(sizes),
+        saving_bytes=sizes["F32"] // 2,
+        previous_repair=header.get("__metadata__", {}).get("donor_repair") == "Applied",
+    )
 
 
 def _float_values(raw, dtype):
@@ -48,9 +53,14 @@ def _float_values(raw, dtype):
         return (np.frombuffer(raw, dtype="<u2").astype(np.uint32) << 16).view(np.float32)
     if dtype.startswith("F"):
         import torch
-        names = {"F8_E4M3": "float8_e4m3fn", "F8_E5M2": "float8_e5m2",
-                 "F8_E4M3FNUZ": "float8_e4m3fnuz", "F8_E5M2FNUZ": "float8_e5m2fnuz",
-                 "F8_E8M0": "float8_e8m0fnu"}
+
+        names = {
+            "F8_E4M3": "float8_e4m3fn",
+            "F8_E5M2": "float8_e5m2",
+            "F8_E4M3FNUZ": "float8_e4m3fnuz",
+            "F8_E5M2FNUZ": "float8_e5m2fnuz",
+            "F8_E8M0": "float8_e8m0fnu",
+        }
         target = getattr(torch, names.get(dtype, ""), None)
         if target is None:
             raise ValueError(f"Weight checking is not supported for {dtype}.")
@@ -59,8 +69,10 @@ def _float_values(raw, dtype):
 
 
 def _tensors(header):
-    return sorted(((k, v) for k, v in header.items() if k != "__metadata__"),
-                  key=lambda item: item[1]["data_offsets"][0])
+    return sorted(
+        ((k, v) for k, v in header.items() if k != "__metadata__"),
+        key=lambda item: item[1]["data_offsets"][0],
+    )
 
 
 def _stamp(path):
@@ -121,9 +133,9 @@ def _publish(source, target):
             return
     # Without hard links, POSIX rename could overwrite a concurrently created
     # target. Exclusive creation keeps the no-overwrite guarantee on these drives.
-    destination = target.open('xb')
+    destination = target.open("xb")
     try:
-        with destination, source.open('rb') as incoming:
+        with destination, source.open("rb") as incoming:
             shutil.copyfileobj(incoming, destination, CHUNK_SIZE)
             destination.flush()
             os.fsync(destination.fileno())
@@ -133,8 +145,9 @@ def _publish(source, target):
         raise
 
 
-def create_fp16_copy(path, cache_dir, model_info=None, preview=None,
-                     progress=lambda fraction, description: None):
+def create_fp16_copy(
+    path, cache_dir, model_info=None, preview=None, progress=lambda fraction, description: None
+):
     path = Path(path)
     report = inspect_checkpoint(path)
     if not report["saving_bytes"]:
@@ -168,7 +181,8 @@ def create_fp16_copy(path, cache_dir, model_info=None, preview=None,
             converted[name]["dtype"] = "F16"
         position += size
     converted["__metadata__"] = header.get("__metadata__", {}) | {
-        "rf.source_sha256": checked["sha256"], "rf.source_name": path.name,
+        "rf.source_sha256": checked["sha256"],
+        "rf.source_name": path.name,
         "rf.conversion": "FP32 to FP16; other dtypes preserved",
     }
     encoded = json.dumps(converted, separators=(",", ":")).encode()
@@ -217,9 +231,11 @@ def create_fp16_copy(path, cache_dir, model_info=None, preview=None,
         if output_hash != digest.hexdigest() or _stamp(path) != before:
             raise ValueError("File verification failed. Conversion stopped.")
         info = dict(model_info or {})
-        info.update(baseModel=info.get("baseModel") or "Unknown",
-                    files=[{"name": destination.name, "hashes": {"SHA256": output_hash}}],
-                    rf_source={"name": path.name, "sha256": checked["sha256"]})
+        info.update(
+            baseModel=info.get("baseModel") or "Unknown",
+            files=[{"name": destination.name, "hashes": {"SHA256": output_hash}}],
+            rf_source={"name": path.name, "sha256": checked["sha256"]},
+        )
         metadata = Path(cache_temporary) / "metadata.tmp"
         metadata.write_text(json.dumps(info, indent=2), encoding="utf-8")
         publish = [(metadata, metadata_destination)]
@@ -237,9 +253,13 @@ def create_fp16_copy(path, cache_dir, model_info=None, preview=None,
             for target in reversed(created):
                 target.unlink()
             raise
-    return dict(path=destination, preview=preview_destination, underflow=underflow,
-                message=f"Created {destination.name}. Saved {format_size(report['saving_bytes'])}. "
-                        f"Values rounded to zero: {underflow}. Original retained.")
+    return dict(
+        path=destination,
+        preview=preview_destination,
+        underflow=underflow,
+        message=f"Created {destination.name}. Saved {format_size(report['saving_bytes'])}. "
+        f"Values rounded to zero: {underflow}. Original retained.",
+    )
 
 
 def format_size(size):
@@ -252,15 +272,26 @@ def format_size(size):
 
 def format_report(report, family="Unknown", checked=None):
     dtypes = ", ".join(f"{name}: {format_size(size)}" for name, size in report["dtypes"].items())
-    lines = [report["name"], f"Model: {family} | {report['tensors']} tensors",
-             f"Tensor data: {dtypes}", "Generation also needs memory for activations and decoding.",
-             f"File size: {format_size(report['bytes'])} | FP32 to FP16 saving: {format_size(report['saving_bytes'])}"]
+    lines = [
+        report["name"],
+        f"Model: {family} | {report['tensors']} tensors",
+        f"Tensor data: {dtypes}",
+        "Generation also needs memory for activations and decoding.",
+        f"File size: {format_size(report['bytes'])} | FP32 to FP16 saving: {format_size(report['saving_bytes'])}",
+    ]
     if report["previous_repair"]:
-        lines.append("Previous optimizer reports donor-replaced weights; this cannot verify their origin.")
+        lines.append(
+            "Previous optimizer reports donor-replaced weights; this cannot verify their origin."
+        )
     if checked is None:
         lines.append("Weight values have not been checked.")
     else:
-        lines.append(f"NaN/Inf tensors: {len(checked['invalid'])}. All-zero tensors: {checked['zero_tensors']} (may be intentional).")
-        lines.extend(f"{item['name']}: {item['nan']} NaN, {item['inf']} Inf" for item in checked["invalid"][:8])
+        lines.append(
+            f"NaN/Inf tensors: {len(checked['invalid'])}. All-zero tensors: {checked['zero_tensors']} (may be intentional)."
+        )
+        lines.extend(
+            f"{item['name']}: {item['nan']} NaN, {item['inf']} Inf"
+            for item in checked["invalid"][:8]
+        )
         lines.append(f"SHA-256 (local): {checked['sha256']}")
     return "\n".join(lines)

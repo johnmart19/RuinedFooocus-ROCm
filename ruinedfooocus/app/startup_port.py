@@ -1,4 +1,5 @@
 from ruinedfooocus.core.paths import APP_ROOT
+
 """Resolve listen-port conflicts before loading models or starting Gradio."""
 
 import os
@@ -10,8 +11,12 @@ def ruinedfooocus_owner(port):
     """Only recognize Python launchers from this checkout, never a process name alone."""
     try:
         import psutil
-        owners = {c.pid for c in psutil.net_connections(kind="tcp")
-                  if c.status == psutil.CONN_LISTEN and c.laddr.port == port}
+
+        owners = {
+            c.pid
+            for c in psutil.net_connections(kind="tcp")
+            if c.status == psutil.CONN_LISTEN and c.laddr.port == port
+        }
         if len(owners) != 1 or None in owners or os.getpid() in owners:
             return None
         process = psutil.Process(owners.pop())
@@ -29,7 +34,14 @@ def ruinedfooocus_owner(port):
         if not script.is_absolute():
             script = Path(process.cwd()) / script
         root = APP_ROOT
-        if script.resolve() not in {root / name for name in ("ruinedfooocus/app/bootstrap.py", "entry_with_update.py", "ruinedfooocus/ui/app.py")}:
+        if script.resolve() not in {
+            root / name
+            for name in (
+                "ruinedfooocus/app/bootstrap.py",
+                "entry_with_update.py",
+                "ruinedfooocus/ui/app.py",
+            )
+        }:
             return None
         process.create_time()  # Cache identity so terminate() guards against PID reuse.
         return process
@@ -44,7 +56,9 @@ def offer_close_instance(host, port):
     process = ruinedfooocus_owner(port)
     if process is None:
         return False
-    print(f"RuinedFooocus from this folder is already listening on port {port} (PID {process.pid}).")
+    print(
+        f"RuinedFooocus from this folder is already listening on port {port} (PID {process.pid})."
+    )
     print("Closing it stops any active generation and disconnects its users.")
     try:
         answer = input("Close that instance and use this port? [y/N]: ").strip().lower()
@@ -103,13 +117,16 @@ def configure_port(args):
         args.port = port
         return
     # Preserve Gradio's automatic port selection when --port was not supplied.
-    candidate = next((p for p in range(port + 1, min(port + 101, 65536))
-                      if available(host, p)), None)
+    candidate = next(
+        (p for p in range(port + 1, min(port + 101, 65536)) if available(host, p)), None
+    )
     if not explicit and candidate:
         args.port = candidate
         print(f"Port {port} is unavailable; using port {candidate}.")
         return
-    print(f"\nWarning: {host}:{port} is occupied or unavailable. Another RuinedFooocus may already be running.")
+    print(
+        f"\nWarning: {host}:{port} is occupied or unavailable. Another RuinedFooocus may already be running."
+    )
     while True:
         print("[1] Use another port  [Q] Cancel")
         try:
@@ -131,5 +148,7 @@ def configure_port(args):
             print("\nStartup cancelled. Relaunch with --port <available-port>.")
             raise SystemExit(1)
         args.port = selected
-        print(f"Starting on port {selected}" + (" with API enabled." if args.api else " without API."))
+        print(
+            f"Starting on port {selected}" + (" with API enabled." if args.api else " without API.")
+        )
         return

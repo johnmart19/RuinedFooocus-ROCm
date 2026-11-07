@@ -27,22 +27,26 @@ def get_previewer(device, latent_format):
     if args.preview_method == LatentPreviewMethod.NoPreviews:
         return None
     import ruinedfooocus.app.state as shared
-    folder_paths.add_model_folder_path('vae_approx',
-        str(shared.path_manager.model_paths['vae_approx_path']), is_default=True)
+
+    folder_paths.add_model_folder_path(
+        "vae_approx", str(shared.path_manager.model_paths["vae_approx_path"]), is_default=True
+    )
     method = args.preview_method
     try:
         previewer = latent_preview.get_previewer(device, latent_format)
     except Exception:
-        logging.exception('Could not load preview decoder; using latent RGB preview')
+        logging.exception("Could not load preview decoder; using latent RGB preview")
         args.preview_method = LatentPreviewMethod.Latent2RGB
         previewer = latent_preview.get_previewer(device, latent_format)
     finally:
         args.preview_method = method
     if previewer is not None:
+
         def preview_function(x0, step, total_steps):
             # Image models can use a temporal approximate VAE for one frame.
             if isinstance(previewer, latent_preview.TAEHVPreviewerImpl) and x0.ndim == 4:
                 x0 = x0.unsqueeze(2)
             return previewer.decode_latent_to_preview(x0)
+
         previewer.preview = preview_function
     return previewer

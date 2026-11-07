@@ -1,4 +1,5 @@
 from ruinedfooocus.core.paths import asset_path
+
 """Prepare a browser-only Python runner from fenced assistant code."""
 
 import html
@@ -27,6 +28,9 @@ def python_runner(history):
     data = json.dumps(blocks or [""], ensure_ascii=True)
     # Model output is data, never HTML or JavaScript source.
     document = template.replace("__CODE_BLOCKS__", data.replace("<", "\\u003c"))
-    return ('<iframe title="Python runner" sandbox="allow-scripts" data-python-assets="browser-python/314.0.7/" '
-            'style="display:block;width:100%;height:clamp(560px,75dvh,820px);border:0" srcdoc="'
-            + html.escape(document, quote=True) + '"></iframe>')
+    return (
+        '<iframe title="Python runner" sandbox="allow-scripts" data-python-assets="browser-python/314.0.7/" '
+        'style="display:block;width:100%;height:clamp(560px,75dvh,820px);border:0" srcdoc="'
+        + html.escape(document, quote=True)
+        + '"></iframe>'
+    )

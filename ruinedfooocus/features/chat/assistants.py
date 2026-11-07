@@ -36,20 +36,30 @@ def assistant_choices():
             try:
                 if path.name == "info.json":
                     info = json.loads(path.read_text(encoding="utf-8"))
-                    choices[path.parent.relative_to(folder).as_posix()] = (info["name"], str(path.parent))
+                    choices[path.parent.relative_to(folder).as_posix()] = (
+                        info["name"],
+                        str(path.parent),
+                    )
                 elif path.suffix.lower() == ".png" and not path.with_name("info.json").exists():
                     info = character_card(path)
                     if info:
                         choices[path.relative_to(folder).as_posix()] = (info["name"], str(path))
             except (OSError, ValueError, KeyError) as error:
                 print(f"Cannot read assistant {path}: {error}")
-    return [("General chat", "__normal__")] + sorted(choices.values(), key=lambda item: item[0].casefold())
+    return [("General chat", "__normal__")] + sorted(
+        choices.values(), key=lambda item: item[0].casefold()
+    )
 
 
 def assistant_info(selected):
     if selected == "__normal__":
-        return {"name": "General chat", "avatar": asset_path("chat_normal.png"),
-                "system": "", "embed": "[]", "chatstart": []}
+        return {
+            "name": "General chat",
+            "avatar": asset_path("chat_normal.png"),
+            "system": "",
+            "embed": "[]",
+            "chatstart": [],
+        }
     path = Path(selected)
     try:
         if path.is_dir():
@@ -64,15 +74,22 @@ def assistant_info(selected):
         return info
     except (OSError, ValueError, KeyError) as error:
         print(f"Cannot load assistant {selected}: {error}")
-        return {"name": "Unavailable assistant", "avatar": asset_path("error.png"),
-                "system": "", "embed": "[]", "chatstart": []}
+        return {
+            "name": "Unavailable assistant",
+            "avatar": asset_path("error.png"),
+            "system": "",
+            "embed": "[]",
+            "chatstart": [],
+        }
 
 
 def context_file(value):
     """Resolve local context without allowing files outside application/data roots."""
     candidate = Path(value)
     roots = (data_path(), APP_ROOT)
-    candidates = [base / candidate for base in roots] if not candidate.is_absolute() else [candidate]
+    candidates = (
+        [base / candidate for base in roots] if not candidate.is_absolute() else [candidate]
+    )
     if not candidate.is_absolute() and candidate.parts and candidate.parts[0] == "chatbots":
         candidates.append(resource_path("assistants", *candidate.parts[1:]))
     for path in candidates:

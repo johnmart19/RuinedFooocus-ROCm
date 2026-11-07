@@ -14,7 +14,10 @@ VIDEO_FPS = {
 
 def is_ltx25_distilled(family, checkpoint):
     # Tensor shapes identify the family, not whether its weights were distilled.
-    return family == "LTXV 2.5" and "distilled" in str(checkpoint).replace("\\", "/").rsplit("/", 1)[-1].lower()
+    return (
+        family == "LTXV 2.5"
+        and "distilled" in str(checkpoint).replace("\\", "/").rsplit("/", 1)[-1].lower()
+    )
 
 
 def fixed_video_settings(family, checkpoint=""):
@@ -31,7 +34,9 @@ def fixed_video_settings(family, checkpoint=""):
 
 
 def uses_negative_prompt(family, checkpoint=""):
-    return family not in ("MiniMaxH3", "Hunyuan Video") and not is_ltx25_distilled(family, checkpoint)
+    return family not in ("MiniMaxH3", "Hunyuan Video") and not is_ltx25_distilled(
+        family, checkpoint
+    )
 
 
 def constrain_video_settings(data, family):
@@ -49,27 +54,36 @@ def frame_count(seconds, fps, multiple=4):
 
 
 VIDEO_PIPELINES = {
-    "Wan Video": "wan_video", "Wan 2.2 5B": "wan_video",
-    "Hunyuan Video": "hunyuan_video", "LTXV": "ltx_video",
-    "LTXV2": "video_pipeline", "LTXV 2.3": "video_pipeline",
-    "LTXV 2.5": "video_pipeline", "MiniMaxH3": "video_pipeline",
+    "Wan Video": "wan_video",
+    "Wan 2.2 5B": "wan_video",
+    "Hunyuan Video": "hunyuan_video",
+    "LTXV": "ltx_video",
+    "LTXV2": "video_pipeline",
+    "LTXV 2.3": "video_pipeline",
+    "LTXV 2.5": "video_pipeline",
+    "MiniMaxH3": "video_pipeline",
 }
 
 
 def detect_video_model(tensors):
     # Check architecture keys for both standalone and bundled checkpoints.
     for prefix in ("", "model.diffusion_model.", "diffusion_model."):
+
         def has(key):
             return prefix + key in tensors
+
         def shape(key):
             return tensors.get(prefix + key, {}).get("shape", [])
+
         if has("head.modulation") and has("patch_embedding.weight"):
             return "Wan 2.2 5B" if shape("head.head.weight")[:1] == [192] else "Wan Video"
         if has("txt_in.individual_token_refiner.blocks.0.norm1.weight"):
             return "Hunyuan Video"
         if has("video_patch_proj.weight") and has("audio_patch_proj.weight"):
             return "MiniMaxH3"
-        if has("adaln_single.emb.timestep_embedder.linear_1.bias") and not has("pos_embed.proj.bias"):
+        if has("adaln_single.emb.timestep_embedder.linear_1.bias") and not has(
+            "pos_embed.proj.bias"
+        ):
             if has("audio_adaln_single.linear.weight"):
                 if 4096 in shape("keyframes_abs_pos_embedding"):
                     return "LTXV 2.5"

@@ -6,6 +6,7 @@ lowercase tags mixed with prose through an LLM encoder (no weight syntax), and
 Flux/Qwen/Krea/MOSS-style models want plain descriptions without weights, tags
 or emojis. Values are stored in settings, so the original keys stay valid.
 """
+
 import re
 
 AUTO, TAGS, ANIME, ANIMA, NATURAL = "Auto", "SDXL", "Anime Model", "Anima", "Stable Cascade"
@@ -27,14 +28,22 @@ _FAMILY_FORMATS = (
 ANIME_QUALITY = "masterpiece, best quality, very aesthetic, absurdres"
 ANIMA_QUALITY = "masterpiece, best quality"
 
-_EMOJI = re.compile("[\U0001F000-\U0001FAFF☀-➿️‍]")
+_EMOJI = re.compile("[\U0001f000-\U0001faff☀-➿️‍]")
 _WEIGHT = re.compile(r"\(([^()]*?)(?::\s*-?\d+(?:\.\d+)?)?\)")
 _SD_BOILERPLATE = re.compile(
     r"\b(?:8k|4k|uhd|hdr|highres|absurdres|masterpiece|best quality|high quality|trending on artstation|"
-    r"unreal engine|octane render|award ?winning|awardwinning)\b", re.I)
+    r"unreal engine|octane render|award ?winning|awardwinning)\b",
+    re.I,
+)
 # The engine writes e.g. "gorgeous 1girl", so bare nouns read naturally in place.
-_BOORU_COUNT = {"1girl": "girl", "1boy": "boy", "2girls": "two girls", "2boys": "two boys",
-                "1other": "person", "solo": ""}
+_BOORU_COUNT = {
+    "1girl": "girl",
+    "1boy": "boy",
+    "2girls": "two girls",
+    "2boys": "two boys",
+    "1other": "person",
+    "solo": "",
+}
 
 
 def family_format(family):
@@ -61,7 +70,10 @@ def checkpoint_family(checkpoint):
         return None
     try:
         import ruinedfooocus.app.state as shared
-        family = shared.models.get_model_base(shared.models.get_models_by_path("checkpoints", checkpoint, fetch=False))
+
+        family = shared.models.get_model_base(
+            shared.models.get_models_by_path("checkpoints", checkpoint, fetch=False)
+        )
         path = shared.models.get_file("checkpoints", checkpoint)
         detected = shared.models.detect_checkpoint_base(path) if path is not None else None
         return detected or family
@@ -116,8 +128,12 @@ def finalize(prompt, fmt):
         text = _with_prefix(ANIME_QUALITY, _tidy(text))
     elif fmt == NATURAL:
         text = _SD_BOILERPLATE.sub("", text)
-        text = re.sub(r"\b(" + "|".join(_BOORU_COUNT) + r")\b",
-                      lambda match: _BOORU_COUNT[match.group(1).lower()], text, flags=re.I)
+        text = re.sub(
+            r"\b(" + "|".join(_BOORU_COUNT) + r")\b",
+            lambda match: _BOORU_COUNT[match.group(1).lower()],
+            text,
+            flags=re.I,
+        )
         text = _tidy(text)
         text = text[:1].upper() + text[1:]
     else:

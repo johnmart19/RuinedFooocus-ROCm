@@ -25,7 +25,12 @@ IMAGE_TOOL = {
         "description": "Generate from the current request. The app controls any explicitly selected image reference. Not for prompt-only answers.",
         "parameters": {
             "type": "object",
-            "properties": {"prompt": {"type": "string", "description": "Visual description of the requested image"}},
+            "properties": {
+                "prompt": {
+                    "type": "string",
+                    "description": "Visual description of the requested image",
+                }
+            },
             "required": ["prompt"],
             "additionalProperties": False,
         },

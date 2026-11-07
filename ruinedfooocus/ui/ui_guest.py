@@ -33,8 +33,13 @@ class GuestMedia:
 
     def get(self, token, owner):
         entry = self.entries.get(token)
-        if (not entry or not owner or not secrets.compare_digest(entry[1], owner)
-                or time.monotonic() - entry[2] > 86400 or not entry[0].is_file()):
+        if (
+            not entry
+            or not owner
+            or not secrets.compare_digest(entry[1], owner)
+            or time.monotonic() - entry[2] > 86400
+            or not entry[0].is_file()
+        ):
             raise HTTPException(404, "Result unavailable for this login.")
         return entry[0]
 
@@ -42,7 +47,11 @@ class GuestMedia:
 def launch_guest(args):
     validate_web_access(args)
     # Change only this process's output destination, never the owner's saved paths.
-    output = Path(shared.path_manager.model_paths["temp_outputs_path"]) / "guests" / secrets.token_hex(16)
+    output = (
+        Path(shared.path_manager.model_paths["temp_outputs_path"])
+        / "guests"
+        / secrets.token_hex(16)
+    )
     output.mkdir(parents=True, exist_ok=True)
     shared.path_manager.model_paths["temp_outputs_path"] = output
     shared.path_manager.model_paths["temp_preview_path"] = output / "preview.jpg"
@@ -50,9 +59,17 @@ def launch_guest(args):
     from ruinedfooocus.integrations.openai_api import ImageRequest, VideoRequest
 
     media = GuestMedia(output)
-    models = {key: info for key, info in backend.models().items() if info["kind"] in ("image", "video")}
-    selected = next((key for key, info in models.items()
-                     if info["name"] == shared.settings.default_settings.get("base_model")), next(iter(models), None))
+    models = {
+        key: info for key, info in backend.models().items() if info["kind"] in ("image", "video")
+    }
+    selected = next(
+        (
+            key
+            for key, info in models.items()
+            if info["name"] == shared.settings.default_settings.get("base_model")
+        ),
+        next(iter(models), None),
+    )
 
     def options(model):
         info = models.get(model)
@@ -61,8 +78,14 @@ def launch_guest(args):
         presets = shared.performance_settings.choices_for_model(info["family"], info["name"])
         # This compact view has no custom sampler controls. Prefer a matching
         # family recipe instead of whichever preset happens to be listed first.
-        presets = [name for name in presets if name != shared.performance_settings.CUSTOM_PERFORMANCE]
-        preferred = info["family"] if info["family"] in presets else shared.settings.default_settings.get("performance")
+        presets = [
+            name for name in presets if name != shared.performance_settings.CUSTOM_PERFORMANCE
+        ]
+        preferred = (
+            info["family"]
+            if info["family"] in presets
+            else shared.settings.default_settings.get("performance")
+        )
         if info["kind"] == "image" and preferred in presets:
             presets.remove(preferred)
             presets.insert(0, preferred)
@@ -72,8 +95,11 @@ def launch_guest(args):
 
     def change_model(model):
         presets, sizes, video = options(model)
-        return (gr.update(choices=presets, value=presets[0] if presets else None),
-                gr.update(choices=sizes, value=sizes[0] if sizes else None), gr.update(visible=video))
+        return (
+            gr.update(choices=presets, value=presets[0] if presets else None),
+            gr.update(choices=sizes, value=sizes[0] if sizes else None),
+            gr.update(visible=video),
+        )
 
     def generate(prompt, negative, model, preset, size, seed, duration, request: gr.Request):
         owner = login_token(request.request)
@@ -84,15 +110,26 @@ def launch_guest(args):
             raise gr.Error("Select an available model, performance preset and resolution.")
         width, height = shared.resolution_settings.aspect_ratios[size]
         schema = VideoRequest if video else ImageRequest
-        body = dict(prompt=prompt, negative_prompt=negative, model=model, performance=preset,
-                    size=f"{width}x{height}", seed=seed, styles=[], loras=[], n=1)
+        body = dict(
+            prompt=prompt,
+            negative_prompt=negative,
+            model=model,
+            performance=preset,
+            size=f"{width}x{height}",
+            seed=seed,
+            styles=[],
+            loras=[],
+            n=1,
+        )
         if video:
             body["duration"] = duration
         try:
             payload = schema(**body).model_dump(exclude_none=True)
             job = backend.images(payload, models[model])
         except (ValueError, RuntimeError):
-            raise gr.Error("Cannot start this request. Check the model and generation settings.") from None
+            raise gr.Error(
+                "Cannot start this request. Check the model and generation settings."
+            ) from None
         try:
             yield "", "Generating your result…"
             while True:
@@ -109,9 +146,13 @@ def launch_guest(args):
                     token = media.add(path, owner)
                     url = html.escape(f"guest-media/{token}", quote=True)
                     if Path(path).suffix.lower() in (".mp4", ".webm"):
-                        rendered.append(f'<video controls playsinline src="{url}" style="width:100%;max-height:65vh"></video>')
+                        rendered.append(
+                            f'<video controls playsinline src="{url}" style="width:100%;max-height:65vh"></video>'
+                        )
                     else:
-                        rendered.append(f'<img src="{url}" alt="Your generated result" style="max-width:100%;max-height:65vh">')
+                        rendered.append(
+                            f'<img src="{url}" alt="Your generated result" style="max-width:100%;max-height:65vh">'
+                        )
                     rendered.append(f'<p><a href="{url}" download>Download your result</a></p>')
                 yield "".join(rendered), "Complete. Results are saved on the host."
                 return
@@ -119,8 +160,12 @@ def launch_guest(args):
             job.cancelled.set()
 
     presets, sizes, video = options(selected)
-    with gr.Blocks(title=f"RuinedFooocus {version.version} — Guest", analytics_enabled=False) as app:
-        gr.Markdown("# RuinedFooocus — Guest\nGenerate images or videos. Existing outputs and owner controls are unavailable here.")
+    with gr.Blocks(
+        title=f"RuinedFooocus {version.version} — Guest", analytics_enabled=False
+    ) as app:
+        gr.Markdown(
+            "# RuinedFooocus — Guest\nGenerate images or videos. Existing outputs and owner controls are unavailable here."
+        )
         with gr.Row():
             with gr.Column(scale=2):
                 result = gr.HTML()
@@ -129,19 +174,40 @@ def launch_guest(args):
                 negative = gr.Textbox(label="Negative prompt", lines=2)
                 run = gr.Button("Generate", variant="primary", interactive=bool(models))
             with gr.Column():
-                model = gr.Dropdown([(info["name"], key) for key, info in models.items()], value=selected, label="Model")
-                preset = gr.Dropdown(presets, value=presets[0] if presets else None, label="Performance")
+                model = gr.Dropdown(
+                    [(info["name"], key) for key, info in models.items()],
+                    value=selected,
+                    label="Model",
+                )
+                preset = gr.Dropdown(
+                    presets, value=presets[0] if presets else None, label="Performance"
+                )
                 size = gr.Dropdown(sizes, value=sizes[0] if sizes else None, label="Resolution")
-                seed = gr.Number(value=-1, minimum=-1, maximum=4294967295, precision=0, label="Seed (-1: random)")
-                duration = gr.Slider(0.5, 10, value=3, step=0.5, label="Video duration (seconds)", visible=video)
+                seed = gr.Number(
+                    value=-1, minimum=-1, maximum=4294967295, precision=0, label="Seed (-1: random)"
+                )
+                duration = gr.Slider(
+                    0.5, 10, value=3, step=0.5, label="Video duration (seconds)", visible=video
+                )
         model.change(change_model, model, [preset, size, duration], api_visibility="private")
-        run.click(generate, [prompt, negative, model, preset, size, seed, duration],
-                  [result, status], concurrency_limit=1, api_visibility="private")
+        run.click(
+            generate,
+            [prompt, negative, model, preset, size, seed, duration],
+            [result, status],
+            concurrency_limit=1,
+            api_visibility="private",
+        )
     app.queue(max_size=8)
     server, _, _ = app.launch(
-        server_name=args.listen, server_port=args.port, auth=args.auth.split("/", 1),
-        share=False, inbrowser=not args.nobrowser, prevent_thread_lock=True, pwa=False,
-        allowed_paths=[], app_kwargs={"middleware": [Middleware(PrivateResponses, guest=True)]},
+        server_name=args.listen,
+        server_port=args.port,
+        auth=args.auth.split("/", 1),
+        share=False,
+        inbrowser=not args.nobrowser,
+        prevent_thread_lock=True,
+        pwa=False,
+        allowed_paths=[],
+        app_kwargs={"middleware": [Middleware(PrivateResponses, guest=True)]},
         enable_monitoring=False,
     )
 

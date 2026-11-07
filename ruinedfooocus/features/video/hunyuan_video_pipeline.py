@@ -30,15 +30,24 @@ from comfy.sd import load_checkpoint_guess_config
 from tqdm import tqdm
 
 
-
 from nodes import (
     CLIPTextEncode,
     CLIPVisionEncode,
     VAEDecodeTiled,
 )
 
-from comfy_extras.nodes_custom_sampler import SamplerCustomAdvanced, RandomNoise, BasicScheduler, KSamplerSelect, BasicGuider
-from comfy_extras.nodes_hunyuan import EmptyHunyuanLatentVideo, HunyuanImageToVideo, TextEncodeHunyuanVideo_ImageToVideo
+from comfy_extras.nodes_custom_sampler import (
+    SamplerCustomAdvanced,
+    RandomNoise,
+    BasicScheduler,
+    KSamplerSelect,
+    BasicGuider,
+)
+from comfy_extras.nodes_hunyuan import (
+    EmptyHunyuanLatentVideo,
+    HunyuanImageToVideo,
+    TextEncodeHunyuanVideo_ImageToVideo,
+)
 from comfy_extras.nodes_model_advanced import ModelSamplingSD3
 from comfy_extras.nodes_flux import FluxGuidance
 
@@ -67,24 +76,33 @@ class pipeline:
     model_base_patched = None
     conditions = None
 
-
     # Optional function
     def parse_gen_data(self, gen_data):
         if gen_data.get("video_duration") is not None:
-            gen_data["original_image_number"] = frame_count(gen_data["video_duration"], gen_data.get("video_fps", 24))
+            gen_data["original_image_number"] = frame_count(
+                gen_data["video_duration"], gen_data.get("video_fps", 24)
+            )
         else:
             gen_data["original_image_number"] = 1 + ((int(gen_data["image_number"] / 4.0) + 1) * 4)
         gen_data["image_number"] = 1
         gen_data["show_preview"] = False
         return gen_data
 
-    def load_base_model(self, name, unet_only=True, input_unet=None, hash=None): # Hunyuan_Video never has the clip and vae models?
+    def load_base_model(
+        self, name, unet_only=True, input_unet=None, hash=None
+    ):  # Hunyuan_Video never has the clip and vae models?
 
         # Check if model is already loaded
-        components = {key: value for key, value in settings.default_settings.items()
-                      if key.startswith(("clip_", "vae_"))}
-        if (self.model_hash == name and self.model_base is not None
-                and components == getattr(self, "component_settings", None)):
+        components = {
+            key: value
+            for key, value in settings.default_settings.items()
+            if key.startswith(("clip_", "vae_"))
+        }
+        if (
+            self.model_hash == name
+            and self.model_base is not None
+            and components == getattr(self, "component_settings", None)
+        ):
             return
         self.component_settings = components
 
@@ -120,7 +138,7 @@ class pipeline:
                         clip_path = path_manager.get_folder_file_path(
                             "clip",
                             clip_name,
-                            default = os.path.join(path_manager.model_paths["clip_path"], clip_name)
+                            default=os.path.join(path_manager.model_paths["clip_path"], clip_name),
                         )
                         clip_paths.append(str(clip_path))
                         # https://huggingface.co/calcuis/hunyuan-gguf/tree/main
@@ -129,7 +147,7 @@ class pipeline:
                         clip_path = path_manager.get_folder_file_path(
                             "clip",
                             clip_name,
-                            default = os.path.join(path_manager.model_paths["clip_path"], clip_name)
+                            default=os.path.join(path_manager.model_paths["clip_path"], clip_name),
                         )
                         clip_paths.append(str(clip_path))
                         clip_type = comfy.sd.CLIPType.HUNYUAN_VIDEO
@@ -143,12 +161,14 @@ class pipeline:
 
                     print(f"Loading CLIP: {clip_names}")
                     clip_type = comfy.sd.CLIPType.HUNYUAN_VIDEO
-                    clip = comfy.sd.load_clip(ckpt_paths=clip_paths, clip_type=clip_type, model_options={})
+                    clip = comfy.sd.load_clip(
+                        ckpt_paths=clip_paths, clip_type=clip_type, model_options={}
+                    )
 
                     vae_path = path_manager.get_folder_file_path(
                         "vae",
                         vae_name,
-                        default = os.path.join(path_manager.model_paths["vae_path"], vae_name)
+                        default=os.path.join(path_manager.model_paths["vae_path"], vae_name),
                     )
                     print(f"Loading VAE: {vae_name}")
                     sd, metadata = comfy.utils.load_torch_file(str(vae_path), return_metadata=True)
@@ -168,10 +188,7 @@ class pipeline:
                     raise
             except:
                 print(f"Failed. Trying to load as unet.")
-                self.load_base_model(
-                    filename,
-                    unet_only=True
-                )
+                self.load_base_model(filename, unet_only=True)
                 return
 
         if unet == None:
@@ -182,9 +199,7 @@ class pipeline:
             self.model_base = self.StableDiffusionModel(
                 unet=unet, clip=clip, vae=vae, clip_vision=clip_vision
             )
-            if not (
-                isinstance(self.model_base.unet.model, HunyuanVideo)
-            ):
+            if not (isinstance(self.model_base.unet.model, HunyuanVideo)):
                 print(
                     f"Model {type(self.model_base.unet.model)} not supported. Expected Hunyuan Video model."
                 )
@@ -208,10 +223,10 @@ class pipeline:
         loaded_loras = []
 
         model = self.model_base
-#        for name, weight in loras:
-#           if name == "None" or weight == 0:
-#               continue
-#           filename = str(shared.models.get_file("loras", name))
+        #        for name, weight in loras:
+        #           if name == "None" or weight == 0:
+        #               continue
+        #           filename = str(shared.models.get_file("loras", name))
 
         for lora in loras:
             name = lora.get("name", "None")
@@ -286,7 +301,7 @@ class pipeline:
             worker.add_result(
                 gen_data["task_id"],
                 "preview",
-                (-1, f"Processing text encoding ...", str(asset_path('logo.png')))
+                (-1, f"Processing text encoding ...", str(asset_path("logo.png"))),
             )
 
         if self.conditions is None:
@@ -319,28 +334,31 @@ class pipeline:
                 self.model_base_patched.clip_vision = comfy.clip_vision.load(str(vision_path))
                 if self.model_base_patched.clip_vision is None:
                     raise RuntimeError("Hunyuan I2V requires a valid LLaVA vision encoder")
-            vision = CLIPVisionEncode().encode(self.model_base_patched.clip_vision, image, crop="none")[0]
+            vision = CLIPVisionEncode().encode(
+                self.model_base_patched.clip_vision, image, crop="none"
+            )[0]
             image_positive = TextEncodeHunyuanVideo_ImageToVideo.execute(
-                self.model_base_patched.clip, vision, positive_prompt, image_interleave=4)[0]
+                self.model_base_patched.clip, vision, positive_prompt, image_interleave=4
+            )[0]
 
             (positive, latent_image) = HunyuanImageToVideo().encode(
-                positive = image_positive,
-                vae = self.model_base_patched.vae,
-                width = gen_data["width"],
-                height = gen_data["height"],
-                length = gen_data["original_image_number"],
-                batch_size = 1,
-                #guidance_type = "v1 (concat)", # "v2 (replace)"
-                guidance_type = "v2 (replace)",
-                start_image = image,
+                positive=image_positive,
+                vae=self.model_base_patched.vae,
+                width=gen_data["width"],
+                height=gen_data["height"],
+                length=gen_data["original_image_number"],
+                batch_size=1,
+                # guidance_type = "v1 (concat)", # "v2 (replace)"
+                guidance_type="v2 (replace)",
+                start_image=image,
             )
         else:
             # latent_image
             latent_image = EmptyHunyuanLatentVideo().execute(
-                width = gen_data["width"],
-                height = gen_data["height"],
-                length = gen_data["original_image_number"],
-                batch_size = 1,
+                width=gen_data["width"],
+                height=gen_data["height"],
+                length=gen_data["original_image_number"],
+                batch_size=1,
             )[0]
             positive = self.conditions["+"]["cache"]
 
@@ -348,45 +366,43 @@ class pipeline:
 
         # Guider
         model_sampling = ModelSamplingSD3().patch(
-            model = self.model_base_patched.unet,
-            shift = 7.0,
+            model=self.model_base_patched.unet,
+            shift=7.0,
         )[0]
         flux_guideance = FluxGuidance().append(
-            conditioning = positive,
-            guidance = gen_data["cfg"],
+            conditioning=positive,
+            guidance=gen_data["cfg"],
         )[0]
 
         guider = BasicGuider().get_guider(
-            model = model_sampling,
-            conditioning = flux_guideance,
+            model=model_sampling,
+            conditioning=flux_guideance,
         )[0]
 
         # Sampler
         ksampler = KSamplerSelect().get_sampler(
-            sampler_name = gen_data["sampler_name"],
+            sampler_name=gen_data["sampler_name"],
         )[0]
 
         # Sigmas
         sigmas = BasicScheduler().get_sigmas(
-            model = model_sampling,
-            scheduler = gen_data["scheduler"],
-            steps = gen_data["steps"],
-            denoise = 1,
+            model=model_sampling,
+            scheduler=gen_data["scheduler"],
+            steps=gen_data["steps"],
+            denoise=1,
         )[0]
 
-        worker.add_result(
-            gen_data["task_id"],
-            "preview",
-            (-1, f"Generating ...", None)
-        )
+        worker.add_result(gen_data["task_id"], "preview", (-1, f"Generating ...", None))
 
         # From https://github.com/comfyanonymous/ComfyUI/blob/880c205df1fca4491c78523eb52d1a388f89ef92/comfy_extras/nodes_custom_sampler.py#L623
         latent = latent_image
         latent_image = latent["samples"]
         latent = latent.copy()
         latent_image = comfy.sample.fix_empty_latent_channels(
-            guider.model_patcher, latent_image,
-            latent.get("downscale_ratio_spacial"), latent.get("downscale_ratio_temporal"),
+            guider.model_patcher,
+            latent_image,
+            latent.get("downscale_ratio_spacial"),
+            latent.get("downscale_ratio_temporal"),
         )
         latent["samples"] = latent_image
 
@@ -402,7 +418,7 @@ class pipeline:
             denoise_mask=noise_mask,
             callback=callback_function,
             disable_pbar=not comfy.utils.PROGRESS_BAR_ENABLED,
-            seed=noise.seed
+            seed=noise.seed,
         )
         samples = samples.to(comfy.model_management.intermediate_device())
 
@@ -411,13 +427,8 @@ class pipeline:
         sampled.pop("downscale_ratio_temporal", None)
         sampled["samples"] = samples
 
-
         if callback is not None:
-            worker.add_result(
-                gen_data["task_id"],
-                "preview",
-                (-1, f"VAE Decoding ...", None)
-            )
+            worker.add_result(gen_data["task_id"], "preview", (-1, f"VAE Decoding ...", None))
 
         decoded_latent = VAEDecodeTiled().decode(
             samples=sampled,
@@ -428,31 +439,27 @@ class pipeline:
 
         pil_images = []
         for image in decoded_latent:
-            i = 255. * image.cpu().numpy()
+            i = 255.0 * image.cpu().numpy()
             img = Image.fromarray(np.clip(i, 0, 255).astype(np.uint8))
             pil_images.append(img)
 
         if callback is not None:
-            worker.add_result(
-                gen_data["task_id"],
-                "preview",
-                (-1, f"Saving ...", None)
-            )
+            worker.add_result(gen_data["task_id"], "preview", (-1, f"Saving ...", None))
 
         file = generate_temp_filename(
             folder=path_manager.model_paths["temp_outputs_path"], extension="gif"
         )
         os.makedirs(os.path.dirname(file), exist_ok=True)
 
-        fps=float(gen_data.get("video_fps", 24.0))
-        compress_level=9 # Min = 0, Max = 9
+        fps = float(gen_data.get("video_fps", 24.0))
+        compress_level = 9  # Min = 0, Max = 9
 
         # Save GIF
         pil_images[0].save(
             file,
             compress_level=compress_level,
             save_all=True,
-            duration=int(1000.0/fps),
+            duration=int(1000.0 / fps),
             append_images=pil_images[1:],
             optimize=True,
             loop=0,

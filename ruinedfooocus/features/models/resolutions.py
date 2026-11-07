@@ -44,14 +44,17 @@ class ResolutionSettings:
         def order(item):
             name, res = item
             width, height = res["width"], res["height"]
-            return (0 if width == height else 1 if width > height else 2,
-                    max(width, height) / min(width, height), width * height, name.casefold())
+            return (
+                0 if width == height else 1 if width > height else 2,
+                max(width, height) / min(width, height),
+                width * height,
+                name.casefold(),
+            )
+
         for ratio, res in sorted(data.items(), key=order):
             self.base_ratios[ratio] = (res["width"], res["height"])
 
-        self.aspect_ratios = {
-            f"{v[0]}x{v[1]} ({k})": v for k, v in self.base_ratios.items()
-        }
+        self.aspect_ratios = {f"{v[0]}x{v[1]} ({k})": v for k, v in self.base_ratios.items()}
 
         return self.base_ratios
 
@@ -73,18 +76,29 @@ class ResolutionSettings:
 
     def choices_for_model(self, family):
         from ruinedfooocus.features.video.video_settings import VIDEO_FPS
+
         video = family in VIDEO_FPS
-        choices = [f"{width}x{height} ({name})"
-                for name, (width, height) in self.base_ratios.items()
-                if (family in self.video_models[name] if video else
-                    not self.video_models[name] and
-                    (not self.image_models[name] or family in self.image_models[name]) and
-                    (not name.startswith("Qwen Image") or family in ("QwenImage", "Qwen", "Qwen-Image")))
-                ]
+        choices = [
+            f"{width}x{height} ({name})"
+            for name, (width, height) in self.base_ratios.items()
+            if (
+                family in self.video_models[name]
+                if video
+                else not self.video_models[name]
+                and (not self.image_models[name] or family in self.image_models[name])
+                and (
+                    not name.startswith("Qwen Image")
+                    or family in ("QwenImage", "Qwen", "Qwen-Image")
+                )
+            )
+        ]
         recommended = self.recommended_sizes(family)
-        if family in ('HiDreamO1', 'HiDream O1'):
-            choices = [value for value in choices
-                       if self.aspect_ratios[value] in recommended or self.is_custom(value)]
+        if family in ("HiDreamO1", "HiDream O1"):
+            choices = [
+                value
+                for value in choices
+                if self.aspect_ratios[value] in recommended or self.is_custom(value)
+            ]
         for width, height in recommended:
             if not any(self.aspect_ratios[value] == (width, height) for value in choices):
                 label = f"{width}x{height} ({family} recommended)"
@@ -96,23 +110,37 @@ class ResolutionSettings:
     def recommended_sizes(self, family):
         import re
         from ruinedfooocus.features.models.model_recommendations import FAMILY_PRESETS
+
         with Path("ruinedfooocus/resources/defaults/performance.default").open() as f:
             recipes = json.load(f)
         recipe = recipes.get(FAMILY_PRESETS.get(family, family), {})
         if not recipe:
-            recipe = next((value for value in recipes.values() if family in value.get("video_models", [])), {})
-        return [(int(w), int(h)) for w, h in re.findall(r"(\d+)x(\d+)", recipe.get("recommended_resolutions", ""))]
+            recipe = next(
+                (value for value in recipes.values() if family in value.get("video_models", [])), {}
+            )
+        return [
+            (int(w), int(h))
+            for w, h in re.findall(r"(\d+)x(\d+)", recipe.get("recommended_resolutions", ""))
+        ]
 
     def recommendation_text(self, family):
         sizes = self.recommended_sizes(family)
-        return "Recommended (family recipe): " + ", ".join(f"{w} × {h}" for w,h in sizes) if sizes else "No recommended size published in the local family recipe."
+        return (
+            "Recommended (family recipe): " + ", ".join(f"{w} × {h}" for w, h in sizes)
+            if sizes
+            else "No recommended size published in the local family recipe."
+        )
 
     def is_custom(self, selection):
-        return any(f"{w}x{h} ({name})" == selection and name not in self.builtin_names
-                   for name, (w, h) in self.base_ratios.items())
+        return any(
+            f"{w}x{h} ({name})" == selection and name not in self.builtin_names
+            for name, (w, h) in self.base_ratios.items()
+        )
 
     def remove_custom(self, selection):
-        name = next((k for k,v in self.base_ratios.items() if f"{v[0]}x{v[1]} ({k})" == selection), None)
+        name = next(
+            (k for k, v in self.base_ratios.items() if f"{v[0]}x{v[1]} ({k})" == selection), None
+        )
         if name is None or name in self.builtin_names:
             raise ValueError("Only saved custom resolutions can be removed.")
         options = dict(self.base_ratios)

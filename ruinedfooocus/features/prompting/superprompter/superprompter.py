@@ -1,4 +1,5 @@
 from ruinedfooocus.core.paths import data_path
+
 #!/usr/bin/env python
 import os
 import random
@@ -20,9 +21,7 @@ def load_models():
 
     global tokenizer, model
     tokenizer = T5Tokenizer.from_pretrained(modelDir)
-    model = T5ForConditionalGeneration.from_pretrained(
-        modelDir, torch_dtype=torch.float16
-    )
+    model = T5ForConditionalGeneration.from_pretrained(modelDir, torch_dtype=torch.float16)
 
 
 def unload_models():

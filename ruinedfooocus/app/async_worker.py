@@ -13,12 +13,21 @@ import json
 import ruinedfooocus.app.state as shared
 import random
 
-from ruinedfooocus.features.prompting.prompt_processing import process_metadata, process_prompt, parse_loras
+from ruinedfooocus.features.prompting.prompt_processing import (
+    process_metadata,
+    process_prompt,
+    parse_loras,
+)
 from ruinedfooocus.features.image_editing.shift_attention import shift_attention
 
 from PIL import Image
 from PIL.PngImagePlugin import PngInfo
-from ruinedfooocus.core.util import generate_temp_filename, TimeIt, get_checkpoint_hashes, get_lora_hashes
+from ruinedfooocus.core.util import (
+    generate_temp_filename,
+    TimeIt,
+    get_checkpoint_hashes,
+    get_lora_hashes,
+)
 import ruinedfooocus.features.generation.pipelines as pipelines
 import ruinedfooocus.features.image_editing.controlnet as control_tools
 import comfy.model_management as model_management
@@ -31,6 +40,7 @@ task_lock = threading.Lock()
 api_jobs = {}
 
 interrupt_ruined_processing = False
+
 
 def interrupt_processing():
     global interrupt_ruined_processing
@@ -50,28 +60,36 @@ def is_sha256_hash(input_string):
     if len(input_string) != 64:
         return False
     # Check if the string consists only of hexadecimal characters
-    if not all(c in '0123456789abcdefABCDEF' for c in input_string):
+    if not all(c in "0123456789abcdefABCDEF" for c in input_string):
         return False
     return True
+
 
 def _process(gen_data):
     check_interrupt(gen_data)
     res = []
     metadatastrings = []
     # Named sampling defaults apply first; imported image/JSON metadata wins.
-    initial_family = shared.models.get_model_base(shared.models.get_models_by_path(
-        "checkpoints", gen_data.get("base_model_name", "")))
+    initial_family = shared.models.get_model_base(
+        shared.models.get_models_by_path("checkpoints", gen_data.get("base_model_name", ""))
+    )
     gen_data = shared.performance_settings.apply(gen_data, initial_family)
     if "_api_job" not in gen_data and gen_data.get("task_type") != "tool_call":
         gen_data = process_metadata(gen_data)
 
     from ruinedfooocus.features.video.video_settings import VIDEO_FPS, constrain_video_settings
-    family = shared.models.get_model_base(shared.models.get_models_by_path(
-        "checkpoints", gen_data.get("base_model_name", "")))
-    if family in VIDEO_FPS and gen_data.get("performance_selection") not in shared.performance_settings.choices_for_model(
-            family, gen_data.get("base_model_name", "")):
+
+    family = shared.models.get_model_base(
+        shared.models.get_models_by_path("checkpoints", gen_data.get("base_model_name", ""))
+    )
+    if family in VIDEO_FPS and gen_data.get(
+        "performance_selection"
+    ) not in shared.performance_settings.choices_for_model(
+        family, gen_data.get("base_model_name", "")
+    ):
         gen_data["performance_selection"] = shared.performance_settings.selection_for_model(
-            family, gen_data.get("base_model_name", ""), None)
+            family, gen_data.get("base_model_name", ""), None
+        )
         gen_data = shared.performance_settings.apply(gen_data, family)
     gen_data = constrain_video_settings(gen_data, family)
 
@@ -96,7 +114,7 @@ def _process(gen_data):
         else:
             hash = None
 
-        w, l  = lora_data[1].split(" - ", 1)
+        w, l = lora_data[1].split(" - ", 1)
         if not l == "None":
             loras.append({"name": l, "weight": float(w), "hash": hash})
 
@@ -110,7 +128,7 @@ def _process(gen_data):
         )
 
     if "base_model_hash" not in gen_data:
-        gen_data["base_model_hash"] = get_checkpoint_hashes(gen_data["base_model_name"])['SHA256']
+        gen_data["base_model_hash"] = get_checkpoint_hashes(gen_data["base_model_name"])["SHA256"]
 
     pipeline.load_base_model(
         gen_data["base_model_name"],
@@ -123,10 +141,7 @@ def _process(gen_data):
     steps = gen_data["custom_steps"]
     gen_data["steps"] = steps
 
-    if (
-        gen_data["aspect_ratios_selection"]
-        == shared.resolution_settings.CUSTOM_RESOLUTION
-    ):
+    if gen_data["aspect_ratios_selection"] == shared.resolution_settings.CUSTOM_RESOLUTION:
         width, height = (gen_data["custom_width"], gen_data["custom_height"])
     else:
         width, height = shared.resolution_settings.aspect_ratios[
@@ -151,7 +166,7 @@ def _process(gen_data):
         seed = random.randint(0, max_seed)
 
     all_steps = steps * max(image_number, 1)
-    with open(resource_path('render.txt'), 'r', encoding='utf-8') as f:
+    with open(resource_path("render.txt"), "r", encoding="utf-8") as f:
         lines = f.readlines()
     status = random.choice(lines)
     status = f"{status}"
@@ -193,12 +208,9 @@ def _process(gen_data):
                 image = Image.open(y)
             else:
                 image = Image.fromarray(y)
-            grid_xpos = int(
-                (shared.state["preview_count"] % grid_xsize) * (pwidth / grid_xsize)
-            )
+            grid_xpos = int((shared.state["preview_count"] % grid_xsize) * (pwidth / grid_xsize))
             grid_ypos = int(
-                math.floor(shared.state["preview_count"] / grid_xsize)
-                * (pheight / grid_ysize)
+                math.floor(shared.state["preview_count"] / grid_xsize) * (pheight / grid_ysize)
             )
             image = image.resize((int(width / grid_max), int(height / grid_max)))
             shared.state["preview_grid"].paste(image, (grid_xpos, grid_ypos))
@@ -241,7 +253,7 @@ def _process(gen_data):
     if control_tools.get_settings(gen_data).get("preserve_details"):
         prompt_styles = []
     for i in range(max(image_number, 1)):
-        gen_data["seed"] = abs(seed) # Update seed
+        gen_data["seed"] = abs(seed)  # Update seed
         start_step = 0
         denoise = None
         with TimeIt("Pipeline process"):
@@ -280,7 +292,7 @@ def _process(gen_data):
                     add_result(gen_data["task_id"], "error", describe_error(iex))
 
         for x in imgs:
-            folder=shared.path_manager.model_paths["temp_outputs_path"]
+            folder = shared.path_manager.model_paths["temp_outputs_path"]
             local_temp_filename = generate_temp_filename(
                 folder=folder,
                 extension="png",
@@ -301,40 +313,51 @@ def _process(gen_data):
                 "scheduler": gen_data["scheduler"],
                 "base_model_name": gen_data["base_model_name"],
                 "base_model_hash": gen_data["base_model_hash"],
-                "loras": [[f"{get_lora_hashes(lora['name'])['SHA256']}", f"{lora['weight']} - {lora['name']}"] for lora in used_loras],
+                "loras": [
+                    [
+                        f"{get_lora_hashes(lora['name'])['SHA256']}",
+                        f"{lora['weight']} - {lora['name']}",
+                    ]
+                    for lora in used_loras
+                ],
                 "start_step": start_step,
                 "denoise": gen_data.get("sampling_denoise", denoise),
                 "clip_skip": gen_data["clip_skip"],
                 "comment": settings.default_settings.get("meta_comment", ""),
                 "software": "RuinedFooocus",
             }
-            if gen_data.get('image_guidance'):
+            if gen_data.get("image_guidance"):
                 # Flat effective fields round-trip through imported image
                 # metadata; the grouped form also identifies the applied recipe.
-                prompt.update(gen_data['image_guidance'])
-                prompt['image_guidance'] = dict(gen_data['image_guidance'])
-                prompt['reference_image_count'] = gen_data.get('reference_image_count', 0)
-            if gen_data.get('image_geometry'):
-                prompt['image_geometry'] = gen_data['image_geometry']
-            if gen_data.get('depth_preprocessing'):
-                prompt['depth_preprocessing'] = dict(gen_data['depth_preprocessing'])
+                prompt.update(gen_data["image_guidance"])
+                prompt["image_guidance"] = dict(gen_data["image_guidance"])
+                prompt["reference_image_count"] = gen_data.get("reference_image_count", 0)
+            if gen_data.get("image_geometry"):
+                prompt["image_geometry"] = gen_data["image_geometry"]
+            if gen_data.get("depth_preprocessing"):
+                prompt["depth_preprocessing"] = dict(gen_data["depth_preprocessing"])
             if "upscale" in pipeline.pipeline_type:
-                prompt.update(width=x.shape[1], height=x.shape[0],
-                              upscaler=control_tools.get_settings(gen_data)["upscaler"])
+                prompt.update(
+                    width=x.shape[1],
+                    height=x.shape[0],
+                    upscaler=control_tools.get_settings(gen_data)["upscaler"],
+                )
             elif gen_data.get("automatic_upscale_model"):
-                prompt.update(generation_width=prompt['width'], generation_height=prompt['height'],
-                              width=x.shape[1], height=x.shape[0],
-                              automatic_upscale=gen_data["automatic_upscale"],
-                              upscaler=gen_data["automatic_upscale_model"])
+                prompt.update(
+                    generation_width=prompt["width"],
+                    generation_height=prompt["height"],
+                    width=x.shape[1],
+                    height=x.shape[0],
+                    automatic_upscale=gen_data["automatic_upscale"],
+                    upscaler=gen_data["automatic_upscale_model"],
+                )
             metadata = PngInfo()
             metadata.add_text("parameters", json.dumps(prompt))
 
             if "preview_count" not in shared.state:
                 shared.state["preview_count"] = 0
             shared.state["preview_count"] += 1
-            if isinstance(x, str) or isinstance(
-                x, (pathlib.WindowsPath, pathlib.PosixPath)
-            ):
+            if isinstance(x, str) or isinstance(x, (pathlib.WindowsPath, pathlib.PosixPath)):
                 local_temp_filename = x
             else:
                 if not isinstance(x, Image.Image):
@@ -344,14 +367,14 @@ def _process(gen_data):
             try:
                 metadata = {
                     "parameters": json.dumps(prompt),
-                    "file_path": str(Path(local_temp_filename).relative_to(folder))
+                    "file_path": str(Path(local_temp_filename).relative_to(folder)),
                 }
                 if "browser" in shared.shared_cache:
                     shared.shared_cache["browser"].add_image(
                         local_temp_filename,
                         Path(local_temp_filename).relative_to(folder),
                         metadata,
-                        commit=True
+                        commit=True,
                     )
             except:
                 pass
@@ -365,6 +388,7 @@ def _process(gen_data):
         if stop_batch:
             break
     return res
+
 
 def preload_startup_model():
     if not settings.default_settings.get("preload_image_model", False):
@@ -434,18 +458,15 @@ def worker():
 
         # Prepend preview-grid (maybe)
         if (
-            "preview_grid" in shared.state and 
-            shared.state["preview_grid"] is not None
+            "preview_grid" in shared.state
+            and shared.state["preview_grid"] is not None
             and shared.state["preview_total"] > 1
             and ("show_preview" not in gen_data or gen_data["show_preview"] == True)
             and not gen_data["generate_forever"]
         ):
-            results = [
-                shared.path_manager.model_paths["temp_preview_path"]
-            ] + results
+            results = [shared.path_manager.model_paths["temp_preview_path"]] + results
 
         outputs.append([gen_data["task_id"], "results", results])
-
 
     def txt2txt_process(gen_data):
 
@@ -467,15 +488,15 @@ def worker():
 
         outputs.append([gen_data["task_id"], "results", results])
 
-
     def handler(gen_data):
         from ruinedfooocus.features.image_processing.auxiliary_resources import release_except
+
         group = None
-        if gen_data['task_type'] == 'external_api':
-            group = getattr(gen_data['_api_job'].operation, 'resource_group', None)
-        elif gen_data['task_type'] == 'process':
+        if gen_data["task_type"] == "external_api":
+            group = getattr(gen_data["_api_job"].operation, "resource_group", None)
+        elif gen_data["task_type"] == "process":
             control = control_tools.get_settings(gen_data) or {}
-            group = 'rembg' if control.get('type') == 'rembg' else None
+            group = "rembg" if control.get("type") == "rembg" else None
         release_except(group)
         match gen_data["task_type"]:
             case "external_api":
@@ -501,7 +522,11 @@ def worker():
                 if "_api_job" in task:
                     task["_api_job"].events.put(("error", "Generation stopped."))
                 elif task.get("task_type") == "llama":
-                    add_result(task["task_id"], "results", {"error": "The operation was stopped. You can retry."})
+                    add_result(
+                        task["task_id"],
+                        "results",
+                        {"error": "The operation was stopped. You can retry."},
+                    )
                 else:
                     add_result(task["task_id"], "results", [])
             except Exception as error:
@@ -527,6 +552,7 @@ def worker():
                     # Cleanup must not kill the worker after a recoverable failure.
                     traceback.print_exc()
 
+
 # Use this to add a task, then use task_result() to get data from the pipeline
 def add_task(gen_data):
     global current_task, buffer
@@ -541,6 +567,7 @@ def add_task(gen_data):
         buffer.append(gen_data.copy())
     return task_id
 
+
 # Pipelines use this to add results
 def add_result(task_id, flag, product):
     global outputs
@@ -548,23 +575,30 @@ def add_result(task_id, flag, product):
         return
     outputs.append([task_id, flag, product])
 
+
 # Use the task_id from add_task() to wait for data
 def task_result(task_id):
     global outputs
 
     while True:
-        if (worker_thread is None or not worker_thread.is_alive()) and not any(res[0] == task_id for res in outputs):
-            raise RuntimeError("The task worker stopped unexpectedly. Retry to restart it; see the terminal for details.")
+        if (worker_thread is None or not worker_thread.is_alive()) and not any(
+            res[0] == task_id for res in outputs
+        ):
+            raise RuntimeError(
+                "The task worker stopped unexpectedly. Retry to restart it; see the terminal for details."
+            )
         if not outputs:
             # Throttle check/updates
             time.sleep(settings.default_settings.get("update_interval", 0.1))
             continue
 
-        matches = [res for res in outputs if res[0] == task_id] 
+        matches = [res for res in outputs if res[0] == task_id]
 
         if matches:
             flag = "preview"
-            while len(matches) and flag == "preview": # If we have a bunch of replies, skip the previews
+            while (
+                len(matches) and flag == "preview"
+            ):  # If we have a bunch of replies, skip the previews
                 id, flag, product = matches.pop(0)
                 outputs.remove([id, flag, product])
             break

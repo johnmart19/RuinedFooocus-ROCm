@@ -42,11 +42,14 @@ class pipeline:
         if not os.path.isfile(model_path):
             raise FileNotFoundError(f"Upscaler not found: {model_name}")
         signature = file_signature(model_path)
-        if signature == getattr(self, 'upscaler_file_signature', None):
+        if signature == getattr(self, "upscaler_file_signature", None):
             return self.upscaler_model
         from comfy_extras.nodes_upscale_model import UpscaleModelLoader
+
         model_path = Path(model_path)
-        folder_paths.add_model_folder_path("upscale_models", str(model_path.parent), is_default=True)
+        folder_paths.add_model_folder_path(
+            "upscale_models", str(model_path.parent), is_default=True
+        )
         out = UpscaleModelLoader.execute(model_path.name)[0]
         self.upscaler_model = out
         self.upscaler_file_signature = signature
@@ -76,11 +79,7 @@ class pipeline:
         input_image = np.array(input_image).astype(np.float32) / 255.0
         input_image = torch.from_numpy(input_image)[None,]
 
-        worker.add_result(
-            gen_data["task_id"],
-            "preview",
-            (-1, f"Load upscaling model ...", None)
-        )
+        worker.add_result(gen_data["task_id"], "preview", (-1, f"Load upscaling model ...", None))
 
         cn_settings = controlnet.get_settings(gen_data)
         upscaler_name = cn_settings.get("upscaler")
@@ -90,8 +89,9 @@ class pipeline:
         upscaler_model = self.load_upscaler_model(upscaler_name)
         worker.add_result(gen_data["task_id"], "preview", (-1, "Upscaling image ...", None))
         from comfy_extras.nodes_upscale_model import ImageUpscaleWithModel
+
         decoded = ImageUpscaleWithModel.execute(
-            InterruptibleUpscaler(upscaler_model, gen_data), input_image)[0]
+            InterruptibleUpscaler(upscaler_model, gen_data), input_image
+        )[0]
         worker.check_interrupt(gen_data)
-        return [np.clip(255.0 * image.cpu().numpy(), 0, 255).astype(np.uint8)
-                for image in decoded]
+        return [np.clip(255.0 * image.cpu().numpy(), 0, 255).astype(np.uint8) for image in decoded]

@@ -1,4 +1,5 @@
 from ruinedfooocus.core.paths import asset_path, resource_path
+
 """Prompt-rewrite presets and their output handling, without loading a model."""
 import ast
 from pathlib import Path
@@ -9,9 +10,15 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def helpers():
-    tree = ast.parse((ROOT / "ruinedfooocus/features/chat/llama_pipeline.py").read_text(encoding="utf-8"))
-    nodes = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in ("clean_rewrite", "restore_tags")]
-    scope = {'asset_path': asset_path, 'resource_path': resource_path, "re": re}
+    tree = ast.parse(
+        (ROOT / "ruinedfooocus/features/chat/llama_pipeline.py").read_text(encoding="utf-8")
+    )
+    nodes = [
+        n
+        for n in tree.body
+        if isinstance(n, ast.FunctionDef) and n.name in ("clean_rewrite", "restore_tags")
+    ]
+    scope = {"asset_path": asset_path, "resource_path": resource_path, "re": re}
     exec(compile(ast.Module(body=nodes, type_ignores=[]), "llama_pipeline", "exec"), scope)
     return scope["clean_rewrite"], scope["restore_tags"]
 
@@ -21,14 +28,16 @@ class RewriteOutputTests(unittest.TestCase):
         clean, _ = helpers()
         self.assertEqual(clean('Output: "a fox in the snow"'), "a fox in the snow")
         self.assertEqual(clean("  'a fox'  "), "a fox")
-        self.assertEqual(clean("a \"quoted\" word stays"), 'a "quoted" word stays')
+        self.assertEqual(clean('a "quoted" word stays'), 'a "quoted" word stays')
         self.assertEqual(clean(None), "")
         self.assertEqual(clean("close‑up, low–angle"), "close-up, low-angle")
 
     def test_dropped_lora_and_style_tags_are_restored_once(self):
         _, restore = helpers()
         original = "a fox <lora:detail:0.5> in snow <style:Cinematic> <lora:detail:0.5>"
-        self.assertEqual(restore(original, "Solitude"), "Solitude <lora:detail:0.5> <style:Cinematic>")
+        self.assertEqual(
+            restore(original, "Solitude"), "Solitude <lora:detail:0.5> <style:Cinematic>"
+        )
         kept = "a red fox, dusk <lora:detail:0.5> <style:Cinematic>"
         self.assertEqual(restore(original, kept), kept)
         self.assertEqual(restore("no tags here", "rewritten,"), "rewritten,")
@@ -38,19 +47,37 @@ class RewriteReasoningTests(unittest.TestCase):
     def test_setting_maps_to_template_kwargs_and_rejects_unknown_values(self):
         from types import SimpleNamespace
         from ruinedfooocus.core.settings_validation import validate_settings
-        tree = ast.parse((ROOT / "ruinedfooocus/features/chat/llama_pipeline.py").read_text(encoding="utf-8"))
-        node = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "rewrite_template_kwargs")
+
+        tree = ast.parse(
+            (ROOT / "ruinedfooocus/features/chat/llama_pipeline.py").read_text(encoding="utf-8")
+        )
+        node = next(
+            n
+            for n in tree.body
+            if isinstance(n, ast.FunctionDef) and n.name == "rewrite_template_kwargs"
+        )
         settings = SimpleNamespace(default_settings={})
-        scope = {'asset_path': asset_path, 'resource_path': resource_path, "settings": settings}
+        scope = {"asset_path": asset_path, "resource_path": resource_path, "settings": settings}
         exec(compile(ast.Module(body=[node], type_ignores=[]), "llama_pipeline", "exec"), scope)
-        cases = {None: ("low", False), "Low": ("low", False), "Medium": ("medium", True),
-                 "High": ("high", True), "bogus": ("low", False)}
+        cases = {
+            None: ("low", False),
+            "Low": ("low", False),
+            "Medium": ("medium", True),
+            "High": ("high", True),
+            "bogus": ("low", False),
+        }
         for value, (effort, thinking) in cases.items():
             with self.subTest(value=value):
-                settings.default_settings = {} if value is None else {"llm_rewrite_reasoning": value}
-                self.assertEqual(scope["rewrite_template_kwargs"](),
-                                 {"reasoning_effort": effort, "enable_thinking": thinking})
-        self.assertEqual(validate_settings({"llm_rewrite_reasoning": "High"})["llm_rewrite_reasoning"], "High")
+                settings.default_settings = (
+                    {} if value is None else {"llm_rewrite_reasoning": value}
+                )
+                self.assertEqual(
+                    scope["rewrite_template_kwargs"](),
+                    {"reasoning_effort": effort, "enable_thinking": thinking},
+                )
+        self.assertEqual(
+            validate_settings({"llm_rewrite_reasoning": "High"})["llm_rewrite_reasoning"], "High"
+        )
         with self.assertRaises(ValueError):
             validate_settings({"llm_rewrite_reasoning": "Extreme"})
 

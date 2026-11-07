@@ -40,8 +40,8 @@ class OneButtonPresets:
 
         # Sanity check
         for name, settings in data.items():
-            if settings['subject'] == '------ all':
-                settings['subject'] = 'all'
+            if settings["subject"] == "------ all":
+                settings["subject"] = "all"
             # Upgrade unchanged bundled anime text, preserving custom preset edits.
             if name in ("Waifu's", "Husbando's"):
                 bundled = default_data.get(name, {})

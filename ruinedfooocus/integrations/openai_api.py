@@ -40,10 +40,21 @@ class ChatRequest(BaseModel):
                     if item["type"] == "text" and not isinstance(item.get("text"), str):
                         raise ValueError("Text content requires a text string.")
                     if item["type"] == "image_url":
-                        url = item.get("image_url", {}).get("url") if isinstance(item.get("image_url"), dict) else None
-                        if message["role"] != "user" or not isinstance(url, str) or not url.startswith("data:image/"):
-                            raise ValueError("Vision inputs must be user messages with base64 image data URLs.")
+                        url = (
+                            item.get("image_url", {}).get("url")
+                            if isinstance(item.get("image_url"), dict)
+                            else None
+                        )
+                        if (
+                            message["role"] != "user"
+                            or not isinstance(url, str)
+                            or not url.startswith("data:image/")
+                        ):
+                            raise ValueError(
+                                "Vision inputs must be user messages with base64 image data URLs."
+                            )
                         from ruinedfooocus.app.api_runtime import decode_image
+
                         decode_image(url)
             elif content is not None and not isinstance(content, str):
                 raise ValueError("Message content must be text.")
@@ -59,14 +70,18 @@ class ControlNetRequest(BaseModel):
     edge_low: float = Field(default=0.2, ge=0, le=1)
     edge_high: float = Field(default=0.8, ge=0, le=1)
     denoise: float = Field(default=0.25, gt=0, le=1)
-    force: bool = Field(default=False, description='Reprocess transparent images with background removal.')
-    depth_preprocess: Literal['auto', 'none'] = Field(default='auto',
-        description='Auto estimates a depth map from the input photo; none uses an uploaded depth map.')
-    depth_model: Literal['auto','small','base'] = 'auto'
+    force: bool = Field(
+        default=False, description="Reprocess transparent images with background removal."
+    )
+    depth_preprocess: Literal["auto", "none"] = Field(
+        default="auto",
+        description="Auto estimates a depth map from the input photo; none uses an uploaded depth map.",
+    )
+    depth_model: Literal["auto", "small", "base"] = "auto"
     depth_resolution: int = Field(default=504, ge=140, le=2520, multiple_of=14)
-    depth_resize_method: Literal['upper_bound_resize', 'lower_bound_resize'] = 'upper_bound_resize'
-    depth_normalization: Literal['v2_style', 'min_max'] = 'v2_style'
-    depth_dtype: Literal['default', 'fp16', 'bf16', 'fp32'] = 'default'
+    depth_resize_method: Literal["upper_bound_resize", "lower_bound_resize"] = "upper_bound_resize"
+    depth_normalization: Literal["v2_style", "min_max"] = "v2_style"
+    depth_dtype: Literal["default", "fp16", "bf16", "fp32"] = "default"
 
 
 MAX_IMAGE_PROMPT_CHARS = 131072
@@ -74,12 +89,21 @@ MAX_IMAGE_PROMPT_CHARS = 131072
 
 class ImageRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    prompt: str = Field(default="", max_length=MAX_IMAGE_PROMPT_CHARS,
-                        description="Complete visual description, up to 131072 characters. Native encoder chunking/context and available memory still apply. Put output dimensions in size, not only in this text.")
-    model: str = Field(default="image/default", description="Use image/default for the selected checkpoint, or an image/ ID from available_models. Do not use chat model IDs.")
+    prompt: str = Field(
+        default="",
+        max_length=MAX_IMAGE_PROMPT_CHARS,
+        description="Complete visual description, up to 131072 characters. Native encoder chunking/context and available memory still apply. Put output dimensions in size, not only in this text.",
+    )
+    model: str = Field(
+        default="image/default",
+        description="Use image/default for the selected checkpoint, or an image/ ID from available_models. Do not use chat model IDs.",
+    )
     n: int = Field(default=1, ge=1, le=4)
-    size: str | None = Field(default=None, pattern=r"^(auto|[0-9]+x[0-9]+)$",
-        description="Output WIDTHxHEIGHT; omit to inherit Main's size. Multiples of 8, 64–2048 per side; HiDream O1 allows up to 4096 per side within 4 megapixels.")
+    size: str | None = Field(
+        default=None,
+        pattern=r"^(auto|[0-9]+x[0-9]+)$",
+        description="Output WIDTHxHEIGHT; omit to inherit Main's size. Multiples of 8, 64–2048 per side; HiDream O1 allows up to 4096 per side within 4 megapixels.",
+    )
     response_format: Literal["url", "b64_json"] = "url"
     negative_prompt: str | None = Field(default=None, max_length=MAX_IMAGE_PROMPT_CHARS)
     performance: str | None = None
@@ -90,12 +114,17 @@ class ImageRequest(BaseModel):
     clip_skip: int | None = Field(default=None, ge=1, le=12)
     seed: int | None = Field(default=None, ge=-1, le=4294967295)
     user: str | None = None
-    input_image: str | None = Field(default=None, max_length=28000000,
-                                    description="Base64 image, image data URL, or unexpired image URL returned by this API. No arbitrary URLs or file paths.")
+    input_image: str | None = Field(
+        default=None,
+        max_length=28000000,
+        description="Base64 image, image data URL, or unexpired image URL returned by this API. No arbitrary URLs or file paths.",
+    )
     controlnet: ControlNetRequest | None = None
     styles: list[str] | None = None
     loras: list["LoraRequest"] | None = None
-    moss_image_edit_format: Literal['Disabled', 'ai-toolkit', 'ai-toolkit (kv_cache off)', 'Moss-Image-Edit'] | None = None
+    moss_image_edit_format: (
+        Literal["Disabled", "ai-toolkit", "ai-toolkit (kv_cache off)", "Moss-Image-Edit"] | None
+    ) = None
     moss_image_edit_strength: float | None = Field(default=None, ge=0, le=100, allow_inf_nan=False)
     moss_image_slg: bool | None = None
     moss_image_slg_double_layers: str | None = Field(default=None, max_length=1024)
@@ -104,28 +133,49 @@ class ImageRequest(BaseModel):
     moss_image_slg_end: float | None = Field(default=None, ge=0, le=1, allow_inf_nan=False)
     sampling_shift: float | None = Field(default=None, ge=0.01, le=100, allow_inf_nan=False)
     cfg_norm_strength: float | None = Field(default=None, ge=0, le=100, allow_inf_nan=False)
-    cfg_norm_pre_cfg: bool | None = Field(default=None,
-        description='Normalize before CFG when normalization strength is set; may amplify guidance.')
+    cfg_norm_pre_cfg: bool | None = Field(
+        default=None,
+        description="Normalize before CFG when normalization strength is set; may amplify guidance.",
+    )
     hidream_o1_noise_scale: float | None = Field(default=None, ge=0, le=64, allow_inf_nan=False)
-    hidream_o1_seam_smoothing: bool | None = Field(default=None,
-        description='Auto enables seams for full O1 and disables them for dev; true/false explicitly overrides Auto.')
+    hidream_o1_seam_smoothing: bool | None = Field(
+        default=None,
+        description="Auto enables seams for full O1 and disables them for dev; true/false explicitly overrides Auto.",
+    )
     hidream_o1_seam_start: float | None = Field(default=None, ge=0, le=1, allow_inf_nan=False)
     hidream_o1_seam_end: float | None = Field(default=None, ge=0, le=1, allow_inf_nan=False)
-    hidream_o1_seam_pattern: Literal['single_shift','symmetric'] | None = None
-    hidream_o1_seam_passes: Literal['2','4','ramp_2_4','ramp_2_4_8'] | None = None
-    hidream_o1_seam_blend: Literal['average','window','median'] | None = None
+    hidream_o1_seam_pattern: Literal["single_shift", "symmetric"] | None = None
+    hidream_o1_seam_passes: Literal["2", "4", "ramp_2_4", "ramp_2_4_8"] | None = None
+    hidream_o1_seam_blend: Literal["average", "window", "median"] | None = None
     hidream_o1_seam_strength: float | None = Field(default=None, ge=0, le=1, allow_inf_nan=False)
     lcm_noise: float | None = Field(default=None, ge=0, le=64, allow_inf_nan=False)
     lcm_noise_end: float | None = Field(default=None, ge=0, le=64, allow_inf_nan=False)
     lcm_noise_clip: float | None = Field(default=None, ge=0, le=10, allow_inf_nan=False)
-    image_resize_mode: Literal['preserve', 'crop'] | None = Field(default=None,
-        description='Preserve keeps the full input frame and only downscales to the working pixel budget. Crop fills an explicitly selected size without stretching.')
-    vae_tiled: bool | None = Field(default=None, description='Force native tiled VAE decoding. Auto also tiles when the image exceeds VRAM.')
-    vae_tile_size: int | None = Field(default=None, ge=64, le=4096, multiple_of=32,
-        description='VAE tile edge in pixels; omit for automatic VRAM fitting.')
-    vae_overlap: int | None = Field(default=None, ge=0, le=4096, multiple_of=32,
-        description='VAE tile overlap in pixels; omit for the native default.')
-    reference_images: list[Annotated[str, Field(max_length=28000000)]] | None = Field(default=None, max_length=15)
+    image_resize_mode: Literal["preserve", "crop"] | None = Field(
+        default=None,
+        description="Preserve keeps the full input frame and only downscales to the working pixel budget. Crop fills an explicitly selected size without stretching.",
+    )
+    vae_tiled: bool | None = Field(
+        default=None,
+        description="Force native tiled VAE decoding. Auto also tiles when the image exceeds VRAM.",
+    )
+    vae_tile_size: int | None = Field(
+        default=None,
+        ge=64,
+        le=4096,
+        multiple_of=32,
+        description="VAE tile edge in pixels; omit for automatic VRAM fitting.",
+    )
+    vae_overlap: int | None = Field(
+        default=None,
+        ge=0,
+        le=4096,
+        multiple_of=32,
+        description="VAE tile overlap in pixels; omit for the native default.",
+    )
+    reference_images: list[Annotated[str, Field(max_length=28000000)]] | None = Field(
+        default=None, max_length=15
+    )
 
 
 class LoraRequest(BaseModel):
@@ -162,9 +212,13 @@ class ReviewRequest(BaseModel):
 
 def create_apps(backend, key=None):
     bearer = HTTPBearer(auto_error=False)
+
     def authorize(credentials: HTTPAuthorizationCredentials | None = Depends(bearer)):
-        if key and (credentials is None or not secrets.compare_digest(credentials.credentials, key)):
+        if key and (
+            credentials is None or not secrets.compare_digest(credentials.credentials, key)
+        ):
             raise HTTPException(401, "Invalid API key.", headers={"WWW-Authenticate": "Bearer"})
+
     api = FastAPI(title="RuinedFooocus API", version="1", dependencies=[Depends(authorize)])
     tools = FastAPI(title="RuinedFooocus tools", version="1", dependencies=[Depends(authorize)])
     assets = {}
@@ -175,17 +229,33 @@ def create_apps(backend, key=None):
             token = path.removeprefix("/v1/images/")
             entry = assets.get(token) if path.startswith("/v1/images/") else None
             if entry is None or time.time() - entry[1] > 86400 or not entry[0].is_file():
-                raise HTTPException(400, "Use an image data URL or an unexpired image URL returned by this API.")
+                raise HTTPException(
+                    400, "Use an image data URL or an unexpired image URL returned by this API."
+                )
             if entry[0].stat().st_size > 21000000:
                 raise HTTPException(400, "Input image exceeds the size limit.")
             return base64.b64encode(entry[0].read_bytes()).decode()
         return value
 
     async def http_error(request, error):
-        return JSONResponse({"error": {"message": str(error.detail), "type": "invalid_request_error",
-                                       "code": error.status_code}}, status_code=error.status_code, headers=error.headers)
+        return JSONResponse(
+            {
+                "error": {
+                    "message": str(error.detail),
+                    "type": "invalid_request_error",
+                    "code": error.status_code,
+                }
+            },
+            status_code=error.status_code,
+            headers=error.headers,
+        )
+
     async def validation_error(request, error):
-        return JSONResponse({"error": {"message": str(error), "type": "invalid_request_error", "code": 400}}, status_code=400)
+        return JSONResponse(
+            {"error": {"message": str(error), "type": "invalid_request_error", "code": 400}},
+            status_code=400,
+        )
+
     for app in (api, tools):
         app.add_exception_handler(HTTPException, http_error)
         app.add_exception_handler(RequestValidationError, validation_error)
@@ -229,8 +299,15 @@ def create_apps(backend, key=None):
     @api.get("/models")
     @tools.get("/models", operation_id="available_models")
     def list_models():
-        return {"object": "list", "data": [dict(id=name, object="model", created=0,
-                owned_by="ruinedfooocus", type=info["kind"]) for name, info in backend.models().items()]}
+        return {
+            "object": "list",
+            "data": [
+                dict(
+                    id=name, object="model", created=0, owned_by="ruinedfooocus", type=info["kind"]
+                )
+                for name, info in backend.models().items()
+            ],
+        }
 
     @api.get("/capabilities")
     @tools.get("/capabilities", operation_id="generation_settings")
@@ -244,15 +321,25 @@ def create_apps(backend, key=None):
         payload["model"] = model
         job = submit(backend.chat, payload, selected)
         if body.stream:
+
             async def stream():
                 try:
                     async for kind, value in events(job, request):
                         if kind == "chunk":
                             yield "data: " + json.dumps(value) + "\n\n"
                 except HTTPException as error:
-                    yield "data: " + json.dumps({"error": {"message": error.detail, "code": error.status_code}}) + "\n\n"
+                    yield (
+                        "data: "
+                        + json.dumps(
+                            {"error": {"message": error.detail, "code": error.status_code}}
+                        )
+                        + "\n\n"
+                    )
                 yield "data: [DONE]\n\n"
-            return StreamingResponse(stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
+
+            return StreamingResponse(
+                stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"}
+            )
         async for kind, value in events(job, request):
             if kind == "result":
                 return value
@@ -264,13 +351,16 @@ def create_apps(backend, key=None):
         payload = body.model_dump(exclude_none=True)
         # Explicit null selects Auto/Off; omission inherits the UI/default snapshot.
         from ruinedfooocus.features.image_editing.image_guidance import FIELD_SCHEMA
+
         for key, spec in FIELD_SCHEMA.items():
-            if spec['default'] is None and key in body.model_fields_set:
+            if spec["default"] is None and key in body.model_fields_set:
                 payload[key] = getattr(body, key)
         if payload.get("input_image"):
             payload["input_image"] = inline_image(payload["input_image"])
-        if payload.get('reference_images'):
-            payload['reference_images'] = [inline_image(value) for value in payload['reference_images']]
+        if payload.get("reference_images"):
+            payload["reference_images"] = [
+                inline_image(value) for value in payload["reference_images"]
+            ]
         job = submit(operation, payload, selected)
         async for kind, value in events(job, request):
             if kind != "result":
@@ -307,11 +397,15 @@ def create_apps(backend, key=None):
             if len(uploads) != 1 or not hasattr(uploads[0], "read"):
                 raise HTTPException(400, "Upload exactly one image using image or image[].")
             if "mask" in form:
-                raise HTTPException(400, "Mask editing is not supported by this endpoint; use image-to-image.")
+                raise HTTPException(
+                    400, "Mask editing is not supported by this endpoint; use image-to-image."
+                )
             raw = await uploads[0].read(21000001)
             if len(raw) > 21000000:
                 raise HTTPException(400, "Input image exceeds the size limit.")
-            values = {name: value for name, value in form.items() if name not in ("image", "image[]")}
+            values = {
+                name: value for name, value in form.items() if name not in ("image", "image[]")
+            }
             for name in ("styles", "loras", "controlnet", "reference_images"):
                 if name in values:
                     try:
@@ -366,9 +460,14 @@ def create_apps(backend, key=None):
         entry = assets.get(token)
         if entry is None or time.time() - entry[1] > 86400 or not entry[0].is_file():
             raise HTTPException(404, "Image URL expired or was not found.")
-        return FileResponse(entry[0], media_type=mimetypes.guess_type(entry[0].name)[0] or "application/octet-stream")
+        return FileResponse(
+            entry[0],
+            media_type=mimetypes.guess_type(entry[0].name)[0] or "application/octet-stream",
+        )
+
     # A separate router avoids inheriting the bearer dependency for capability URLs.
     from fastapi import APIRouter
+
     media = APIRouter()
     media.add_api_route("/images/{token}", image_file, methods=["GET"], include_in_schema=False)
     api.router.routes.extend(media.routes)
@@ -385,6 +484,7 @@ def validate_options(args):
 
 def install(app, key=None):
     import ruinedfooocus.app.api_runtime as api_runtime
+
     api, tools = create_apps(api_runtime, key)
     app.mount("/v1", api)
     app.mount("/tools", tools)

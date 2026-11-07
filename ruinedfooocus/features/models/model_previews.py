@@ -1,4 +1,5 @@
 from ruinedfooocus.core.paths import asset_path
+
 """Decode model artwork before publishing a bounded, animation-safe cache file."""
 
 import io
@@ -24,7 +25,7 @@ def valid_preview(path):
 
 def is_warning(path):
     path = Path(path)
-    for warning in (Path(str(asset_path('warning.jpeg'))), Path(str(asset_path('warning.png')))):
+    for warning in (Path(str(asset_path("warning.jpeg"))), Path(str(asset_path("warning.png")))):
         if (
             warning.is_file()
             and path.is_file()
@@ -69,9 +70,7 @@ def write_preview(data, cache_path, caption="", video=False):
         raise ValueError("Preview contains no decodable frames")
     destination = cache_path.with_suffix(".gif" if len(frames) > 1 else ".jpeg")
     destination.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary = tempfile.mkstemp(
-        dir=destination.parent, suffix=destination.suffix
-    )
+    descriptor, temporary = tempfile.mkstemp(dir=destination.parent, suffix=destination.suffix)
     os.close(descriptor)
     try:
         if len(frames) > 1:

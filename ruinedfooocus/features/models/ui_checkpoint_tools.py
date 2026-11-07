@@ -1,4 +1,5 @@
 from ruinedfooocus.core.paths import asset_path
+
 """Local checkpoint actions for the Main Model tab."""
 
 import filecmp
@@ -24,9 +25,14 @@ def _selected(name):
 def _preview(path):
     cached = shared.models.cache_paths["checkpoints"] / path.name
     for suffix in (".jpg", ".jpeg", ".png", ".gif"):
-        for candidate in (cached.with_suffix(suffix), path.with_suffix(".preview" + suffix),
-                          path.with_suffix(suffix)):
-            if candidate.is_file() and not filecmp.cmp(candidate, str(asset_path('warning.jpeg')), shallow=False):
+        for candidate in (
+            cached.with_suffix(suffix),
+            path.with_suffix(".preview" + suffix),
+            path.with_suffix(suffix),
+        ):
+            if candidate.is_file() and not filecmp.cmp(
+                candidate, str(asset_path("warning.jpeg")), shallow=False
+            ):
                 return candidate
 
 
@@ -34,8 +40,9 @@ def run_action(name, action, progress):
     try:
         path, info = _selected(name)
         if action == "convert":
-            result = tools.create_fp16_copy(path, shared.models.cache_paths["checkpoints"],
-                                            info, _preview(path), progress)
+            result = tools.create_fp16_copy(
+                path, shared.models.cache_paths["checkpoints"], info, _preview(path), progress
+            )
             if result["path"]:
                 destination = result["path"]
                 new_name = str(Path(name).with_name(destination.name))
@@ -61,13 +68,22 @@ def run_action(name, action, progress):
 def create_ui(base_model, visible=True):
     with gr.Column(visible=visible, elem_id="checkpoint-tools") as group:
         names = shared.models.get_names("checkpoints")
-        selected = gr.Dropdown(label="Available checkpoints", choices=names,
-                               value=base_model.value if base_model.value in names else None)
-        selected.focus(lambda: gr.update(choices=shared.models.get_names("checkpoints")),
-                       outputs=selected, api_visibility="undocumented")
-        base_model.change(lambda name: gr.update(choices=shared.models.get_names("checkpoints"), value=name),
-                          inputs=base_model, outputs=selected,
-                          api_visibility="undocumented")
+        selected = gr.Dropdown(
+            label="Available checkpoints",
+            choices=names,
+            value=base_model.value if base_model.value in names else None,
+        )
+        selected.focus(
+            lambda: gr.update(choices=shared.models.get_names("checkpoints")),
+            outputs=selected,
+            api_visibility="undocumented",
+        )
+        base_model.change(
+            lambda name: gr.update(choices=shared.models.get_names("checkpoints"), value=name),
+            inputs=base_model,
+            outputs=selected,
+            api_visibility="undocumented",
+        )
         gr.Markdown("FP16 copies keep the original. Conversion is lossy; FP8/BF16 stay unchanged.")
         with gr.Row(equal_height=True):
             inspect = gr.Button("Inspect", min_width=100)
@@ -87,18 +103,33 @@ def create_ui(base_model, visible=True):
             return message, gr.update(choices=shared.models.get_names("checkpoints"))
 
         for button, callback in ((inspect, inspect_selected), (check, check_selected)):
-            button.click(callback, inputs=selected, outputs=report,
-                         concurrency_id="checkpoint_tools", concurrency_limit=1,
-                         api_visibility="undocumented")
-        convert.click(convert_selected, inputs=selected, outputs=[report, selected],
-                      concurrency_id="checkpoint_tools", concurrency_limit=1,
-                      api_visibility="undocumented")
+            button.click(
+                callback,
+                inputs=selected,
+                outputs=report,
+                concurrency_id="checkpoint_tools",
+                concurrency_limit=1,
+                api_visibility="undocumented",
+            )
+        convert.click(
+            convert_selected,
+            inputs=selected,
+            outputs=[report, selected],
+            concurrency_id="checkpoint_tools",
+            concurrency_limit=1,
+            api_visibility="undocumented",
+        )
 
         def selection_report(name):
             # Inspection reads only the header, so show it instead of an empty report.
             return run_action(name, "inspect", lambda *_: None) if name else ""
 
-        selected.change(selection_report, inputs=selected, outputs=report,
-                        concurrency_id="checkpoint_tools", concurrency_limit=1,
-                        api_visibility="undocumented")
+        selected.change(
+            selection_report,
+            inputs=selected,
+            outputs=report,
+            concurrency_id="checkpoint_tools",
+            concurrency_limit=1,
+            api_visibility="undocumented",
+        )
     return group

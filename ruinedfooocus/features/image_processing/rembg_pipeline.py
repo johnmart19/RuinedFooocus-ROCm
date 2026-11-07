@@ -17,18 +17,20 @@ class pipeline:
         check_cancelled=None,
         **rembg_kwargs,
     ) -> PIL.Image.Image:
-        do_remove = force or not (image.has_transparency_data and image.convert('RGBA').getextrema()[3][0] < 255)
+        do_remove = force or not (
+            image.has_transparency_data and image.convert("RGBA").getextrema()[3][0] < 255
+        )
         if do_remove:
             if rembg_session is None:
-                if getattr(self, '_rembg_session', None) is None:
+                if getattr(self, "_rembg_session", None) is None:
                     self._rembg_session = new_session(cpu=args.cpu)
                 rembg_session = self._rembg_session
-            if hasattr(rembg_session, 'check_cancelled'):
+            if hasattr(rembg_session, "check_cancelled"):
                 rembg_session.check_cancelled = check_cancelled
             try:
                 image = rembg.remove(image, session=rembg_session, **rembg_kwargs)
             finally:
-                if hasattr(rembg_session, 'check_cancelled'):
+                if hasattr(rembg_session, "check_cancelled"):
                     rembg_session.check_cancelled = None
         return image
 
@@ -40,8 +42,8 @@ class pipeline:
         gen_data["original_image_number"] = gen_data["image_number"]
         gen_data["image_number"] = 1
         gen_data["show_preview"] = False
-        if gen_data.get('input_image') is not None:
-            gen_data['width'], gen_data['height'] = gen_data['input_image'].size
+        if gen_data.get("input_image") is not None:
+            gen_data["width"], gen_data["height"] = gen_data["input_image"].size
         return gen_data
 
     def load_base_model(self, name, hash=None):
@@ -55,23 +57,20 @@ class pipeline:
         gen_data=None,
         callback=None,
     ):
-        image = gen_data.get('input_image')
+        image = gen_data.get("input_image")
         if image is None:
-            raise ValueError('Add an image in Image tools to remove its background.')
+            raise ValueError("Add an image in Image tools to remove its background.")
         worker.check_interrupt(gen_data)
         options = get_settings(gen_data)
-        force = options.get('force', False)
-        if gen_data.get('controlnet') is None:
-            force = gen_data.get('rembg_force', force)
+        force = options.get("force", False)
+        if gen_data.get("controlnet") is None:
+            force = gen_data.get("rembg_force", force)
 
-        worker.add_result(
-            gen_data["task_id"],
-            "preview",
-            (-1, f"Removing background ...", None)
+        worker.add_result(gen_data["task_id"], "preview", (-1, f"Removing background ...", None))
+
+        image = self.remove_background(
+            image, force=force, check_cancelled=lambda: worker.check_interrupt(gen_data)
         )
-
-        image = self.remove_background(image, force=force,
-                                       check_cancelled=lambda: worker.check_interrupt(gen_data))
         worker.check_interrupt(gen_data)
 
         # Return finished image to preview

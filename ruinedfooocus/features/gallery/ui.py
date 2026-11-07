@@ -2,16 +2,29 @@ import gradio as gr
 import json
 from ruinedfooocus.app.state import translate, get_ctrl
 from ruinedfooocus.features.gallery.imagebrowser import ImageBrowser
-from ruinedfooocus.features.image_editing.image_guidance import FIELD_SCHEMA, capabilities, restore_guidance_metadata, resolve_guidance
+from ruinedfooocus.features.image_editing.image_guidance import (
+    FIELD_SCHEMA,
+    capabilities,
+    restore_guidance_metadata,
+    resolve_guidance,
+)
 
 browser = ImageBrowser()
 t = translate
 
 METADATA_CONTROLS = {
-    "prompt": "prompt", "negative": "negative", "steps": "custom_steps",
-    "cfg": "cfg", "sampler_name": "sampler_name", "scheduler": "scheduler",
-    "clip_skip": "clip_skip", "width": "custom_width", "height": "custom_height",
-    "seed": "seed", "video_duration": "video_duration", "video_fps": "video_fps",
+    "prompt": "prompt",
+    "negative": "negative",
+    "steps": "custom_steps",
+    "cfg": "cfg",
+    "sampler_name": "sampler_name",
+    "scheduler": "scheduler",
+    "clip_skip": "clip_skip",
+    "width": "custom_width",
+    "height": "custom_height",
+    "seed": "seed",
+    "video_duration": "video_duration",
+    "video_fps": "video_fps",
 }
 
 
@@ -28,22 +41,31 @@ def apply_metadata(metadata, checkpoint, preset):
     data = {key.lower(): value for key, value in metadata.items()}
     if "prompt" not in data:
         raise gr.Error("This file has no saved prompt.")
-    if not isinstance(data['prompt'], str):
-        raise gr.Error('Image metadata needs a text prompt.')
+    if not isinstance(data["prompt"], str):
+        raise gr.Error("Image metadata needs a text prompt.")
     # Saved width/height describe the final file; sampling must use the native size.
     data["width"] = data.get("generation_width", data.get("width"))
     data["height"] = data.get("generation_height", data.get("height"))
-    updates = {get_ctrl(target): gr.update(value=data[key])
-               for key, target in METADATA_CONTROLS.items() if data.get(key) is not None}
-    updates[get_ctrl('_imported_prompt')] = data['prompt']
+    updates = {
+        get_ctrl(target): gr.update(value=data[key])
+        for key, target in METADATA_CONTROLS.items()
+        if data.get(key) is not None
+    }
+    updates[get_ctrl("_imported_prompt")] = data["prompt"]
     from ruinedfooocus.features.image_editing.ui_guidance import family_for_checkpoint
+
     family = family_for_checkpoint(checkpoint)
     guidance = restore_guidance_metadata(data, family=family)
-    if not capabilities(family)['sampling_shift']:
-        guidance['sampling_shift'] = None
+    if not capabilities(family)["sampling_shift"]:
+        guidance["sampling_shift"] = None
     from ruinedfooocus.features.gallery.image_metadata import control_value
-    updates.update({get_ctrl(key): gr.update(value=control_value(key, value))
-                    for key, value in resolve_guidance(guidance, {}, family, checkpoint).items()})
+
+    updates.update(
+        {
+            get_ctrl(key): gr.update(value=control_value(key, value))
+            for key, value in resolve_guidance(guidance, {}, family, checkpoint).items()
+        }
+    )
     updates[get_ctrl("performance_selection")] = gr.update(value="Own settings")
     updates[get_ctrl("style_selection")] = gr.update(value=[])
     updates[get_ctrl("obp_assume_direct_control")] = gr.update(value=False)
@@ -53,14 +75,18 @@ def apply_metadata(metadata, checkpoint, preset):
     if data.get("seed") is not None:
         updates[get_ctrl("seed_random")] = gr.update(value=False)
     from ruinedfooocus.features.generation.automatic_upscale import choices, PRESETS
+
     upscale = data.get("automatic_upscale", "Off")
     if upscale not in choices():
         upscale = "Off"
     updates[get_ctrl("automatic_upscale")] = gr.update(choices=choices(), value=upscale)
     updates[get_ctrl("advanced_upscalers")] = gr.update(value=upscale not in PRESETS)
     updates[get_ctrl("automatic_upscale_target")] = gr.update(value="Generated image")
-    gr.Info("Prompt and sampling settings applied in Main. Checkpoint, LoRAs and input image stay selected.")
+    gr.Info(
+        "Prompt and sampling settings applied in Main. Checkpoint, LoRAs and input image stay selected."
+    )
     return updates
+
 
 def create_image_gallery():
     with gr.Blocks() as app_image_browser:
@@ -68,7 +94,7 @@ def create_image_gallery():
             # Left side for gallery
             with gr.Column(scale=2, min_width=0, elem_id="browser-images"):
                 gallery = gr.Gallery(
-                    buttons=['download', 'download_all', 'fullscreen'],
+                    buttons=["download", "download_all", "fullscreen"],
                     label=t("Images"),
                     show_label=False,
                     columns=[1, 2, 3, 4, 5, 6],
@@ -77,11 +103,12 @@ def create_image_gallery():
                     object_fit="contain",
                     value=browser.load_images(1)[0],
                 )
-                pages=browser.num_images_pages()[1]
+                pages = browser.num_images_pages()[1]
                 ib_page = gr.Number(
                     label=t("Page"),
                     value=1,
-                    step=1, precision=0,
+                    step=1,
+                    precision=0,
                     minimum=1,
                     maximum=pages,
                 )
@@ -91,69 +118,93 @@ def create_image_gallery():
             with gr.Column(scale=1, min_width=0, elem_id="browser-controls"):
                 with gr.Row(elem_id="browser-actions"):
                     update_btn = gr.Button(t("Refresh images"), scale=3)
-                    copymeta_btn = gr.Button(t("Apply settings to Main"), scale=3, interactive=False)
-                    gr.HTML(value='''<a href="gradio_api/file=ruinedfooocus/ui/assets/slideshow.html" target="_blank" rel="noopener" aria-label="Open slideshow" title="Open slideshow">&#128733;</a>''', elem_id="browser-slideshow")
+                    copymeta_btn = gr.Button(
+                        t("Apply settings to Main"), scale=3, interactive=False
+                    )
+                    gr.HTML(
+                        value="""<a href="gradio_api/file=ruinedfooocus/ui/assets/slideshow.html" target="_blank" rel="noopener" aria-label="Open slideshow" title="Open slideshow">&#128733;</a>""",
+                        elem_id="browser-slideshow",
+                    )
                 metadata_output = gr.Textbox(
-                    label=t("Image Metadata"), interactive=False, lines=10, max_lines=18, elem_id="browser-metadata"
+                    label=t("Image Metadata"),
+                    interactive=False,
+                    lines=10,
+                    max_lines=18,
+                    elem_id="browser-metadata",
                 )
-                search_input = gr.Textbox(
-                    label=t("Search Metadata"), placeholder=t("Search term")
-                )
+                search_input = gr.Textbox(label=t("Search Metadata"), placeholder=t("Search term"))
                 search_btn = gr.Button(t("Search"))
                 status_output = gr.Markdown()
-                metadata_json = gr.JSON(
-                    value={},
-                    visible='hidden'
-                )
+                metadata_json = gr.JSON(value={}, visible="hidden")
 
         # A new result set has no selected image; never replay stale metadata.
-        gallery.change(lambda: ({}, ""), outputs=[metadata_json, metadata_output],
-                       api_visibility="undocumented")
+        gallery.change(
+            lambda: ({}, ""),
+            outputs=[metadata_json, metadata_output],
+            api_visibility="undocumented",
+        )
 
         metadata_json.change(
-            lambda data: gr.update(interactive=isinstance(data, dict) and
-                any(str(key).lower() == "prompt" for key in data)),
-            inputs=[metadata_json], outputs=[copymeta_btn], api_visibility="undocumented")
+            lambda data: gr.update(
+                interactive=isinstance(data, dict)
+                and any(str(key).lower() == "prompt" for key in data)
+            ),
+            inputs=[metadata_json],
+            outputs=[copymeta_btn],
+            api_visibility="undocumented",
+        )
 
         # Event handlers
         update_btn.click(
             fn=browser.update_images,
             concurrency_id="image_browser_refresh",
-            api_visibility='undocumented',
+            api_visibility="undocumented",
             outputs=[gallery, ib_page, status_output],
         )
         ib_page.change(
             fn=browser.load_images,
-            api_visibility='undocumented',
+            api_visibility="undocumented",
             inputs=[ib_page],
             outputs=[gallery, ib_range],
         )
         copymeta_btn.click(
             fn=apply_metadata,
-            api_visibility='undocumented',
+            api_visibility="undocumented",
             inputs=[metadata_json, get_ctrl("base_model_name"), get_ctrl("preset_selection")],
-            outputs=[get_ctrl(name) for name in list(METADATA_CONTROLS.values()) + list(FIELD_SCHEMA) + [
-                "performance_selection", "style_selection", "obp_assume_direct_control",
-                "obp_image_prompt", "aspect_ratios_selection", "seed_random",
-                "automatic_upscale", "advanced_upscalers", "automatic_upscale_target", "_imported_prompt"]],
+            outputs=[
+                get_ctrl(name)
+                for name in list(METADATA_CONTROLS.values())
+                + list(FIELD_SCHEMA)
+                + [
+                    "performance_selection",
+                    "style_selection",
+                    "obp_assume_direct_control",
+                    "obp_image_prompt",
+                    "aspect_ratios_selection",
+                    "seed_random",
+                    "automatic_upscale",
+                    "advanced_upscalers",
+                    "automatic_upscale_target",
+                    "_imported_prompt",
+                ]
+            ],
         )
         gallery.select(
             fn=browser.get_image_metadata,
-            api_visibility='undocumented',
+            api_visibility="undocumented",
             outputs=[metadata_json, metadata_output],
         )
         search_btn.click(
             fn=browser.search_metadata,
-            api_visibility='undocumented',
+            api_visibility="undocumented",
             inputs=[search_input],
             outputs=[gallery, ib_page, status_output],
         )
         search_input.submit(
             fn=browser.search_metadata,
-            api_visibility='undocumented',
+            api_visibility="undocumented",
             inputs=[search_input],
             outputs=[gallery, ib_page, status_output],
         )
-
 
     return app_image_browser, [gallery, ib_page, status_output]

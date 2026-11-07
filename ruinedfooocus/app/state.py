@@ -31,16 +31,25 @@ wildcards = None
 
 settings = SettingsManager()
 path_manager = PathManager()
-models_offline = args.offline or os.environ.get("RF_OFFLINE") == "1" or settings.default_settings.get("local_model_metadata", False)
-performance_settings = PerformanceSettings(cache_dir=path_manager.model_paths["cache_path"] / "checkpoints", offline=models_offline)
+models_offline = (
+    args.offline
+    or os.environ.get("RF_OFFLINE") == "1"
+    or settings.default_settings.get("local_model_metadata", False)
+)
+performance_settings = PerformanceSettings(
+    cache_dir=path_manager.model_paths["cache_path"] / "checkpoints", offline=models_offline
+)
 resolution_settings = ResolutionSettings()
 shared_cache = {}
 from ruinedfooocus.features.models.model_handler import Models
+
 models = Models(offline=models_offline)
+
 
 # Call this to trigger a refresh of ui components
 def update_cfg():
     state["last_config"] = str(time.time())
+
 
 def add_ctrl(name, obj, configurable=False):
     state["ctrls_name"] += [name]
@@ -48,8 +57,10 @@ def add_ctrl(name, obj, configurable=False):
     if configurable:
         state["cfg_items_obj"] += [obj]
 
+
 def get_ctrl(name):
     return state["ctrls_obj"][state["ctrls_name"].index(name)]
+
 
 def add_setting(name, obj):
     state["setting_name"] += [name]

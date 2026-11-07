@@ -24,7 +24,13 @@ def _read_installed_torch(backend="rocm"):
         if backend in version.lower() or (backend == "cuda" and "+cu" in version.lower()):
             raise
         return None
-    runtime = "cpu" if backend == "cpu" else torch.version.hip if backend == "rocm" else torch.version.cuda
+    runtime = (
+        "cpu"
+        if backend == "cpu"
+        else torch.version.hip
+        if backend == "rocm"
+        else torch.version.cuda
+    )
     if not runtime:
         return None
     if backend == "cpu":
@@ -41,6 +47,7 @@ def _read_installed_torch(backend="rocm"):
             raise RuntimeError("CUDA kernel check failed.")
 
     import torchvision  # Validate native extensions before preserving the bundle.
+
     versions = {name: importlib.metadata.version(name) for name in ("torch", "torchvision")}
     try:
         versions["torchaudio"] = importlib.metadata.version("torchaudio")
@@ -52,7 +59,9 @@ def _read_installed_torch(backend="rocm"):
         for raw in importlib.metadata.requires(name) or []:
             requirement = Requirement(raw)
             dependency = canonicalize_name(requirement.name)
-            if dependency not in versions or (requirement.marker and not requirement.marker.evaluate()):
+            if dependency not in versions or (
+                requirement.marker and not requirement.marker.evaluate()
+            ):
                 continue
             if not requirement.specifier.contains(versions[dependency], prereleases=True):
                 raise RuntimeError(f"{name} requires {requirement}, found {versions[dependency]}")
@@ -63,10 +72,15 @@ def _probe_installed_torch(backend):
     """Keep torch imports isolated and normalize child-process probe failures."""
     try:
         result = subprocess.run(
-            [sys.executable, "-c",
-             "import json; from ruinedfooocus.packaging.runtime_support import _read_installed_torch; "
-             f"print(json.dumps(_read_installed_torch({backend!r})))"],
-            capture_output=True, text=True, timeout=90,
+            [
+                sys.executable,
+                "-c",
+                "import json; from ruinedfooocus.packaging.runtime_support import _read_installed_torch; "
+                f"print(json.dumps(_read_installed_torch({backend!r})))",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=90,
         )
     except (OSError, subprocess.TimeoutExpired) as error:
         raise RuntimeError(f"Installed {backend.upper()} validation could not finish.") from error
@@ -76,14 +90,18 @@ def _probe_installed_torch(backend):
         bundle = json.loads(result.stdout.strip().splitlines()[-1])
         key = "hip" if backend == "rocm" else backend
         if bundle is not None and (
-            not isinstance(bundle, dict) or not isinstance(bundle.get(key), str)
-            or not bundle[key] or not isinstance(bundle.get("versions"), dict)
+            not isinstance(bundle, dict)
+            or not isinstance(bundle.get(key), str)
+            or not bundle[key]
+            or not isinstance(bundle.get("versions"), dict)
             or not isinstance(bundle["versions"].get("torch"), str)
         ):
             raise ValueError("Invalid runtime bundle")
         return bundle
     except (ValueError, IndexError) as error:
-        raise RuntimeError(f"Installed {backend.upper()} validation returned invalid output.") from error
+        raise RuntimeError(
+            f"Installed {backend.upper()} validation returned invalid output."
+        ) from error
 
 
 def inspect_installed_cpu():
@@ -159,6 +177,7 @@ def select_torch_platform(torchruntime, os_platform, installed_rocm=None, instal
     else:
         gpus = torchruntime.device_db.get_gpus()
         from ruinedfooocus.packaging.cuda_selection import select_cuda, nvidia_info
+
         nvidia = any(gpu.vendor_id.lower() == "10de" for gpu in gpus)
         if not nvidia and os_platform in ("Windows", "Linux"):
             # WSL and virtual machines may not expose NVIDIA in the PCI list.
@@ -166,5 +185,9 @@ def select_torch_platform(torchruntime, os_platform, installed_rocm=None, instal
             # An installed driver's CUDA header alone does not prove that an
             # NVIDIA GPU is present (for example after moving a disk to AMD).
             nvidia = capability is not None
-        selected = select_cuda(gpus) if nvidia else torchruntime.platform_detection.get_torch_platform(gpus)
+        selected = (
+            select_cuda(gpus)
+            if nvidia
+            else torchruntime.platform_detection.get_torch_platform(gpus)
+        )
     return broken_torch_platforms(selected, os_platform)[0]

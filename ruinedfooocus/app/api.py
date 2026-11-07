@@ -12,6 +12,7 @@ from fastapi.responses import Response
 from io import BytesIO
 from PIL import Image, ImageOps
 
+
 def image_file_url(filename):
     """Build a Gradio URL without Windows separators or browser dot segments."""
     path = Path(filename).resolve().as_posix()
@@ -27,7 +28,8 @@ def get_last_image() -> str:
     if "last_image" in state:
         return Path(state["last_image"]).resolve().as_posix()
     else:
-        return Path(str(asset_path('logo.png'))).resolve().as_posix()
+        return Path(str(asset_path("logo.png"))).resolve().as_posix()
+
 
 def add_api():
 
@@ -36,19 +38,28 @@ def add_api():
     def api_llama(system: str, user: str) -> str:
         """Talk to the selected local chat model on the shared GPU worker."""
         model, selected = api_runtime.configured_chat_model()
-        result = api_runtime.wait_for_result(api_runtime.chat({
-            "model": model,
-            "messages": [{"role": "system", "content": system},
-                         {"role": "user", "content": user}],
-            "max_tokens": settings.default_settings.get("llm_hp_max_tokens", 256),
-        }, selected))
+        result = api_runtime.wait_for_result(
+            api_runtime.chat(
+                {
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": user},
+                    ],
+                    "max_tokens": settings.default_settings.get("llm_hp_max_tokens", 256),
+                },
+                selected,
+            )
+        )
         return result["choices"][0]["message"]["content"] or user
+
     gr.api(api_llama, api_name="llama")
 
     def api_generate_image(prompt: str) -> dict:
         """Generate an image using the shared API settings and GPU worker."""
         files = api_runtime.wait_for_result(api_runtime.legacy_images(prompt))
         return {"path": str(files[0]), "meta": {"_type": "gradio.FileData"}}
+
     gr.api(api_generate_image, api_name="generate_image")
 
     # Search
@@ -67,6 +78,7 @@ def add_api():
         for file in files:
             result.append(image_file_url(file))
         return result
+
     gr.api(api_search, api_name="search")
 
     def api_version() -> str:
@@ -77,16 +89,20 @@ def add_api():
             version (str): The current version of RuinedFooocus
         """
         from version import version
+
         return version
+
     gr.api(api_version, api_name="api_version")
 
     # "secret" pi slideshow
     gr.api(get_last_image, api_name="last_image")
 
+
 def add_fastapi():
     from fastapi import Request
     from ruinedfooocus.integrations.web_access import require_ui_login
     from ruinedfooocus.features.chat.browser_python import install_routes
+
     install_routes(shared.server_app)
 
     async def last_image(request: Request, w: int = 0, h: int = 0, format: str = "PNG"):
@@ -95,19 +111,20 @@ def add_fastapi():
         img = Image.open(filename)
         ow, oh = img.size
         if w > 0 or h > 0:
-            if w == 0: w = int(ow * h / oh)
-            if h == 0: h = int(oh * w / ow)
-            img = ImageOps.fit(img, (w, h), method=Image.Resampling.LANCZOS, bleed=0.0, centering=(0.5, 0.5))
-        if format == "JPEG": img = img.convert("RGB")
+            if w == 0:
+                w = int(ow * h / oh)
+            if h == 0:
+                h = int(oh * w / ow)
+            img = ImageOps.fit(
+                img, (w, h), method=Image.Resampling.LANCZOS, bleed=0.0, centering=(0.5, 0.5)
+            )
+        if format == "JPEG":
+            img = img.convert("RGB")
         buf = BytesIO()
         img.save(buf, format=format)
         return Response(
             content=buf.getvalue(),
             media_type=f"image/{format.lower()}",
         )
-    shared.server_app.add_api_route(
-        "/last_image",
-        last_image,
-        methods=["GET"]
-    )
 
+    shared.server_app.add_api_route("/last_image", last_image, methods=["GET"])

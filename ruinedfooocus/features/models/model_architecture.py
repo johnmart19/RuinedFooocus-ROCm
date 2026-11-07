@@ -10,8 +10,11 @@ def detect_tensor_architecture(header):
         if name == "__metadata__" or not isinstance(entry, dict):
             continue
         shape = entry.get("shape")
-        if (not isinstance(shape, list) or len(shape) > 8
-                or any(type(size) is not int or size < 0 or size > 2**31 for size in shape)):
+        if (
+            not isinstance(shape, list)
+            or len(shape) > 8
+            or any(type(size) is not int or size < 0 or size > 2**31 for size in shape)
+        ):
             continue
         try:
             tensors[name] = torch.empty(shape, device="meta")
@@ -20,11 +23,20 @@ def detect_tensor_architecture(header):
     if not tensors:
         return None
     # Match the backend loader's conversion before inspecting Diffusers tensors.
-    if ("adaln_single.emb.timestep_embedder.linear_1.bias" in tensors
-            and "pos_embed.proj.bias" in tensors):
+    if (
+        "adaln_single.emb.timestep_embedder.linear_1.bias" in tensors
+        and "pos_embed.proj.bias" in tensors
+    ):
         tensors = model_detection.convert_diffusers_mmdit(tensors)
-    prefixes = dict.fromkeys((model_detection.unet_prefix_from_state_dict(tensors),
-                              "", "model.diffusion_model.", "net.", "model."))
+    prefixes = dict.fromkeys(
+        (
+            model_detection.unet_prefix_from_state_dict(tensors),
+            "",
+            "model.diffusion_model.",
+            "net.",
+            "model.",
+        )
+    )
     for prefix in prefixes:
         try:
             config = model_detection.detect_unet_config(tensors, prefix)
@@ -37,12 +49,19 @@ def detect_tensor_architecture(header):
                     return "NewBieImage"
                 if name == "Flux2":
                     return {20: "Flux2Klein4B", 24: "Flux2Klein9B"}.get(
-                        config.get("depth_single_blocks"), "Flux2")
-                return {"SD15": "SD 1.5", "SD20": "SD 2.0", "SDXL": "SDXL 1.0",
-                        "Flux": "Flux.1 D", "FluxSchnell": "Flux.1 S",
-                        "PixArtAlpha": "PixArt", "PixArtSigma": "PixArt",
-                        "HunyuanVideo": "Hunyuan Video",
-                        "QwenImage21": "QwenImage"}.get(name, name)
+                        config.get("depth_single_blocks"), "Flux2"
+                    )
+                return {
+                    "SD15": "SD 1.5",
+                    "SD20": "SD 2.0",
+                    "SDXL": "SDXL 1.0",
+                    "Flux": "Flux.1 D",
+                    "FluxSchnell": "Flux.1 S",
+                    "PixArtAlpha": "PixArt",
+                    "PixArtSigma": "PixArt",
+                    "HunyuanVideo": "Hunyuan Video",
+                    "QwenImage21": "QwenImage",
+                }.get(name, name)
         except (KeyError, IndexError, ValueError, TypeError, RuntimeError, AttributeError):
             # Partial/unsupported headers are a normal metadata miss.
             continue
