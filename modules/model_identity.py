@@ -1,5 +1,6 @@
 """Identify the local checkpoint without assuming a release's first file is it."""
 
+from functools import lru_cache
 import re
 import json
 from pathlib import Path
@@ -36,6 +37,17 @@ def read_safetensors_header(path):
     if any(not isinstance(value, dict) for key, value in result.items() if key != '__metadata__'):
         raise ValueError('Invalid tensor entries in safetensors header')
     return result
+
+
+@lru_cache(maxsize=256)
+def _cached_header(path, signature):
+    return read_safetensors_header(path)
+
+
+def cached_safetensors_header(path):
+    """Header of an unchanged file is parsed once; a replaced file is read again."""
+    path = Path(path)
+    return _cached_header(str(path), tuple(file_signature(path)[1:]))
 
 
 def checkpoint_hashes(metadata):

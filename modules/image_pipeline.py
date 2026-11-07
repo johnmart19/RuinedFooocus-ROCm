@@ -210,6 +210,8 @@ class pipeline:
     xl_controlnet_hash = None
 
     model_info = None
+    # Why the last checkpoint load failed, shown to the user instead of a generic error.
+    load_error = None
 
     def get_clip_and_vae(self, unet):
         from modules.resource_defaults import resource_name
@@ -262,13 +264,17 @@ class pipeline:
         self.xl_base_patched_hash = None
         self.conditions = None
         self.model_info = None
+        self.load_error = None
 
         if filename is None:
             print(f"ERROR: Could not load checkpoint {name}")
+            self.load_error = (f"Checkpoint not found: {name}. It may have been moved or renamed; "
+                               "choose another checkpoint in the Models tab.")
             return
 
         if Path(filename).suffix == '.merge':
             print(f"Error: Model type not supported.")
+            self.load_error = f"{name} is a merge file, which cannot be loaded as an image model here."
             return
 
         if input_unet is None: # Be quiet if we already loaded a unet
@@ -304,6 +310,10 @@ class pipeline:
                             )
                         )
 
+                    missing = [Path(path).name for path in clip_paths if not Path(path).is_file()]
+                    if missing:
+                        raise ValueError(f"{name} needs text encoder file(s) that are not installed: "
+                                         f"{', '.join(missing)}. Download them in Models > Model > Image model components.")
                     print(f"Loading CLIP: {model_info['clip_names']}")
                     component_files.extend(file_signature(path) for path in clip_paths)
                     if "clip" in embedded:
@@ -333,6 +343,9 @@ class pipeline:
                                 "vae", model_info['vae_name'],
                                 default=os.path.join(path_manager.model_paths["vae_path"], model_info['vae_name'])
                             )
+                            if not Path(vae_path).is_file():
+                                raise ValueError(f"{name} needs the VAE file {Path(vae_path).name}, which is not "
+                                                 "installed. Download it in Models > Model > Image model components.")
                             print(f"Loading VAE: {model_info['vae_name']}")
                             component_files.append(file_signature(vae_path))
                             if str(vae_path).endswith(".gguf"):
@@ -348,7 +361,10 @@ class pipeline:
                     clip_vision = None
                 except Exception as e:
                     unet = None
-                    traceback.print_exc() 
+                    traceback.print_exc()
+                    from modules.task_errors import describe_error
+                    self.load_error = describe_error(e) if isinstance(e, ValueError) else \
+                        f"Could not load {name}. {describe_error(e)}"
 
         else:
             # The file loader preserves quantization metadata and registers the
@@ -367,6 +383,9 @@ class pipeline:
 
         if unet == None:
             print(f"Failed to load {name}")
+            self.load_error = self.load_error or (
+                f"Could not load {name}: its model type was not recognized. "
+                "Check that it is an image checkpoint or diffusion model file.")
             self.xl_base = None
             self.xl_base_hash = None
             self.xl_base_patched = None
@@ -381,6 +400,8 @@ class pipeline:
                 print(
                     f"Model {self.xl_base.unet.model.__class__.__name__} not supported. RuinedFooocus supports {list(self.known_models)} models as the base model."
                 )
+                self.load_error = (f"{name} is a {self.xl_base.unet.model.__class__.__name__} model, "
+                                   "which is not supported as an image model.")
                 self.xl_base = None
 
             if self.xl_base is not None:
@@ -498,6 +519,8 @@ class pipeline:
         callback=None,
     ):
         if self.xl_base_patched is None:
+            if self.load_error:
+                raise ValueError(self.load_error)
             raise RuntimeError("Image model is not loaded. Check its required components.")
         architecture = self.xl_base_patched.unet.model.__class__.__name__
         if architecture not in self.known_models:

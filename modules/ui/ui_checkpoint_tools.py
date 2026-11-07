@@ -81,12 +81,23 @@ def create_ui(base_model, visible=True):
             return run_action(name, "check", progress)
 
         def convert_selected(name, progress=gr.Progress()):
-            return run_action(name, "convert", progress)
+            message = run_action(name, "convert", progress)
+            # List a new copy at once; the original stays selected.
+            return message, gr.update(choices=shared.models.get_names("checkpoints"))
 
-        for button, callback in ((inspect, inspect_selected), (check, check_selected),
-                                 (convert, convert_selected)):
+        for button, callback in ((inspect, inspect_selected), (check, check_selected)):
             button.click(callback, inputs=selected, outputs=report,
                          concurrency_id="checkpoint_tools", concurrency_limit=1,
                          api_visibility="undocumented")
-        selected.change(lambda: "", outputs=report, api_visibility="undocumented")
+        convert.click(convert_selected, inputs=selected, outputs=[report, selected],
+                      concurrency_id="checkpoint_tools", concurrency_limit=1,
+                      api_visibility="undocumented")
+
+        def selection_report(name):
+            # Inspection reads only the header, so show it instead of an empty report.
+            return run_action(name, "inspect", lambda *_: None) if name else ""
+
+        selected.change(selection_report, inputs=selected, outputs=report,
+                        concurrency_id="checkpoint_tools", concurrency_limit=1,
+                        api_visibility="undocumented")
     return group

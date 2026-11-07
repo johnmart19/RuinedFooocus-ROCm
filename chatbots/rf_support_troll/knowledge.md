@@ -1,12 +1,12 @@
 # RuinedFooocus support notes
 
-Layout: the top tabs are Main, Image browser, Chat bots and Settings. Main holds the prompt box and Generate button, plus the Generation, Model, LoRAs, Prompt tools, Image tools and Details tabs.
+Layout: the top tabs are Main, Image browser, Chat bots and Settings. Main holds the prompt box and Generate button, plus the Generation, Models, Prompt tools, Image tools and Details tabs. The Models tab has two sub-tabs: Model and LoRAs.
 
 Generation tab: Sampling (performance, steps, CFG, sampler and scheduler), Workflow settings, Size and upscale (resolution and upscaling), Style, and Negative prompt and seed. A seed of -1 picks a random seed. Image number 0 generates forever until Cancel is pressed. Ctrl+Enter is the same as pressing Generate.
 
-Model tab: choose the image checkpoint. Image model components covers separate VAE, text encoder and UNet files. Checkpoint tools shows a report about the selected checkpoint. Models go in models/checkpoints, LoRAs in models/loras, and chat models (GGUF) in models/llm. Files dropped into models/inbox are looked up on Civitai and moved into the right folder (this needs internet; unknown files stay in the inbox). Subfolders are supported.
+Models tab, Model sub-tab: choose the image checkpoint. Image model components lists and downloads the text encoder and VAE files a checkpoint needs. Checkpoint tools reports a checkpoint's size and tensor types, checks its weights for damage (NaN/Inf), and can create a smaller FP16 copy. A missing text encoder or VAE, a damaged or incomplete file, or a file that is not an image checkpoint is reported by name when generation fails. Models go in models/checkpoints, LoRAs in models/loras, and chat models (GGUF) in models/llm. Files dropped into models/inbox are looked up on Civitai and moved into the right folder (this needs internet; unknown files stay in the inbox). Subfolders are supported.
 
-LoRAs: pick them in the LoRAs tab, or type <lora:filename:0.8> in the prompt. Trigger words are read from a .txt file with the same name as the LoRA, or downloaded from Civitai when available.
+LoRAs: pick them in Models > LoRAs, or type <lora:filename:0.8> in the prompt. Trigger words are read from a .txt file with the same name as the LoRA, or downloaded from Civitai when available.
 
 Prompt syntax: __name__ inserts a random line from wildcards/name.txt. <style:name> applies a style. Put --- on its own line to queue several prompts in one run. Pasting generation JSON into the prompt box reuses all of its settings, and dropping a RuinedFooocus PNG onto the main image restores its prompt and settings.
 

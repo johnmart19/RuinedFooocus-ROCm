@@ -421,14 +421,33 @@ class Models:
 
     @staticmethod
     def read_safetensors_header(path):
-        from modules.model_identity import read_safetensors_header
+        from modules.model_identity import cached_safetensors_header
         try:
-            return read_safetensors_header(path)
+            return cached_safetensors_header(path)
         except (OSError, ValueError):
             return {}
 
+    # Detection runs on every model lookup; reuse it while the file is unchanged.
+    _base_cache = {}
+
     @staticmethod
     def detect_checkpoint_base(path):
+        path = Path(path)
+        try:
+            key = (str(path), tuple(file_signature(path)[1:]))
+        except OSError:
+            return None
+        if key in Models._base_cache:
+            return Models._base_cache[key]
+        base = Models._detect_checkpoint_base(path)
+        if base is not None:  # Unknown results may change once the backend is installed.
+            if len(Models._base_cache) >= 512:
+                Models._base_cache.clear()
+            Models._base_cache[key] = base
+        return base
+
+    @staticmethod
+    def _detect_checkpoint_base(path):
         from modules.video_settings import detect_video_model
         if path.suffix.lower() == ".gguf":
             import gguf

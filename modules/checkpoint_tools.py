@@ -105,6 +105,23 @@ def check_weights(path, progress=lambda fraction, description: None):
     return dict(sha256=digest.hexdigest(), invalid=invalid, zero_tensors=zeros)
 
 
+def _publish(source, target):
+    """Move a finished file into place without ever replacing an existing one."""
+    try:
+        # Atomic and no-overwrite on NTFS and Linux filesystems.
+        os.link(source, target)
+        return
+    except FileExistsError:
+        raise
+    except OSError:
+        # exFAT/FAT drives and some network shares have no hard links.
+        if os.name != "nt" and target.exists():
+            raise FileExistsError(f"Already exists: {target.name}")
+    # Windows rename refuses to replace an existing file; on other systems the
+    # existence check above leaves only a negligible race on such drives.
+    os.rename(source, target)
+
+
 def create_fp16_copy(path, cache_dir, model_info=None, preview=None,
                      progress=lambda fraction, description: None):
     path = Path(path)
@@ -203,23 +220,30 @@ def create_fp16_copy(path, cache_dir, model_info=None, preview=None,
         created = []
         try:
             for source, target in publish:
-                # Atomic and no-overwrite on Windows NTFS and Linux filesystems.
-                os.link(source, target)
+                _publish(source, target)
                 created.append(target)
         except OSError:
             for target in reversed(created):
                 target.unlink()
             raise
     return dict(path=destination, preview=preview_destination, underflow=underflow,
-                message=f"Created {destination.name}. Saved {report['saving_bytes'] / 2**30:.2f} GiB. "
+                message=f"Created {destination.name}. Saved {format_size(report['saving_bytes'])}. "
                         f"Values rounded to zero: {underflow}. Original retained.")
 
 
+def format_size(size):
+    """Binary units that stay readable from small LoRAs to large checkpoints."""
+    for unit in ("B", "KiB", "MiB", "GiB"):
+        if size < 1024 or unit == "GiB":
+            return f"{size:.0f} {unit}" if unit == "B" else f"{size:.2f} {unit}"
+        size /= 1024
+
+
 def format_report(report, family="Unknown", checked=None):
-    dtypes = ", ".join(f"{name}: {size / 2**30:.2f} GiB" for name, size in report["dtypes"].items())
+    dtypes = ", ".join(f"{name}: {format_size(size)}" for name, size in report["dtypes"].items())
     lines = [report["name"], f"Model: {family} | {report['tensors']} tensors",
              f"Tensor data: {dtypes}", "Generation also needs memory for activations and decoding.",
-             f"FP32 to FP16 saving: {report['saving_bytes'] / 2**20:.2f} MiB"]
+             f"File size: {format_size(report['bytes'])} | FP32 to FP16 saving: {format_size(report['saving_bytes'])}"]
     if report["previous_repair"]:
         lines.append("Previous optimizer reports donor-replaced weights; this cannot verify their origin.")
     if checked is None:
