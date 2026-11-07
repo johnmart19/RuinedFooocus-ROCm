@@ -2,6 +2,16 @@
   "base": "cd7abb27064155f62dea002f745a8ce1b040c990",
   "features": [
     {
+      "id": "task-focused-ui",
+      "subject": "Unify task navigation and explicit prompt and generation preferences",
+      "requires": [
+        "worker-package-bindings"
+      ],
+      "tests": [
+        "test_*.py"
+      ]
+    },
+    {
       "id": "worker-package-bindings",
       "subject": "Bind image tool routing explicitly in the worker",
       "requires": [

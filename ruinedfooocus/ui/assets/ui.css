@@ -22,9 +22,8 @@
 #main_view img, #image-tool-input img { object-fit: contain; }
 #hint-container { max-height: 150px; overflow: auto; }
 #settings-layout {
-  display: grid !important;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
-  gap: 12px; align-items: start;
+  display: block !important;
+  min-width: 0;
 }
 #settings-general, #settings-models, #settings-components { min-width: 0 !important; }
 #settings-actions { margin-top: 12px; }
@@ -200,17 +199,17 @@ textarea { resize: vertical; }
   top: calc(var(--block-padding) * .5); right: var(--block-padding);
 }
 
-#generation-controls .grid-container {
+#generation-controls .grid-container, #models-panel .grid-container {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)) !important;
 }
-#generation-controls .gallery-item { min-width: 0; }
+#generation-controls .gallery-item, #models-panel .gallery-item { min-width: 0; }
 /* Model names remain readable instead of being ellipsized over the artwork. */
-#generation-controls .thumbnail-item {
+#generation-controls .thumbnail-item, #models-panel .thumbnail-item {
   width: 100% !important;
   height: auto !important; vertical-align: top;
 }
-#generation-controls .thumbnail-item img { width: 100%; height: 8rem; object-fit: cover; }
-#generation-controls .caption-label {
+#generation-controls .thumbnail-item img, #models-panel .thumbnail-item img { width: 100%; height: 8rem; object-fit: contain; }
+#generation-controls .caption-label, #models-panel .caption-label {
   position: static; box-sizing: border-box; width: 100%; max-height: none;
   white-space: normal; overflow-wrap: anywhere; text-overflow: clip;
   padding: .5rem; font-size: var(--text-sm); line-height: 1.4;

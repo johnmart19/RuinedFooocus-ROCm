@@ -65,8 +65,10 @@ If you see **"MetadataIncompleteBuffer"**, a model file is incomplete or damaged
 
 ## Ruined Edition Features
 
-The main window has the prompt box and Generate button above the **Generation**, **Models**, **Prompt tools**,
-**Image tools** and **Details** tabs. **Image browser**, **Chat bots** and **Settings** are separate top tabs.
+The main destinations are **Create**, **Chat**, **Library**, **Models** and **Settings**. Create puts the image
+model and prompt first, with Generation, Prompt tools, Image tools and Details beside the preview.
+Settings groups Appearance, Storage, Runtime, Defaults and Integrations. Text size applies immediately
+and is remembered by your browser; browser zoom and keyboard navigation remain available.
 
 ### Image models
 * SD 1.5, SDXL (including Pony, Illustrious and NoobAI), SD3, Flux, Flux 2 and Flux 3, Qwen-Image, HiDream and
@@ -126,11 +128,17 @@ The main window has the prompt box and Generate button above the **Generation**,
   `assistants`; legacy `chatbots` entries still work. Bundled assistants live under `ruinedfooocus/resources/assistants`.
   Select **General chat** for a conversation without a character persona.
 * Chat can generate images, with an optional reference image that is edited natively when the checkpoint can.
-* Optional vision review and a browser Python runner for code from the chat.
+* Optional vision review and a browser Python runner for code from the chat. **Allow image tools** controls
+  image generation/editing for the conversation; Force image generation applies to one message.
 
 ### Settings and access
 * Defaults for the UI in `settings/settings.json`, custom resolutions in `settings/resolutions.json`, custom
   performance presets, Gradio themes and translations (`--language`).
+* **Create > Save current defaults** stores the selected model, prompt, styles, LoRAs, size, seed and sampling
+  choices for the next launch. It never stores uploads or a previous generated image. Clear an active generation
+  preset before saving. Prompt rewrite offers Preview, Apply and Undo, protecting later edits to your prompt.
+* Model weights load on demand. **Settings > Runtime > Image compute > Preload selected image model** optionally
+  loads the selected image model during startup.
 * `--listen` opens the UI on your network and requires `--auth user/password` (or `RF_UI_AUTH`). `--guest`
   starts a restricted, generation-only page for other people. `--nobrowser` skips opening a browser.
 * `--api` enables an OpenAI-compatible API; set `--api-key` (or `RF_API_KEY`), which is required when listening

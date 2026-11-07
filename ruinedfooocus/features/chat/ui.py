@@ -100,6 +100,8 @@ def create_chat(image_controls=None):
                 with gr.Row(elem_id="chat-message-actions"):
                     send_message = gr.Button("Send", variant="primary", min_width=80)
                     clear_chat = gr.Button("New conversation", min_width=140)
+                enable_image_tools = gr.Checkbox(label="Allow image tools", value=settings.default_settings.get("enable_llm_tools", False),
+                    info="Let the assistant create or edit images when you ask. Uses the Create settings.")
                 force_image = gr.Checkbox(label="Force image generation", value=False,
                     info="Generate for your next message, then return to normal chat.")
                 with gr.Accordion('Image reference', open=False):
@@ -150,11 +152,11 @@ def create_chat(image_controls=None):
                     visible=assistant_info(default_bot)["avatar"] is not None,
                 )
                 with gr.Row():
-                    llama_reload = gr.Button(value="Refresh chatbots")
+                    llama_reload = gr.Button(value="Refresh assistants")
                     llama_assistants = gr.Dropdown(
                         choices=assistant_choices(),
                         value=default_bot,
-                        label="Chatbot",
+                        label="Assistant",
                         show_label=True,
                         interactive=True,
                         scale=7,
@@ -294,13 +296,14 @@ def create_chat(image_controls=None):
 
         @recover_controls
         def llama_respond(message, system, embed, chat_history, model, show_thinking, vision_enabled, review_model, include_system, force,
-                          source_mode, source_image, source_denoise, *image_values):
+                          source_mode, source_image, source_denoise, allow_images, *image_values):
             chat_history = list(chat_history)
             chat_history.append({"role": "user", "content": message})
 
             gen_data = {
                 "task_type": "llama",
                 "force_image": force,
+                "enable_image_tools": allow_images,
                 "image_source": source_mode,
                 "image_reference": source_image if source_mode == 'Uploaded image' else None,
                 "image_denoise": source_denoise,
@@ -484,7 +487,7 @@ def create_chat(image_controls=None):
 
         def submit_message(message, force, selected_model, system, embed, history, model,
                            show_thinking, vision_enabled, review_model, include_system,
-                           source_mode='New image', source_image=None, source_denoise=0.25, *image_values):
+                           source_mode='New image', source_image=None, source_denoise=0.25, allow_images=False, *image_values):
             try:
                 message, force = llama_get_text(message, force, model, selected_model)
                 from ruinedfooocus.features.chat.llama_vision import image_reference_source
@@ -497,14 +500,14 @@ def create_chat(image_controls=None):
                    send_message: gr.update(interactive=False), clear_chat: gr.update(interactive=False)}
             yield from llama_respond(message, system, embed, history, model, show_thinking,
                                     vision_enabled, review_model, include_system, force,
-                                    source_mode, source_image, source_denoise, *image_values)
+                                    source_mode, source_image, source_denoise, allow_images, *image_values)
             yield {send_message: gr.update(interactive=True), clear_chat: gr.update(interactive=True)}
 
         gr.on(triggers=[llama_msg.submit, send_message.click], fn=submit_message,
             api_visibility='undocumented',
             inputs=[llama_msg, force_image, llama_quant, llama_system, llama_embed, llama_history,
                     llama_active_model, show_reasoning, enable_vision, vision_model, vision_include_system,
-                    image_source, image_reference, image_denoise,
+                    image_source, image_reference, image_denoise, enable_image_tools,
                     *image_controls.values()],
             outputs=[llama_chat, llama_history, llama_model_status, llama_download,
                      llama_active_model, llama_msg, llama_use, force_image, image_source, send_message, clear_chat],

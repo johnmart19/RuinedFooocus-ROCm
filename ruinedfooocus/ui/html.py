@@ -7,7 +7,7 @@ css = asset_path("ui.css").read_text(encoding="utf-8")
 head = """<style>
 /* Text and rem spacing follow the browser default up to 1920px wide, then grow
    smoothly with the window: ~117% at 2560px (1440p), 150% at 3840px (4K). */
-html { font-size: clamp(100%, 50% + .4167vw, 150%); }
+html { font-size: var(--rf-user-text-scale, clamp(100%, 50% + .4167vw, 150%)); }
 @media (max-width: 600px) {
 .gradio-container .main.fillable.app { padding: 8px !important; }
 }</style>"""
@@ -23,6 +23,10 @@ progress_html = """
 """
 scripts = """
 function generate_shortcut(){
+  const savedTextScale = Number(localStorage.getItem('ruinedfooocus-text-scale'));
+  if (savedTextScale >= 75 && savedTextScale <= 200) {
+    document.documentElement.style.setProperty('--rf-user-text-scale', `${savedTextScale}%`);
+  }
   // Gradio treats non-navigation keys as search edits, even modifiers and
   // PrintScreen, filtering the list to its selected label. Keep these keys
   // out of dropdown handlers without cancelling the OS screenshot chord.

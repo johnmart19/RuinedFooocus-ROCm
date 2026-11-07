@@ -19,6 +19,27 @@ def function_from(path, name, namespace):
 
 
 class WorkflowControlsTests(unittest.TestCase):
+    def test_rewrite_preview_requires_apply_and_does_not_overwrite_new_edits(self):
+        gr = SimpleNamespace(Error=ValueError, update=lambda **values: values)
+        model = Mock(return_value='A rewritten prompt')
+        suggest = function_from('ruinedfooocus/features/prompting/ui_rewrite.py', 'suggest', {'gr': gr, 'run_prompt': model})
+        preview, original, enabled = suggest('my-preset.txt', 'Original prompt')
+        self.assertEqual(original, 'Original prompt')
+        self.assertEqual(preview['value'], 'A rewritten prompt')
+        apply = function_from('ruinedfooocus/features/prompting/ui_rewrite.py', 'apply_rewrite', {'gr': gr})
+        with self.assertRaisesRegex(ValueError, 'prompt changed'):
+            apply('New user edit', original, preview['value'])
+        result = apply(original, original, preview['value'])
+        self.assertEqual(result[:2], ('A rewritten prompt', ('Original prompt', 'A rewritten prompt')))
+
+    def test_rewrite_undo_protects_later_user_edits(self):
+        gr = SimpleNamespace(Error=ValueError, update=lambda **values: values, skip=lambda: 'skip')
+        undo = function_from('ruinedfooocus/features/prompting/ui_rewrite.py', 'undo_rewrite', {'gr': gr})
+        record = ('Original', 'Applied')
+        with self.assertRaisesRegex(ValueError, 'overwrite your edits'):
+            undo('Later edit', record)
+        self.assertEqual(undo('Applied', record)[0], {'value': 'Original'})
+
     def test_image_submission_preserves_prompt_before_it_reaches_the_worker(self):
         policy = function_from('ruinedfooocus/features/prompting/prompt_processing.py', 'use_random_prompt', {})
         add = Mock(return_value='task')

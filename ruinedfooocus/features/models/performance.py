@@ -8,7 +8,7 @@ from ruinedfooocus.core.config_io import save_json
 MODEL_DEFAULT_SELECTIONS = ("Model Defaults", "Model settings", "Model defaults")
 
 class PerformanceSettings:
-    DEFAULT_PERFORMANCE_FILE = Path("ruinedfooocus/resources/defaults/performance.default")
+    DEFAULT_PERFORMANCE_FILE = resource_path("defaults", "performance.default")
     PERFORMANCE_FILE = data_path("settings", "performance.json")
     CUSTOM_PERFORMANCE = "Own settings"
     MODEL_PERFORMANCE = MODEL_DEFAULT_SELECTIONS[0]

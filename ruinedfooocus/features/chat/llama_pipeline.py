@@ -67,7 +67,7 @@ def run_llama(system_file, prompt, *, instruction=None, check_cancelled=None):
                 check_cancelled()
             # External llama.cpp allocations are outside Comfy's model residency.
             model_management.unload_all_models()
-            llama.load_base_model(vision=instruction is None)
+            llama.load_base_model(vision=False)
             if check_cancelled:
                 check_cancelled()
             parts = []
@@ -299,7 +299,7 @@ class pipeline:
             system_prompt += context
 
         force_image = bool(gen_data.get("force_image", False))
-        if settings.default_settings.get("enable_llm_tools", False) or force_image:
+        if gen_data.get("enable_image_tools", settings.default_settings.get("enable_llm_tools", False)) or force_image:
             tools = [IMAGE_TOOL]
             tool_prompt = "\n" + IMAGE_TOOL_GUIDANCE + " The app displays the image; do not name the internal tool in your reply."
         else:

@@ -1,4 +1,6 @@
 ### Unreleased (development)
+* Task-based Create, Chat, Library, Models and Settings navigation; model/prompt controls first, grouped preferences, browser-specific text sizing, explicit generation-default saving and opt-in startup weight loading
+* Prompt rewrite and enhancement share the serial local chat worker; rewrite preview/apply/undo protects user edits, and Chat exposes its per-message image-tool permission
 * Organize source by feature and backend under `ruinedfooocus`; separate bundled assets/defaults from user content, with legacy assistant/rewrite preset overrides preserved and explicit writable-data paths
 * Installers for NVIDIA CUDA, AMD ROCm 10.1 (Windows, Linux and WSL), DirectML and CPU, with validated PyTorch bundles and `RuinedFooocus.bat`/`RuinedFooocus.sh` launchers
 * Removed obsolete upstream portable setup helpers, their test/wrapper, the embedded-Python builder and Conda environment file; PyTorch switch/reinstall/freeze instructions are inline in the readme

@@ -6,8 +6,8 @@ from ruinedfooocus.core.config_io import save_json
 
 
 class ResolutionSettings:
-    DEFAULT_RESOLUTIONS_FILE = Path("ruinedfooocus/resources/defaults/resolutions.default")
-    VIDEO_RESOLUTIONS_FILE = Path("ruinedfooocus/resources/defaults/video_resolutions.default")
+    DEFAULT_RESOLUTIONS_FILE = resource_path("defaults", "resolutions.default")
+    VIDEO_RESOLUTIONS_FILE = resource_path("defaults", "video_resolutions.default")
     RESOLUTIONS_FILE = data_path("settings", "resolutions.json")
     CUSTOM_RESOLUTION = "Custom..."
 

@@ -7,16 +7,16 @@ Application code lives under `ruinedfooocus`; downloaded backends live under
 
 | Feature | Source under `ruinedfooocus/` | UI entry | Backend |
 | --- | --- | --- | --- |
-| Generation, batches, automatic settings | `features/generation`, `features/models/performance.py` | Main → Generation | ComfyUI sampling and model loading |
-| Image editing, masks, ControlNet, geometry | `features/image_editing` | Main → Image tools | Native ComfyUI edit/ControlNet nodes |
-| Upscale, background removal, captioning | `features/image_processing` | Generation / Image tools / image upload | ComfyUI upscale nodes; ONNX / caption models |
-| Models, LoRAs, components, checkpoint copies | `features/models` | Main → Models | ComfyUI; local safetensors inspection |
-| Prompt transforms, styles, rewrite presets | `features/prompting` | Main → Prompt tools / Style | Shared local chat; ComfyUI conditioning |
+| Generation, batches, automatic settings | `features/generation`, `features/models/performance.py` | Create → Generation | ComfyUI sampling and model loading |
+| Image editing, masks, ControlNet, geometry | `features/image_editing` | Create → Image tools | Native ComfyUI edit/ControlNet nodes |
+| Upscale, background removal, captioning | `features/image_processing` | Create → Generation / Image tools / image upload | ComfyUI upscale nodes; ONNX / caption models |
+| Models, LoRAs, components, checkpoint copies | `features/models` | Models | ComfyUI; local safetensors inspection |
+| Prompt transforms, styles, rewrite presets | `features/prompting` | Create → Prompt tools / Style | Shared local chat; ComfyUI conditioning |
 | Random prompts and datasets | `features/prompting/one_button` | Prompt tools | One Button Prompt |
 | Optional SuperPrompter | `features/prompting/superprompter` | One Button prompt enhancer | Local Transformers T5 |
-| Local chat, assistants, image tools, vision | `features/chat` | Chat bots | Shared llama runtime and image worker |
-| Browser Python runner | `features/chat/browser_python.py`, `chat_code.py` | Chat bots → Python | Isolated browser sandbox |
-| Gallery, search, metadata replay | `features/gallery` | Image browser / Details | SQLite, local images |
+| Local chat, assistants, image tools, vision | `features/chat` | Chat | Shared llama runtime and image worker |
+| Browser Python runner | `features/chat/browser_python.py`, `chat_code.py` | Chat → Python | Isolated browser sandbox |
+| Gallery, search, metadata replay | `features/gallery` | Library / Create → Details | SQLite, local images |
 | Local commands and search routing | `features/automation` | Prompt commands | Existing feature services |
 | Retained video code | `features/video` | Conditional controls | Pinned ComfyUI; outside image acceptance |
 | HTTP/API access | `integrations`, `app/api*.py` | Startup options | FastAPI, shared serial worker |
@@ -67,3 +67,5 @@ an appropriate Python/runtime rather than copying a development venv. Drivers
 remain system prerequisites. Preserve writable data on upgrade, keep model
 downloads explicit, and bypass Git update behavior for archive builds. A source
 or CPU smoke check does not certify a portable GPU distribution.
+
+Task controls are saved with **Create → Save current defaults**; Settings contains persistent app preferences and advanced defaults. Prompt rewrite previews before applying. Model preloading is optional; browsing alone does not require weights to be loaded.

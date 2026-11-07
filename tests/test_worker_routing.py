@@ -8,6 +8,21 @@ from types import SimpleNamespace
 
 
 class WorkerRoutingTests(unittest.TestCase):
+    def test_startup_loads_weights_only_when_explicitly_enabled(self):
+        source = Path(__file__).resolve().parents[1] / 'ruinedfooocus/app/async_worker.py'
+        tree = ast.parse(source.read_text(encoding='utf-8'))
+        function = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == 'preload_startup_model')
+        registry = SimpleNamespace(update=Mock())
+        settings = SimpleNamespace(default_settings={'base_model': 'selected.safetensors'})
+        scope = {'settings': settings, 'pipelines': registry}
+        exec(compile(ast.Module(body=[function], type_ignores=[]), str(source), 'exec'), scope)
+        scope['preload_startup_model']()
+        registry.update.assert_not_called()
+        settings.default_settings['preload_image_model'] = True
+        scope['preload_startup_model']()
+        registry.update.assert_called_once_with({'base_model_name': 'selected.safetensors'})
+        registry.update.return_value.load_base_model.assert_called_once_with('selected.safetensors')
+
     def test_image_dispatch_uses_explicit_controls_and_preserves_queued_request(self):
         source = Path(__file__).resolve().parents[1] / 'ruinedfooocus/app/async_worker.py'
         tree = ast.parse(source.read_text(encoding='utf-8'))

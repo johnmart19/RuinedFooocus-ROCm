@@ -366,11 +366,9 @@ def _process(gen_data):
             break
     return res
 
-def worker():
-    global interrupt_ruined_processing
-    global buffer, outputs
-
-    pipeline = None
+def preload_startup_model():
+    if not settings.default_settings.get("preload_image_model", False):
+        return
     try:
         pipeline = pipelines.update(
             {"base_model_name": settings.default_settings.get("base_model")}
@@ -381,10 +379,13 @@ def worker():
         # A missing/broken startup model must not prevent later requests.
         print(f"Startup model: {describe_error(error)}")
         traceback.print_exc()
-    # shared.state owns the active pipeline. This thread lives for the entire
-    # session; retaining its startup reference pins the old checkpoint in RAM
-    # even after image/chat switching replaces it in shared.state.
-    del pipeline
+
+
+def worker():
+    global interrupt_ruined_processing
+    global buffer, outputs
+
+    preload_startup_model()
 
     def job_start(gen_data):
         shared.state["preview_grid"] = None

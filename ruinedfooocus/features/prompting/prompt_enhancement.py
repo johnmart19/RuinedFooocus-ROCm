@@ -1,7 +1,7 @@
 """Shared image-prompt enhancement through the configured local chat model."""
 
 import re
-import threading
+from ruinedfooocus.features.prompting.local_model import run_prompt
 
 
 def image_prompt_instruction(model_type, preset_focus=""):
@@ -36,20 +36,7 @@ def image_prompt_instruction(model_type, preset_focus=""):
 def enhance_prompt(prompt, model_type="", preset_focus="", *, check_cancelled=None):
     if not prompt.strip():
         return prompt
-    # UI buttons and generation share the existing serial GPU worker.
-    import ruinedfooocus.app.async_worker as worker
-    if threading.current_thread() is not worker.worker_thread:
-        from ruinedfooocus.app.api_runtime import submit, wait_for_result
-        def operation(job, task_id):
-            def check():
-                if check_cancelled:
-                    check_cancelled()
-                worker.check_interrupt({"_api_job": job})
-            return enhance_prompt(prompt, model_type, preset_focus, check_cancelled=check)
-        return wait_for_result(submit(operation))
-    # Import only when selected; the chat worker also imports prompt processing.
-    from ruinedfooocus.features.chat.llama_pipeline import run_llama
-    return run_llama(None, prompt, instruction=image_prompt_instruction(model_type, preset_focus),
+    return run_prompt(prompt, instruction=image_prompt_instruction(model_type, preset_focus),
                      check_cancelled=check_cancelled)
 
 

@@ -137,19 +137,24 @@ def launch_app(args):
         # Use the whole window; Gradio's stepped max-widths leave wide side margins.
         fill_width=True,
     )
+    # Move the existing model controls, including their events, into the shell.
+    # The same components continue to supply Create, Chat and API image settings.
+    with shared.gradio_root:
+        model_tab.unrender()
     with main_tabs:
         with gr.Tabs(elem_id="app-tabs", overflow_behavior="wrap") as top_tabs:
-            for interface, label in zip(
-                [shared.gradio_root, app_image_browser, app_llama_chat, app_settings],
-                [t("Main"), t("Image browser"), t("Chat bots"), t("Settings")],
-            ):
+            for interface, label in ((shared.gradio_root, "Create"), (app_llama_chat, "Chat"),
+                                     (app_image_browser, "Library")):
                 # Include automatically created nested tab groups in the responsive layout.
                 for component in interface.blocks.values():
                     if isinstance(component, gr.Tabs):
                         component.overflow_behavior = "wrap"
                 with gr.Tab(label):
                     interface.render()
-        top_tabs.children[1].select(
+            model_tab.render()
+            with gr.Tab("Settings"):
+                app_settings.render()
+        top_tabs.children[2].select(
             ui_image_gallery.browser.update_images, outputs=browser_refresh_outputs,
             concurrency_id="image_browser_refresh",
             api_visibility='undocumented')
@@ -169,7 +174,7 @@ def launch_app(args):
         css=html.css,
         head=html.head,
         js=html.scripts,
-        allowed_paths=["html", str(path_manager.model_paths["temp_outputs_path"])]
+        allowed_paths=[str(asset_path(".")), str(path_manager.model_paths["temp_outputs_path"])]
         + [str(path) for path in shared.models.cache_paths.values()]
         + settings.get("archive_folders", []),
         app_kwargs={"middleware": [Middleware(PrivateResponses)]},
@@ -358,6 +363,40 @@ with shared.gradio_root as block:
 
     with gr.Row(elem_id="generation-layout"):
         with gr.Column(scale=5, min_width=0, elem_id="generation-workspace"):
+            base_model = gr.Dropdown(label="Image model", choices=shared.models.get_names("checkpoints"),
+                value=settings["base_model"], interactive=True, elem_id="create-model")
+            preset_notice = gr.Markdown('', visible=False)
+            clear_preset_btn = gr.Button("Clear generation preset", visible=False, size="sm")
+            with gr.Row(elem_id="prompt-row"):
+                with gr.Column(scale=5, min_width=0):
+                    with gr.Group():
+                        with gr.Group(), gr.Row():
+                            prompt = gr.Textbox(
+                                label=t("Prompt"),
+                                show_label=False,
+                                placeholder=t("Type prompt here."),
+                                container=False,
+                                autofocus=True,
+                                lines=3,
+                                value=settings["prompt"],
+                                scale=5,
+                            )
+                            add_ctrl("prompt", prompt)
+                            add_ctrl('_imported_prompt', gr.State(None))
+
+                with gr.Column(scale=1, min_width=0, elem_id="prompt-actions"):
+                    run_button = gr.Button(value=t("Generate"), elem_id="generate")
+                    stop_button = gr.Button(
+                        value=t("Stop"), interactive=False, visible='hidden'
+                    )
+                    spellcheck = gr.Dropdown(
+                        label="Wildcards",
+                        visible='hidden',
+                        choices=[],
+                        value="",
+                        scale=1,
+                    )
+
             main_view = gr.Image(
                 elem_id="main_view",
                 value=str(asset_path('init_image.png')),
@@ -427,71 +466,42 @@ with shared.gradio_root as block:
                     metadata_json: gr.update(value=metadata),
                 }
 
-            with gr.Row(elem_id="prompt-row"):
-                with gr.Column(scale=5, min_width=0):
-                    with gr.Group():
-                        with gr.Group(), gr.Row():
-                            prompt = gr.Textbox(
-                                label=t("Prompt"),
-                                show_label=False,
-                                placeholder=t("Type prompt here."),
-                                container=False,
-                                autofocus=True,
-                                lines=5,
-                                value=settings["prompt"],
-                                scale=5,
-                            )
-                            add_ctrl("prompt", prompt)
-                            add_ctrl('_imported_prompt', gr.State(None))
+            @prompt.input(api_visibility='undocumented', inputs=prompt, outputs=spellcheck)
+            def checkforwildcards(text):
+                test = find_unclosed_markers(text)
+                if test is not None:
+                    filtered = [s for s in shared.wildcards if test in s]
+                    filtered.append(" ")
+                    return {
+                        spellcheck: gr.update(
+                            interactive=True,
+                            visible=True,
+                            choices=filtered,
+                            value=" ",
+                        )
+                    }
+                else:
+                    return {
+                        spellcheck: gr.update(interactive=False, visible='hidden')
+                    }
 
-                with gr.Column(scale=1, min_width=0, elem_id="prompt-actions"):
-                    run_button = gr.Button(value=t("Generate"), elem_id="generate")
-                    stop_button = gr.Button(
-                        value=t("Stop"), interactive=False, visible='hidden'
-                    )
-                    spellcheck = gr.Dropdown(
-                        label="Wildcards",
-                        visible='hidden',
-                        choices=[],
-                        value="",
-                        scale=1,
-                    )
-
-                    @prompt.input(api_visibility='undocumented', inputs=prompt, outputs=spellcheck)
-                    def checkforwildcards(text):
-                        test = find_unclosed_markers(text)
-                        if test is not None:
-                            filtered = [s for s in shared.wildcards if test in s]
-                            filtered.append(" ")
-                            return {
-                                spellcheck: gr.update(
-                                    interactive=True,
-                                    visible=True,
-                                    choices=filtered,
-                                    value=" ",
-                                )
-                            }
-                        else:
-                            return {
-                                spellcheck: gr.update(interactive=False, visible='hidden')
-                            }
-
-                    @spellcheck.select(api_visibility='undocumented', inputs=[prompt, spellcheck], outputs=prompt)
-                    def select_spellcheck(text, selection):
-                        last_idx = text.rindex("__")
-                        newtext = f"{text[:last_idx]}__{selection}__"
-                        return {prompt: gr.update(value=newtext)}
+            @spellcheck.select(api_visibility='undocumented', inputs=[prompt, spellcheck], outputs=prompt)
+            def select_spellcheck(text, selection):
+                last_idx = text.rindex("__")
+                newtext = f"{text[:last_idx]}__{selection}__"
+                return {prompt: gr.update(value=newtext)}
 
 
-                    @main_view.upload(
-                        api_visibility='undocumented',
-                        inputs=[main_view, prompt],
-                        outputs=[prompt, gallery]
-                    )
-                    def load_images_handler(file, prompt):
-                        image = Image.open(file)
-                        params = look(image, prompt, gr)
-                        return params, [file]
+            @main_view.upload(
+                api_visibility='undocumented',
+                inputs=[main_view, prompt],
+                outputs=[prompt, gallery]
+            )
+            def load_images_handler(file, prompt):
+                image = Image.open(file)
+                params = look(image, prompt, gr)
+                return params, [file]
+
 
         with gr.Column(scale=2, min_width=0, elem_id="generation-controls") as right_col:
             with gr.Tab(label=t("Generation")):
@@ -528,6 +538,12 @@ with shared.gradio_root as block:
                     visible='hidden',
                 )
                 add_ctrl("preset_selection", preset_selection)
+                preset_selection.change(lambda selected: (
+                    gr.update(interactive=not bool(selected)),
+                    gr.update(value="A generation preset supplies model/settings. Clear it to use the current controls.", visible=bool(selected)),
+                    gr.update(visible=bool(selected))),
+                    inputs=preset_selection, outputs=[base_model, preset_notice, clear_preset_btn],
+                    api_visibility='undocumented', queue=False)
 
                 with gr.Accordion("Sampling", open=True, elem_id="generation-sampling"):
                     initial_performance = settings["performance"]
@@ -567,6 +583,8 @@ with shared.gradio_root as block:
                     custom_default_values = performance_settings.get_perf_options(
                         initial_performance, settings["base_model"], initial_model_base
                     ) | initial_fixed
+                    if initial_performance == performance_settings.CUSTOM_PERFORMANCE:
+                        custom_default_values |= settings.get("custom_sampling", {})
                     custom_steps = gr.Slider(
                         label=t("Custom Steps"),
                         minimum=1,
@@ -649,7 +667,8 @@ with shared.gradio_root as block:
                         interactive=True,
                         visible=custom_resolution,
                     )
-                    default_resolution = resolution_settings.aspect_ratios.get(initial_resolution, (1024, 1024))
+                    default_resolution = resolution_settings.aspect_ratios.get(initial_resolution,
+                        (settings.get("custom_width", 1024), settings.get("custom_height", 1024)))
                     custom_width = gr.Slider(
                         label=t("Width"),
                         minimum=256,
@@ -781,6 +800,7 @@ with shared.gradio_root as block:
                         visible='hidden' if settings["seed_random"] else True,
                     )
                     add_ctrl("seed", image_seed)
+                save_defaults_btn = gr.Button("Save current defaults", size="sm", elem_id="save-generation-defaults")
 
                 @style_button.click(
                     api_visibility='undocumented',
@@ -810,6 +830,7 @@ with shared.gradio_root as block:
             model_tab = gr.Tab(
                 label=t("Models"),
                 visible=True,
+                elem_id="models-panel",
             )
             with model_tab:
                 with gr.Tab(label=t("Model")):
@@ -830,7 +851,7 @@ with shared.gradio_root as block:
                             height="auto",
                             allow_preview=False,
                             preview=False,
-                            columns=[2],
+                            columns=[1, 2, 3, 4, 4, 5],
                             rows=[3],
                             object_fit="contain",
                             visible=True,
@@ -844,10 +865,6 @@ with shared.gradio_root as block:
                             ),
                         )
 
-                    base_model = gr.Text(
-                        visible='hidden',
-                        value=settings["base_model"],
-                    )
                     add_ctrl("base_model_name", base_model)
 
                     from ruinedfooocus.features.models.ui_model_components import create_ui as create_components_ui
@@ -963,12 +980,9 @@ with shared.gradio_root as block:
                             scale=1,
                         )
 
-                    default_active = []
-                    for i in range(1, 6):
-                        m = settings.get(f"lora_{i}_model", "None")
-                        w = settings.get(f"lora_{i}_weight", 0.0)
-                        if m != "" and m != "None":
-                            default_active.append((get_lora_thumbnail(m), f"{w} - {m}"))
+                    from ruinedfooocus.features.generation.defaults import startup_loras
+                    default_active = [(get_lora_thumbnail(name), f"{weight} - {name}")
+                                      for name, weight in startup_loras(settings)]
 
                     with gr.Group(visible=True) as lora_active:
                         with gr.Row():
@@ -1163,7 +1177,7 @@ with shared.gradio_root as block:
                     loras = []
                     for lora_data in gallery:
                         loras.append((lora_data[0], lora_data[1]))
-                    l = gallery[lora_active_selected][1].split(" - ")[1]
+                    l = gallery[lora_active_selected][1].split(" - ", 1)[1]
                     loras[lora_active_selected] = (get_lora_thumbnail(l), f"{w} - {l}")
 
                     return {
@@ -1532,7 +1546,7 @@ with shared.gradio_root as block:
                 custom_width: show_size,
                 custom_height: show_size,
                 ratio_save: show_size,
-                model_tab: show_models,
+                model_tab: gr.update(visible=True),
             }
 
         def preset_unselect(performance_selection_val, aspect_ratios_selection_val):
@@ -1578,10 +1592,10 @@ with shared.gradio_root as block:
                 custom_width: gr.update(visible='hidden'),
                 custom_height: gr.update(visible='hidden'),
                 ratio_save: gr.update(visible='hidden'),
-                model_tab: gr.update(visible=False),
+                model_tab: gr.update(visible=True),
             }
 
-        preset_image.clear(
+        gr.on(triggers=[preset_image.clear, clear_preset_btn.click],
             fn=preset_unselect,
             api_visibility='undocumented',
             inputs=[
@@ -1657,6 +1671,19 @@ with shared.gradio_root as block:
             ]
         )
 
+    from ruinedfooocus.features.generation.defaults import DEFAULT_CONTROLS, SAMPLING_KEYS, generation_defaults
+    default_keys = set(DEFAULT_CONTROLS.values()) | set(SAMPLING_KEYS) | {"loras", "preset_selection"}
+    default_controls = {key: component for key, component in zip(state["ctrls_name"], state["ctrls_obj"])
+                        if key in default_keys}
+    def save_current_defaults(*values):
+        try:
+            defaults = generation_defaults(dict(zip(default_controls, values)))
+        except ValueError as error:
+            raise gr.Error(str(error)) from error
+        shared.settings.default_settings.update(defaults)
+        shared.settings.save_settings()
+        gr.Info("Saved generation defaults to this profile for the next launch.")
+    save_defaults_btn.click(save_current_defaults, inputs=list(default_controls.values()), api_visibility='undocumented')
     add_api()
 
 if args.api:

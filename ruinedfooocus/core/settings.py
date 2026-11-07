@@ -18,7 +18,7 @@ class SettingsManager:
         "style": ["Style: sai-cinematic"],
         "prompt": "",
         "negative_prompt": "",
-        "performance": "SDXL",
+        "performance": "Model Defaults",
         "resolution": "1152x896 (4:3)",
         "base_model": "sd_xl_base_1.0_0.9vae.safetensors",
         "lora_1_model": "None",

@@ -713,8 +713,8 @@ def ui_onebutton(prompt, run_event, checkpoint=None):
                 info="Auto follows the image checkpoint. For full sentences, run Rewrite prompt on the result.",
             )
             add_ctrl("OBP_modeltype", modeltype)
-        gr.Markdown("Local prompt enhancement and rewrite use the model loaded in Chat bots (otherwise "
-                    "the startup default). Token limit and reasoning are in Settings > Chatbot settings.")
+        gr.Markdown("Local prompt enhancement and rewrite use the model selected in Chat (otherwise "
+                    "the startup default). Token limit and reasoning are in Settings > Runtime.")
         with gr.Row():
             gr.Markdown(
                 """
@@ -1026,6 +1026,6 @@ def ui_onebutton(prompt, run_event, checkpoint=None):
             outputs=[prompt],
         )
 
-        from ruinedfooocus.features.prompting.ui_rewrite import add_llama_tab
-        with gr.Accordion("Local prompt rewrite", open=False):
-            add_llama_tab(prompt)
+        from ruinedfooocus.features.prompting.ui_rewrite import add_rewrite_controls
+        with gr.Accordion("Rewrite with chat model", open=False):
+            add_rewrite_controls(prompt)
