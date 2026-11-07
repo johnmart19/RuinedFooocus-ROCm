@@ -34,7 +34,7 @@ def checkpoint_features(name, moss_format=None):
 def control_types(features):
     return [name.capitalize() for name in controlnet.controlnet_models
             if (not features["video"] or name in ("upscale", "rembg"))
-            and (features['native_edit'] or name != 'edit')
+            and (features.get('native_edit') or name != 'edit')
             and (features["sdxl"] or name not in SDXL_CONTROLS)]
 
 

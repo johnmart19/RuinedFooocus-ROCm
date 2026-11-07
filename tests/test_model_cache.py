@@ -189,7 +189,9 @@ class ModelCacheTests(unittest.TestCase):
 
     def test_lora_cache_reloads_replaced_weights_and_starts_from_the_base(self):
         path = self.file('style.safetensors')
-        native = Mock(return_value=('patched unet', 'patched clip'))
+        # A compatible LoRA adds native patches; incompatible ones are rejected by load_loras.
+        native = Mock(return_value=(SimpleNamespace(patches={'diffusion_model.w': [object()]}),
+                                    SimpleNamespace(patcher=SimpleNamespace(patches={}))))
         reader = Mock(return_value='lora weights')
         resolve = Mock(return_value=path)
         owner = SimpleNamespace(xl_base_patched_hash=None,
