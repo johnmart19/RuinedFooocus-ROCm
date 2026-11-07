@@ -60,6 +60,28 @@
       "tests": []
     },
     {
+      "id": "image-prompt-labels",
+      "subject": "Distinguish image checkpoints from prompt formats in the UI",
+      "requires": [
+        "ui"
+      ],
+      "tests": [
+        "test_ui_workflows.py",
+        "test_image_settings.py"
+      ]
+    },
+    {
+      "id": "image-prompt-label-validation",
+      "subject": "Register prompt format UI validation",
+      "requires": [
+        "validation",
+        "image-prompt-labels"
+      ],
+      "tests": [
+        "test_feature_cherry_pick_manifest.py"
+      ]
+    },
+    {
       "id": "styles",
       "subject": "Respect requested anime medium in styles and prompt templates",
       "requires": [],
