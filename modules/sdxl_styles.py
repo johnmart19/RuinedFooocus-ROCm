@@ -146,13 +146,15 @@ def apply_style(style, prompt, negative_prompt, lora_keywords):
             n = ", ".join(tag.strip() for tag in (n or "").split(",")
                           if tag.strip().lower() not in {"", "anime", "cartoon", "graphic", "painting", "crayon"})
         if p is not None:
-            output_prompt = p + ", "
+            template = (p + ", ").replace(", ,", ", ")
+            def substitute(match):
+                if match.group(0) == "{prompt}":
+                    return temp_style_prompt
+                return "{lora_keywords}" if lora_keywords is None else lora_keywords
+            temp_style_prompt = re.sub(r"\{prompt\}|\{lora_keywords\}", substitute, template)
+            output_prompt = temp_style_prompt
         if n is not None:
             output_negative_prompt += n + ", "
-
-        temp_style_prompt = output_prompt.replace("{prompt}", temp_style_prompt)
-        output_prompt = temp_style_prompt.replace(", ,", ", ")
-
 
     # prep outputprompt for use in Flufferize and Artify
     if output_prompt == "":
@@ -167,8 +169,6 @@ def apply_style(style, prompt, negative_prompt, lora_keywords):
     if bErniehancer:
         output_prompt = Erniehancer().execute(output_prompt)
 
-    if lora_keywords is not None:
-        output_prompt = output_prompt.replace("{lora_keywords}", lora_keywords)
     output_negative_prompt += ", " + negative_prompt
 
     return output_prompt, output_negative_prompt

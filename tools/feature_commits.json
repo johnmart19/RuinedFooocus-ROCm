@@ -2,6 +2,18 @@
   "base": "cd7abb27064155f62dea002f745a8ce1b040c990",
   "features": [
     {
+      "id": "style-payload-integrity",
+      "subject": "Render style templates without rewriting prompt content",
+      "requires": [
+        "prompt-expansion-integrity"
+      ],
+      "tests": [
+        "test_style_prompt_payloads.py",
+        "test_prompt_expansion_cpu.py",
+        "test_prompt_wildcards.py"
+      ]
+    },
+    {
       "id": "prompt-expansion-integrity",
       "subject": "Preserve literal prompts through replay and enhancement",
       "requires": [
