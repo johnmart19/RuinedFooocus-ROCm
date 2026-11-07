@@ -2,6 +2,17 @@
   "base": "cd7abb27064155f62dea002f745a8ce1b040c990",
   "features": [
     {
+      "id": "worker-package-bindings",
+      "subject": "Bind image tool routing explicitly in the worker",
+      "requires": [
+        "feature-package-layout"
+      ],
+      "tests": [
+        "test_worker_routing.py",
+        "test_chat_boundaries.py"
+      ]
+    },
+    {
       "id": "feature-package-layout",
       "subject": "Organize source by feature with preserved user resource overrides",
       "requires": [

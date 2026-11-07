@@ -20,6 +20,7 @@ from PIL import Image
 from PIL.PngImagePlugin import PngInfo
 from ruinedfooocus.core.util import generate_temp_filename, TimeIt, get_checkpoint_hashes, get_lora_hashes
 import ruinedfooocus.features.generation.pipelines as pipelines
+import ruinedfooocus.features.image_editing.controlnet as control_tools
 import comfy.model_management as model_management
 from ruinedfooocus.app.state import settings
 
@@ -237,7 +238,7 @@ def _process(gen_data):
 
     stop_batch = False
     prompt_styles = gen_data["style_selection"]
-    if ruinedfooocus.features.image_editing.controlnet.get_settings(gen_data).get("preserve_details"):
+    if control_tools.get_settings(gen_data).get("preserve_details"):
         prompt_styles = []
     for i in range(max(image_number, 1)):
         gen_data["seed"] = abs(seed) # Update seed
@@ -319,7 +320,7 @@ def _process(gen_data):
                 prompt['depth_preprocessing'] = dict(gen_data['depth_preprocessing'])
             if "upscale" in pipeline.pipeline_type:
                 prompt.update(width=x.shape[1], height=x.shape[0],
-                              upscaler=ruinedfooocus.features.image_editing.controlnet.get_settings(gen_data)["upscaler"])
+                              upscaler=control_tools.get_settings(gen_data)["upscaler"])
             elif gen_data.get("automatic_upscale_model"):
                 prompt.update(generation_width=prompt['width'], generation_height=prompt['height'],
                               width=x.shape[1], height=x.shape[0],
@@ -472,7 +473,7 @@ def worker():
         if gen_data['task_type'] == 'external_api':
             group = getattr(gen_data['_api_job'].operation, 'resource_group', None)
         elif gen_data['task_type'] == 'process':
-            control = ruinedfooocus.features.image_editing.controlnet.get_settings(gen_data) or {}
+            control = control_tools.get_settings(gen_data) or {}
             group = 'rembg' if control.get('type') == 'rembg' else None
         release_except(group)
         match gen_data["task_type"]:
