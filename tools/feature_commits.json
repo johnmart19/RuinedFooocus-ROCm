@@ -27,6 +27,18 @@
       ]
     },
     {
+      "id": "ernie-prompt-enhancement",
+      "subject": "Use Ernie instruction prompts and cache native CPU enhancement",
+      "requires": [
+        "prompt-expansion-integrity"
+      ],
+      "tests": [
+        "test_erniehancer.py",
+        "test_prompt_expansion_cpu.py",
+        "test_prompt_wildcards.py"
+      ]
+    },
+    {
       "id": "prompt-text-integrity",
       "subject": "Preserve native prompt text and bound schedule processing",
       "requires": [

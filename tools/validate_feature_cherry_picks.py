@@ -149,7 +149,7 @@ def run(root, manifest, selected, ref='HEAD', tests=False):
     by_id = {item['id']: item for item in manifest['features']}
     # Only native source contracts are copied. No backend or package is installed.
     native_files = ['node_helpers.py', 'nodes.py', 'comfy/sd.py', 'comfy/cli_args.py', 'comfy/supported_models.py', 'comfy/model_sampling.py', 'comfy/samplers.py', 'comfy/text_encoders/qwen35.py',
-                    'comfy_extras/nodes_fibo2.py', 'comfy_extras/nodes_moss_image.py',
+                    'comfy_extras/nodes_fibo2.py', 'comfy_extras/nodes_moss_image.py', 'comfy_extras/nodes_textgen.py',
                     'comfy_extras/nodes_cfg.py', 'comfy_extras/nodes_slg.py',
                     'comfy_extras/nodes_hidream_o1.py', 'comfy_extras/nodes_model_advanced.py',
                     'comfy_extras/nodes_custom_sampler.py', 'comfy_extras/nodes_advanced_samplers.py',
